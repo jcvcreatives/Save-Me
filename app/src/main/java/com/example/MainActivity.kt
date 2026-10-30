@@ -24,14 +24,12 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -51,7 +49,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,7 +58,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,22 +65,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -98,9 +89,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlin.random.Random
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 // ============================================================================
 // 1. COLOR PALETTE & THEME DEFINITIONS ("GRAPH PAPER DOODLE")
@@ -117,7 +106,6 @@ object DoodleColors {
     val CorrectGreen = Color(0xFF2ECC71)
     val WrongRed = Color(0xFFE74C3C)
     val DoodleYellow = Color(0xFFFFD166)
-    val DoodleYellowDark = Color(0xFFF4B942)
 
     val HintMagnifierGreen = Color(0xFF4CAF50)
     val HintPotionBlue = Color(0xFF2196F3)
@@ -128,7 +116,18 @@ object DoodleColors {
     val WaterBlue = Color(0xFF4FC3F7)
     val WaterDeep = Color(0xFF0288D1)
     val SharkGrey = Color(0xFF546E7A)
-    val SharkBelly = Color(0xFFCFD8DC)
+
+    val UfoSilver = Color(0xFFB0BEC5)
+    val UfoDomeCyan = Color(0xFF80DEEA)
+    val UfoBeamGreen = Color(0xFF76FF03)
+
+    val LavaOrange = Color(0xFFFF5722)
+    val LavaYellow = Color(0xFFFFEB3B)
+    val CrateStone = Color(0xFFD7CCC8)
+    val CrateStoneDark = Color(0xFFA1887F)
+
+    val DinoGreen = Color(0xFF689F38)
+    val DinoLightGreen = Color(0xFF9CCC65)
 
     val BalloonPalette = listOf(
         Color(0xFFFF595E), // Coral Red
@@ -153,15 +152,83 @@ enum class PaperTheme(
 }
 
 // ============================================================================
-// 2. DATA MODELS & PRE-POPULATED LEVELS
+// 2. DYNAMIC PERIL SCENARIOS & LEVEL MODELS
 // ============================================================================
+
+/**
+ * Rotates automatically based on the level number (`level % 4`):
+ * - Levels 1, 5, 9...  -> SHARK_BALLOONS
+ * - Levels 2, 6, 10... -> UFO_ABDUCTION
+ * - Levels 3, 7, 11... -> VOLCANO_BLOCKS
+ * - Levels 4, 8, 12... -> DINO_STEALTH
+ */
+enum class PerilType(
+    val displayName: String,
+    val panicBubbleText: String,
+    val gameOverTitle: String,
+    val gameOverDescription: String,
+    val extraLifeLabel: String,
+    val hitEffectLabel: String
+) {
+    SHARK_BALLOONS(
+        displayName = "Shark & Balloons",
+        panicBubbleText = "Come on, you can do that!",
+        gameOverTitle = "SPLASH! SHARK SNACK",
+        gameOverDescription = "All 6 balloons popped! The shark caught up.",
+        extraLifeLabel = "+1 Balloon attached!",
+        hitEffectLabel = "POP!"
+    ),
+    UFO_ABDUCTION(
+        displayName = "UFO Abduction",
+        panicBubbleText = "Not the alien probe!",
+        gameOverTitle = "ZAP! ABDUCTED!",
+        gameOverDescription = "The UFO tractor beam pulled the stickman aboard!",
+        extraLifeLabel = "+1 Gravity Anchor!",
+        hitEffectLabel = "ZAP!"
+    ),
+    VOLCANO_BLOCKS(
+        displayName = "Volcano Crates",
+        panicBubbleText = "My shoes are melting!",
+        gameOverTitle = "SIZZLE! MELTDOWN!",
+        gameOverDescription = "All 6 stone crates crumbled into the bubbling lava!",
+        extraLifeLabel = "+1 Stone Crate stacked!",
+        hitEffectLabel = "CRUMBLE!"
+    ),
+    DINO_STEALTH(
+        displayName = "Sleeping T-Rex",
+        panicBubbleText = "Shhh! Don't wake Rex!",
+        gameOverTitle = "ROOOAR! REX AWOKE!",
+        gameOverDescription = "The Noise Meter maxed out and woke the giant T-Rex!",
+        extraLifeLabel = "-1 Noise Bar hushed!",
+        hitEffectLabel = "CLANG!"
+    );
+
+    companion object {
+        fun forLevel(levelNumber: Int): PerilType {
+            val normalized = if (levelNumber <= 0) 1 else levelNumber
+            return when (normalized % 4) {
+                1 -> SHARK_BALLOONS
+                2 -> UFO_ABDUCTION
+                3 -> VOLCANO_BLOCKS
+                else -> DINO_STEALTH
+            }
+        }
+    }
+}
 
 data class WordLevel(
     val number: Int,
     val word: String,
     val clue: String,
     val isAdventure: Boolean = false
-)
+) {
+    val perilType: PerilType
+        get() = PerilType.forLevel(if (number <= 0) 1 else number)
+
+    /** Every 5th level is a Boss Level with 3 bomb letters on the keyboard! */
+    val isBossLevel: Boolean
+        get() = isAdventure || (number > 0 && number % 5 == 0)
+}
 
 enum class ScreenState {
     MAIN_MENU,
@@ -186,37 +253,37 @@ val CAMPAIGN_LEVELS = listOf(
     WordLevel(2, "CHINA", "What country was paper invented in?"),
     WordLevel(3, "PRANK", "April Fool's Day tradition"),
     WordLevel(4, "CAKE", "Sweet baked treat with birthday candles"),
-    WordLevel(5, "GIRAFFE", "Tallest African mammal with a long neck"),
+    WordLevel(5, "GIRAFFE", "Boss Level: Tallest mammal with a long neck"),
     WordLevel(6, "COMPASS", "Navigation tool that always points north"),
     WordLevel(7, "VOLCANO", "Mountain that erupts with glowing lava"),
     WordLevel(8, "PENGUIN", "Tuxedo-wearing bird that cannot fly"),
     WordLevel(9, "RAINBOW", "Colorful arc seen in the sky after rain"),
-    WordLevel(10, "PIRATE", "High-seas sailor searching for buried treasure"),
+    WordLevel(10, "PIRATE", "Boss Level: High-seas sailor seeking treasure"),
     WordLevel(11, "CACTUS", "Spiky desert plant that stores water"),
     WordLevel(12, "GUITAR", "Six-stringed musical instrument"),
     WordLevel(13, "OCTOPUS", "Clever sea creature with eight tentacles"),
     WordLevel(14, "POPCORN", "Buttery snack eaten at the movie theater"),
-    WordLevel(15, "ASTRONAUT", "Explorer who travels into outer space"),
+    WordLevel(15, "ASTRONAUT", "Boss Level: Explorer who travels into outer space"),
     WordLevel(16, "IGLOO", "Dome-shaped shelter built from snow blocks"),
     WordLevel(17, "TORNADO", "Violently rotating column of wind"),
     WordLevel(18, "PANCAKE", "Flat breakfast cake served with maple syrup"),
     WordLevel(19, "DINOSAUR", "Prehistoric reptile that ruled the Earth"),
-    WordLevel(20, "TREASURE", "Chest overflowing with gold coins and jewels")
+    WordLevel(20, "TREASURE", "Boss Level: Chest overflowing with gold and jewels")
 )
 
 val ADVENTURE_LEVELS = listOf(
-    WordLevel(101, "LABYRINTH", "Devil Mode: An intricate maze of winding passages", true),
-    WordLevel(102, "CHAMELEON", "Devil Mode: Lizard famous for shifting its colors", true),
-    WordLevel(103, "AVALANCHE", "Devil Mode: Sudden rapid rush of snow down a cliff", true),
-    WordLevel(104, "QUICKSAND", "Devil Mode: Loose wet sand that traps the unwary", true),
-    WordLevel(105, "JELLYFISH", "Devil Mode: Translucent ocean drifter with stinging tentacles", true),
-    WordLevel(106, "SAXOPHONE", "Devil Mode: Brass woodwind instrument iconic in jazz", true),
-    WordLevel(107, "METEORITE", "Devil Mode: Space rock that survives falling to Earth", true),
-    WordLevel(108, "KALEIDOSCOPE", "Devil Mode: Optical tube of mirrors and colorful glass", true)
+    WordLevel(1, "LABYRINTH", "Devil Boss: An intricate maze of winding passages", true),
+    WordLevel(2, "CHAMELEON", "Devil Boss: Lizard famous for shifting its colors", true),
+    WordLevel(3, "AVALANCHE", "Devil Boss: Sudden rapid rush of snow down a cliff", true),
+    WordLevel(4, "QUICKSAND", "Devil Boss: Loose wet sand that traps the unwary", true),
+    WordLevel(5, "JELLYFISH", "Devil Boss: Ocean drifter with stinging tentacles", true),
+    WordLevel(6, "SAXOPHONE", "Devil Boss: Brass woodwind instrument iconic in jazz", true),
+    WordLevel(7, "METEORITE", "Devil Boss: Space rock that survives falling to Earth", true),
+    WordLevel(8, "KALEIDOSCOPE", "Devil Boss: Optical tube of mirrors and colorful glass", true)
 )
 
 // ============================================================================
-// 3. GAME VIEWMODEL (STATE, COINS, STREAKS, POWER-UPS & ANIMATION TRIGGERS)
+// 3. GAME VIEWMODEL (PERILS, BOSS BOMBS, COINS, STREAKS, POWER-UPS)
 // ============================================================================
 
 class WordGameViewModel : ViewModel() {
@@ -238,12 +305,12 @@ class WordGameViewModel : ViewModel() {
         private set
     var maxStreak by mutableIntStateOf(5)
         private set
-    var chestProgress by mutableIntStateOf(1) // 0..4 (awards bonus chest at 4/4)
+    var chestProgress by mutableIntStateOf(1) // 1..4
         private set
-    var themeProgress by mutableIntStateOf(1) // 0..10 (unlocks themes)
+    var themeProgress by mutableIntStateOf(1) // 1..10
         private set
 
-    // Power-up inventory & costs
+    // Power-up inventory
     var freeShieldPotions by mutableIntStateOf(2)
         private set
 
@@ -269,28 +336,36 @@ class WordGameViewModel : ViewModel() {
 
     val keyStatuses = mutableStateMapOf<Char, KeyStatus>()
     val revealedChars = mutableStateListOf<Char>()
+    val bombLetters = mutableStateListOf<Char>()
 
-    // Animation triggers for wrong guess / balloon pop / coin toast
+    // Animation triggers for wrong guess / hazard hit / life loss
     var lastPoppedBalloonIndex by mutableIntStateOf(-1)
         private set
     var popAnimationTrigger by mutableIntStateOf(0)
+        private set
+    var lastDamageAmount by mutableIntStateOf(1)
+        private set
+    var lastHitWasBomb by mutableStateOf(false)
         private set
     var statusBannerMessage by mutableStateOf<String?>(null)
         private set
 
     val currentCampaignLevelNumber: Int
-        get() = (campaignLevelIndex % CAMPAIGN_LEVELS.size) + 1
+        get() = campaignLevelIndex + 1
+
+    val activePerilType: PerilType
+        get() = activeLevel.perilType
 
     fun startCampaignLevel() {
-        val level = CAMPAIGN_LEVELS[campaignLevelIndex % CAMPAIGN_LEVELS.size].copy(
-            number = campaignLevelIndex + 1
-        )
+        val template = CAMPAIGN_LEVELS[campaignLevelIndex % CAMPAIGN_LEVELS.size]
+        val level = template.copy(number = campaignLevelIndex + 1)
         loadLevel(level)
         currentScreen = ScreenState.GAMEPLAY
     }
 
     fun startAdventureLevel() {
-        val level = ADVENTURE_LEVELS[adventureLevelIndex % ADVENTURE_LEVELS.size]
+        val template = ADVENTURE_LEVELS[adventureLevelIndex % ADVENTURE_LEVELS.size]
+        val level = template.copy(number = adventureLevelIndex + 1, isAdventure = true)
         loadLevel(level)
         currentScreen = ScreenState.GAMEPLAY
     }
@@ -299,13 +374,13 @@ class WordGameViewModel : ViewModel() {
         currentScreen = ScreenState.TWO_PLAYER_SETUP
     }
 
-    fun startTwoPlayerGame(rawWord: String, rawClue: String) {
+    fun startTwoPlayerGame(rawWord: String, rawClue: String, chosenPerilIndex: Int = 1) {
         val cleanedWord = rawWord.uppercase().filter { it in 'A'..'Z' }.take(12)
         val finalWord = cleanedWord.ifEmpty { "SHARK" }
         val finalClue = rawClue.trim().ifEmpty { "Two-Player Secret Word!" }
         loadLevel(
             WordLevel(
-                number = 0,
+                number = chosenPerilIndex,
                 word = finalWord,
                 clue = finalClue,
                 isAdventure = false
@@ -319,6 +394,12 @@ class WordGameViewModel : ViewModel() {
         roundOutcome = RoundOutcome.PLAYING
     }
 
+    /** Allows jumping directly to a specific level number (great for testing perils & boss levels) */
+    fun selectCampaignLevelNumber(levelNumber: Int) {
+        campaignLevelIndex = (levelNumber - 1).coerceAtLeast(0)
+        startCampaignLevel()
+    }
+
     private fun loadLevel(level: WordLevel) {
         activeLevel = level
         maxBalloons = 6
@@ -327,8 +408,29 @@ class WordGameViewModel : ViewModel() {
         roundOutcome = RoundOutcome.PLAYING
         keyStatuses.clear()
         revealedChars.clear()
+        bombLetters.clear()
         lastPoppedBalloonIndex = -1
+        lastDamageAmount = 1
+        lastHitWasBomb = false
         statusBannerMessage = null
+
+        // If Boss Level (every 5th level or Adventure), mark 3 random wrong letters with a red bomb dot
+        if (level.isBossLevel) {
+            val targetSet = level.word.uppercase().toSet()
+            val wrongPool = ('A'..'Z').filter { !targetSet.contains(it) }
+            // Deterministic seeded selection per level word + number so tests & replays are consistent
+            val step = 5
+            val picked = mutableListOf<Char>()
+            var idx = (level.number * 3) % wrongPool.size
+            while (picked.size < 3 && picked.size < wrongPool.size) {
+                val candidate = wrongPool[idx % wrongPool.size]
+                if (!picked.contains(candidate)) {
+                    picked.add(candidate)
+                }
+                idx += step
+            }
+            bombLetters.addAll(picked)
+        }
     }
 
     fun onLetterTapped(letter: Char) {
@@ -346,10 +448,18 @@ class WordGameViewModel : ViewModel() {
         } else {
             keyStatuses[upper] = KeyStatus.WRONG
             mistakesThisRound++
+            val isBomb = bombLetters.contains(upper)
+            val damage = if (isBomb) 2 else 1
+            lastDamageAmount = damage
+            lastHitWasBomb = isBomb
+
             if (balloonsRemaining > 0) {
-                lastPoppedBalloonIndex = balloonsRemaining - 1
-                balloonsRemaining--
+                lastPoppedBalloonIndex = (balloonsRemaining - 1).coerceAtLeast(0)
+                balloonsRemaining = (balloonsRemaining - damage).coerceAtLeast(0)
                 popAnimationTrigger++
+            }
+            if (isBomb) {
+                statusBannerMessage = "💥 BOMB LETTER '$upper'! -2 ❤️"
             }
             if (balloonsRemaining <= 0) {
                 currentStreak = 0
@@ -394,24 +504,24 @@ class WordGameViewModel : ViewModel() {
         checkVictoryCondition()
     }
 
-    // Power-Up 2: Blue Shield/Potion (Badge count or Cost: 200 coins) -> Adds 1 extra balloon
+    // Power-Up 2: Blue Shield/Potion (Badge count or Cost: 200 coins) -> Adds 1 extra life back
     fun useExtraBalloonPotion() {
         if (roundOutcome != RoundOutcome.PLAYING) return
         if (balloonsRemaining >= 6) {
-            statusBannerMessage = "Already at max 6 balloons!"
+            statusBannerMessage = "Already at max 6 lives!"
             return
         }
         val cost = 200
         if (freeShieldPotions > 0) {
             freeShieldPotions--
             balloonsRemaining++
-            statusBannerMessage = "+1 Balloon attached! (Used free potion)"
+            statusBannerMessage = "${activePerilType.extraLifeLabel} (Free potion)"
         } else if (coins >= cost) {
             coins -= cost
             balloonsRemaining++
-            statusBannerMessage = "+1 Balloon attached!"
+            statusBannerMessage = activePerilType.extraLifeLabel
         } else {
-            statusBannerMessage = "Need $cost coins for a Balloon Potion!"
+            statusBannerMessage = "Need $cost coins for a Life Potion!"
         }
     }
 
@@ -432,24 +542,23 @@ class WordGameViewModel : ViewModel() {
             return
         }
         coins -= cost
-        val toEliminate = candidateWrongs.shuffled().take(3)
+        // Prioritize defusing bomb letters first if present!
+        val prioritized = candidateWrongs.sortedByDescending { bombLetters.contains(it) }
+        val toEliminate = prioritized.take(3)
         toEliminate.forEach { ch ->
             keyStatuses[ch] = KeyStatus.WRONG
         }
-        statusBannerMessage = "Cleared ${toEliminate.size} wrong letters!"
+        statusBannerMessage = "Safely cleared ${toEliminate.size} wrong letters!"
     }
 
     fun proceedAfterVictory() {
-        val reward = if (activeLevel.isAdventure) 50 else 25
+        val reward = if (activeLevel.isBossLevel) 50 else 25
         val chestBonus = if (chestProgress == 4) 100 else 0
         coins += reward + chestBonus
 
         if (activeLevel.isAdventure) {
             adventureLevelIndex++
             startAdventureLevel()
-        } else if (activeLevel.number == 0) {
-            // Two-player mode returns to setup or menu
-            navigateToMainMenu()
         } else {
             campaignLevelIndex++
             startCampaignLevel()
@@ -466,7 +575,7 @@ class WordGameViewModel : ViewModel() {
             coins -= rescueCost
             balloonsRemaining = 3
             roundOutcome = RoundOutcome.PLAYING
-            statusBannerMessage = "Rescued with 3 fresh balloons!"
+            statusBannerMessage = "Rescued with 3 lives!"
         } else {
             statusBannerMessage = "Need $rescueCost coins! Tap + at top right."
         }
@@ -514,7 +623,6 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
         FontFamily.SansSerif
     }
 
-    // Auto-dismiss transient banner feedback
     LaunchedEffect(viewModel.statusBannerMessage) {
         if (viewModel.statusBannerMessage != null) {
             delay(2200)
@@ -544,6 +652,7 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                         onPlayCampaign = { viewModel.startCampaignLevel() },
                         onPlayAdventure = { viewModel.startAdventureLevel() },
                         onPlayTwoPlayer = { viewModel.openTwoPlayerSetup() },
+                        onSelectPerilLevel = { lvl -> viewModel.selectCampaignLevelNumber(lvl) },
                         onOpenSettings = { viewModel.showSettingsDialog = true },
                         onOpenCoinShop = { viewModel.showCoinShopDialog = true }
                     )
@@ -554,8 +663,8 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                     TwoPlayerSetupScreen(
                         fontFamily = activeFontFamily,
                         onBack = { viewModel.navigateToMainMenu() },
-                        onStartGame = { word, clue ->
-                            viewModel.startTwoPlayerGame(word, clue)
+                        onStartGame = { word, clue, perilIdx ->
+                            viewModel.startTwoPlayerGame(word, clue, perilIdx)
                         }
                     )
                 }
@@ -569,14 +678,14 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                 }
             }
 
-            // Floating Status Toast (e.g. power-up feedback)
+            // Floating Status Toast
             AnimatedVisibility(
                 visible = viewModel.statusBannerMessage != null,
                 enter = fadeIn() + scaleIn(),
                 exit = fadeOut() + scaleOut(),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 68.dp)
+                    .padding(top = 66.dp)
             ) {
                 SketchyContainer(
                     fillColor = DoodleColors.DoodleYellow,
@@ -614,7 +723,7 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
             )
         }
 
-        // 4. Game Over Overlay (0 Balloons Left - Stickman falls into shark water)
+        // 4. Game Over Overlay (0 Lives Left)
         AnimatedVisibility(
             visible = viewModel.currentScreen == ScreenState.GAMEPLAY &&
                 viewModel.roundOutcome == RoundOutcome.GAME_OVER,
@@ -623,7 +732,6 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
         ) {
             GameOverOverlay(
                 level = viewModel.activeLevel,
-                coins = viewModel.coins,
                 fontFamily = activeFontFamily,
                 onRescue = { viewModel.rescueWithCoins() },
                 onRetry = { viewModel.retryCurrentLevel() },
@@ -672,7 +780,6 @@ fun GraphPaperBackground(
         val width = size.width
         val height = size.height
 
-        // Vertical grid lines
         var x = 0f
         var colIndex = 0
         while (x <= width) {
@@ -687,7 +794,6 @@ fun GraphPaperBackground(
             colIndex++
         }
 
-        // Horizontal grid lines
         var y = 0f
         var rowIndex = 0
         while (y <= height) {
@@ -702,7 +808,6 @@ fun GraphPaperBackground(
             rowIndex++
         }
 
-        // Subtle notebook red vertical margin line on the left
         val marginX = step * 1.6f
         drawLine(
             color = DoodleColors.MarginRed.copy(alpha = 0.45f),
@@ -713,10 +818,6 @@ fun GraphPaperBackground(
     }
 }
 
-/**
- * A reusable container that renders a solid pastel fill and a double-stroked,
- * slightly uneven hand-sketched black outline with a subtle ink shadow.
- */
 @Composable
 fun SketchyContainer(
     modifier: Modifier = Modifier,
@@ -748,7 +849,6 @@ fun SketchyContainer(
             val sw = strokeWidth.toPx()
             val sh = shadowOffset.toPx()
 
-            // Offset hand-drawn shadow
             drawRoundRect(
                 color = borderColor.copy(alpha = 0.18f),
                 topLeft = Offset(sh, sh),
@@ -757,7 +857,6 @@ fun SketchyContainer(
                 style = Fill
             )
 
-            // Main pastel fill
             drawRoundRect(
                 color = fillColor,
                 topLeft = Offset(0f, 0f),
@@ -766,7 +865,6 @@ fun SketchyContainer(
                 style = Fill
             )
 
-            // Primary outer sketchy stroke
             drawRoundRect(
                 color = borderColor,
                 topLeft = Offset(sw * 0.5f, sw * 0.5f),
@@ -775,7 +873,6 @@ fun SketchyContainer(
                 style = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
 
-            // Second slightly tilted/offset stroke for authentic hand-sketched double-line look
             drawRoundRect(
                 color = borderColor.copy(alpha = 0.75f),
                 topLeft = Offset(sw * 1.15f, sw * 0.2f),
@@ -789,7 +886,7 @@ fun SketchyContainer(
 }
 
 // ============================================================================
-// 6. SCREEN 1: MAIN MENU SCREEN
+// 6. SCREEN 1: MAIN MENU SCREEN (WITH PERIL PREVIEW & LEVEL SELECTOR)
 // ============================================================================
 
 @Composable
@@ -800,18 +897,21 @@ fun MainMenuScreen(
     onPlayCampaign: () -> Unit,
     onPlayAdventure: () -> Unit,
     onPlayTwoPlayer: () -> Unit,
+    onSelectPerilLevel: (Int) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenCoinShop: () -> Unit
 ) {
+    val upcomingPeril = PerilType.forLevel(levelNumber)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .widthIn(max = 600.dp)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top Bar: Settings gear icon (left), Star/Coin counter pill with + button (right)
+        // Top Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -833,7 +933,7 @@ fun MainMenuScreen(
             )
         }
 
-        // Center Hero: Animated Stickman floating on 6 balloons above circling shark + "W O R D" title
+        // Center Hero: Animated Peril Scene + Peril Selector Chips + "W O R D" title
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -845,13 +945,15 @@ fun MainMenuScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
-                BalloonSharkSceneCanvas(
-                    balloonsRemaining = 6,
-                    lastPoppedBalloonIndex = -1,
+                DynamicPerilSceneCanvas(
+                    perilType = upcomingPeril,
+                    livesRemaining = 6,
+                    lastPoppedIndex = -1,
                     popTrigger = 0,
+                    lastDamageAmount = 1,
                     isGameOver = false,
                     showSpeechBubble = false,
                     isMenuPreview = true,
@@ -860,21 +962,57 @@ fun MainMenuScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            // Quick Peril Preview / Level Jump Row (Lets user see or jump to any of the 4 perils + Boss Level 5)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 4.dp)
+            ) {
+                val quickPickLevels = listOf(
+                    1 to "1:Shark",
+                    2 to "2:UFO",
+                    3 to "3:Lava",
+                    4 to "4:Dino",
+                    5 to "5:Boss💣"
+                )
+                quickPickLevels.forEach { (lvl, label) ->
+                    val isCurrent = levelNumber == lvl
+                    SketchyContainer(
+                        fillColor = if (isCurrent) DoodleColors.DoodleYellow else Color.White,
+                        cornerRadius = 12.dp,
+                        strokeWidth = 1.5.dp,
+                        shadowOffset = 1.5.dp,
+                        onClick = { onSelectPerilLevel(lvl) },
+                        modifier = Modifier
+                            .height(32.dp)
+                            .testTag("quick_level_$lvl")
+                    ) {
+                        Text(
+                            text = label,
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp,
+                            color = DoodleColors.InkBlack,
+                            modifier = Modifier.padding(horizontal = 7.dp)
+                        )
+                    }
+                }
+            }
 
-            // Title "W O R D" with colored underlines beneath each letter
+            Spacer(modifier = Modifier.height(4.dp))
+
             DoodleWordTitleHeader(fontFamily = fontFamily)
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Bottom Stacked Buttons (Sketchy Pill Style)
+        // Bottom Stacked Buttons
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 360.dp)
-                .padding(bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // 1. Level X (Yellow fill, primary action)
@@ -887,20 +1025,29 @@ fun MainMenuScreen(
                     .height(58.dp)
                     .testTag("play_level_button")
             ) {
-                Text(
-                    text = "Level $levelNumber",
-                    fontFamily = fontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 24.sp,
-                    color = DoodleColors.InkBlack
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (levelNumber % 5 == 0) "Level $levelNumber (BOSS 💣)" else "Level $levelNumber",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 22.sp,
+                        color = DoodleColors.InkBlack
+                    )
+                    Text(
+                        text = upcomingPeril.displayName,
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = DoodleColors.InkBlack.copy(alpha = 0.75f)
+                    )
+                }
             }
 
-            // 2. Adventure (White fill with a small red devil/horn doodle icon on the top-left corner)
+            // 2. Adventure (White fill with red devil/horn doodle icon on top-left corner)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(62.dp)
+                    .height(60.dp)
             ) {
                 SketchyContainer(
                     fillColor = Color.White,
@@ -908,25 +1055,19 @@ fun MainMenuScreen(
                     onClick = onPlayAdventure,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
+                        .height(54.dp)
                         .align(Alignment.BottomCenter)
                         .testTag("adventure_button")
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "Adventure",
-                            fontFamily = fontFamily,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 22.sp,
-                            color = DoodleColors.InkBlack
-                        )
-                    }
+                    Text(
+                        text = "Adventure",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 21.sp,
+                        color = DoodleColors.InkBlack
+                    )
                 }
 
-                // Small red devil/horn doodle badge on the top-left corner
                 Canvas(
                     modifier = Modifier
                         .size(38.dp)
@@ -944,14 +1085,14 @@ fun MainMenuScreen(
                 onClick = onPlayTwoPlayer,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(54.dp)
                     .testTag("two_player_button")
             ) {
                 Text(
                     text = "Two Player",
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 22.sp,
+                    fontSize = 21.sp,
                     color = DoodleColors.InkBlack
                 )
             }
@@ -972,23 +1113,21 @@ fun DoodleWordTitleHeader(fontFamily: FontFamily) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(18.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(vertical = 4.dp)
+        modifier = Modifier.padding(vertical = 2.dp)
     ) {
         letters.forEachIndexed { index, letter ->
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = letter.toString(),
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.Black,
-                    fontSize = 42.sp,
+                    fontSize = 40.sp,
                     color = DoodleColors.InkBlack
                 )
                 Canvas(
                     modifier = Modifier
-                        .width(42.dp)
-                        .height(10.dp)
+                        .width(40.dp)
+                        .height(9.dp)
                 ) {
                     val path = Path().apply {
                         moveTo(2f, size.height * 0.55f)
@@ -1016,7 +1155,7 @@ fun DoodleWordTitleHeader(fontFamily: FontFamily) {
 }
 
 // ============================================================================
-// 7. SCREEN 2: GAMEPLAY SCREEN
+// 7. SCREEN 2: GAMEPLAY SCREEN (DYNAMIC PERILS + BOSS BOMB MODIFIER)
 // ============================================================================
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1026,17 +1165,18 @@ fun GameplayScreen(
     fontFamily: FontFamily
 ) {
     val level = viewModel.activeLevel
+    val perilType = viewModel.activePerilType
     val targetWord = level.word.uppercase()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .widthIn(max = 650.dp)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // 1. Top Bar: Back arrow button, "Level X" text, and Coin balance pill (1231 + Watch Ad/Add icon)
+        // 1. Top Bar: Back arrow button, "Level X" + Peril/Boss subtitle, and Coin balance pill
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1050,20 +1190,32 @@ fun GameplayScreen(
                 DrawDoodleBackArrow()
             }
 
-            val headerTitle = when {
-                level.isAdventure -> "Adventure"
-                level.number == 0 -> "2 Player"
-                else -> "Level ${level.number}"
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val headerTitle = when {
+                    level.isAdventure -> "Adventure ${level.number}"
+                    else -> "Level ${level.number}"
+                }
+                Text(
+                    text = headerTitle,
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 24.sp,
+                    color = DoodleColors.InkBlack,
+                    modifier = Modifier.testTag("level_header_text")
+                )
+                Text(
+                    text = if (level.isBossLevel) {
+                        "${perilType.displayName} • 💣 BOSS (-2 ❤️)"
+                    } else {
+                        perilType.displayName
+                    },
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 12.sp,
+                    color = if (level.isBossLevel) DoodleColors.WrongRed else DoodleColors.InkBlue,
+                    modifier = Modifier.testTag("peril_subtitle_text")
+                )
             }
-
-            Text(
-                text = headerTitle,
-                fontFamily = fontFamily,
-                fontWeight = FontWeight.Black,
-                fontSize = 26.sp,
-                color = DoodleColors.InkBlack,
-                modifier = Modifier.testTag("level_header_text")
-            )
 
             CoinBalancePill(
                 coins = viewModel.coins,
@@ -1073,42 +1225,44 @@ fun GameplayScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // 2. Upper Split Scene:
-        // Left Half: Custom Compose Canvas rendering Stickman, remaining balloons, water line, shark
-        // Right Half: The Clue/Category prompt centered vertically
+        // Left Half: Custom Compose Canvas rendering the active PerilType (Shark, UFO, Volcano, or Dino)
+        // Right Half: The Clue/Category prompt + Boss warning badge centered vertically
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Half: Balloon & Shark Canvas
+            // Left Half: Dynamic Peril Canvas
             Box(
                 modifier = Modifier
-                    .weight(0.52f)
+                    .weight(0.53f)
                     .fillMaxHeight()
                     .padding(end = 6.dp)
             ) {
-                BalloonSharkSceneCanvas(
-                    balloonsRemaining = viewModel.balloonsRemaining,
-                    lastPoppedBalloonIndex = viewModel.lastPoppedBalloonIndex,
+                DynamicPerilSceneCanvas(
+                    perilType = perilType,
+                    livesRemaining = viewModel.balloonsRemaining,
+                    lastPoppedIndex = viewModel.lastPoppedBalloonIndex,
                     popTrigger = viewModel.popAnimationTrigger,
+                    lastDamageAmount = viewModel.lastDamageAmount,
                     isGameOver = viewModel.roundOutcome == RoundOutcome.GAME_OVER,
                     showSpeechBubble = viewModel.balloonsRemaining in 1..2,
                     isMenuPreview = false,
                     fontFamily = fontFamily,
                     modifier = Modifier
                         .fillMaxSize()
-                        .testTag("balloon_shark_canvas")
+                        .testTag("peril_scene_canvas")
                 )
             }
 
-            // Right Half: Clue / Category prompt centered vertically
+            // Right Half: Clue / Category prompt + Lives + Boss Bomb indicator
             Box(
                 modifier = Modifier
-                    .weight(0.48f)
+                    .weight(0.47f)
                     .fillMaxHeight()
                     .padding(start = 6.dp),
                 contentAlignment = Alignment.Center
@@ -1116,13 +1270,13 @@ fun GameplayScreen(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(horizontal = 6.dp)
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 ) {
-                    // Lives / Balloons indicator pill
+                    // 6 Lives status dots
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(bottom = 10.dp)
+                        modifier = Modifier.padding(bottom = 8.dp)
                     ) {
                         repeat(6) { idx ->
                             val alive = idx < viewModel.balloonsRemaining
@@ -1144,12 +1298,34 @@ fun GameplayScreen(
                         }
                     }
 
+                    if (level.isBossLevel) {
+                        SketchyContainer(
+                            fillColor = Color(0xFFFFEBEE),
+                            borderColor = DoodleColors.WrongRed,
+                            cornerRadius = 12.dp,
+                            strokeWidth = 1.6.dp,
+                            shadowOffset = 1.5.dp,
+                            modifier = Modifier
+                                .padding(bottom = 8.dp)
+                                .testTag("boss_warning_badge")
+                        ) {
+                            Text(
+                                text = "💣 BOSS: Red Dot Keys = -2 ❤️",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp,
+                                color = DoodleColors.WrongRed,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
                     Text(
                         text = level.clue,
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 21.sp,
-                        lineHeight = 27.sp,
+                        fontSize = 20.sp,
+                        lineHeight = 25.sp,
                         color = DoodleColors.InkBlack,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.testTag("clue_text")
@@ -1158,11 +1334,11 @@ fun GameplayScreen(
             }
         }
 
-        // 3. Middle Area (Word Slots): Horizontal row of blank underlines (_) for each letter
+        // 3. Middle Area (Word Slots)
         FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(vertical = 10.dp),
             horizontalArrangement = Arrangement.Center,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -1177,18 +1353,15 @@ fun GameplayScreen(
             }
         }
 
-        // 4. Keyboard Area: Custom 4-row alphabetical grid
-        // Row 1: A B C D E F G
-        // Row 2: H I J K L M N
-        // Row 3: O P Q R S T U
-        // Row 4: V W X Y Z
+        // 4. Keyboard Area: Custom 4-row alphabetical grid (with red bomb dots on Boss Levels!)
         DoodleAlphabetKeyboard(
             keyStatuses = viewModel.keyStatuses,
+            bombLetters = viewModel.bombLetters.toSet(),
             fontFamily = fontFamily,
             onKeyPress = { ch -> viewModel.onLetterTapped(ch) }
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // 5. Bottom Power-Up Bar (3 Circular Sketch Buttons)
         BottomPowerUpBar(
@@ -1225,21 +1398,20 @@ fun WordLetterSlot(
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.height(38.dp)
+            modifier = Modifier.height(36.dp)
         ) {
             if (isRevealed) {
                 Text(
                     text = letter.toString(),
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.Black,
-                    fontSize = 28.sp,
+                    fontSize = 27.sp,
                     color = if (slotIndex % 2 == 0) DoodleColors.CorrectGreen else DoodleColors.InkBlue,
                     modifier = Modifier.scale(scale)
                 )
             }
         }
 
-        // Hand-sketched underline
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1265,12 +1437,13 @@ fun WordLetterSlot(
 }
 
 // ============================================================================
-// 8. CUSTOM 4-ROW ALPHABETICAL KEYBOARD WITH HAND-DRAWN CIRCLES & CROSSES
+// 8. CUSTOM 4-ROW ALPHABETICAL KEYBOARD (WITH BOSS LEVEL BOMB DOTS)
 // ============================================================================
 
 @Composable
 fun DoodleAlphabetKeyboard(
     keyStatuses: Map<Char, KeyStatus>,
+    bombLetters: Set<Char>,
     fontFamily: FontFamily,
     onKeyPress: (Char) -> Unit
 ) {
@@ -1285,7 +1458,7 @@ fun DoodleAlphabetKeyboard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         rows.forEach { rowChars ->
@@ -1296,9 +1469,11 @@ fun DoodleAlphabetKeyboard(
             ) {
                 rowChars.forEach { ch ->
                     val status = keyStatuses[ch] ?: KeyStatus.DEFAULT
+                    val isBomb = bombLetters.contains(ch)
                     DoodleLetterKey(
                         letter = ch,
                         status = status,
+                        hasBombDot = isBomb,
                         fontFamily = fontFamily,
                         onClick = { onKeyPress(ch) },
                         modifier = Modifier.weight(1f, fill = false)
@@ -1313,6 +1488,7 @@ fun DoodleAlphabetKeyboard(
 fun DoodleLetterKey(
     letter: Char,
     status: KeyStatus,
+    hasBombDot: Boolean,
     fontFamily: FontFamily,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -1337,7 +1513,7 @@ fun DoodleLetterKey(
             )
             .testTag("key_$letter")
             .semantics {
-                contentDescription = "Letter $letter"
+                contentDescription = if (hasBombDot) "Letter $letter Bomb Key" else "Letter $letter"
             }
     ) {
         // Letter Text
@@ -1352,6 +1528,46 @@ fun DoodleLetterKey(
                 KeyStatus.DEFAULT -> DoodleColors.InkBlack
             }
         )
+
+        // Boss Level: Small red bomb dot with a tiny sizzling fuse at the top-right corner of the key
+        if (hasBombDot) {
+            Canvas(
+                modifier = Modifier
+                    .size(14.dp)
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-3).dp, y = 3.dp)
+                    .testTag("bomb_dot_$letter")
+            ) {
+                val r = size.minDimension * 0.36f
+                val c = Offset(size.width * 0.45f, size.height * 0.58f)
+                // Fuse line
+                drawLine(
+                    color = DoodleColors.InkBlack,
+                    start = Offset(c.x + r * 0.5f, c.y - r * 0.5f),
+                    end = Offset(size.width * 0.88f, size.height * 0.14f),
+                    strokeWidth = 1.5.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                // Spark tip
+                drawCircle(
+                    color = DoodleColors.DoodleYellow,
+                    radius = 2.2.dp.toPx(),
+                    center = Offset(size.width * 0.88f, size.height * 0.14f)
+                )
+                // Red bomb dot
+                drawCircle(
+                    color = DoodleColors.WrongRed,
+                    radius = r,
+                    center = c
+                )
+                drawCircle(
+                    color = DoodleColors.InkBlack,
+                    radius = r,
+                    center = c,
+                    style = Stroke(width = 1.3.dp.toPx())
+                )
+            }
+        }
 
         // Hand-drawn Green Circle or Red Cross overlay
         if (status != KeyStatus.DEFAULT) {
@@ -1425,11 +1641,10 @@ fun BottomPowerUpBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Green Magnifying Glass (Cost: 150 coins) -> Reveals 1 random unguessed letter
         PowerUpCircularButton(
             badgeText = "150",
             accentColor = DoodleColors.HintMagnifierGreen,
@@ -1441,20 +1656,18 @@ fun BottomPowerUpBar(
             DrawDoodleMagnifierIcon()
         }
 
-        // 2. Blue Shield/Potion (Badge count / Cost: 200 coins) -> Adds 1 extra balloon
         PowerUpCircularButton(
             badgeText = if (freePotions > 0) "$freePotions" else "200",
             isCountBadge = freePotions > 0,
             accentColor = DoodleColors.HintPotionBlue,
             fontFamily = fontFamily,
             testTag = "hint_balloon_button",
-            contentDescription = "Add 1 extra balloon life",
+            contentDescription = "Add 1 extra life",
             onClick = onExtraBalloon
         ) {
             DrawDoodlePotionShieldIcon()
         }
 
-        // 3. Orange Lightbulb (Cost: 125 coins) -> Eliminates 3 wrong letters
         PowerUpCircularButton(
             badgeText = "125",
             accentColor = DoodleColors.HintBulbOrange,
@@ -1482,38 +1695,27 @@ fun PowerUpCircularButton(
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(width = 86.dp, height = 74.dp)
+            .size(width = 86.dp, height = 72.dp)
             .testTag(testTag)
             .semantics { this.contentDescription = contentDescription }
     ) {
-        // Circular Sketch Button
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(62.dp)
+                .size(60.dp)
                 .align(Alignment.TopCenter)
                 .clip(CircleShape)
                 .clickable(onClick = onClick)
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val r = size.minDimension * 0.44f
-                // Drop shadow
                 drawCircle(
                     color = DoodleColors.InkBlack.copy(alpha = 0.16f),
                     radius = r,
                     center = Offset(center.x + 2.dp.toPx(), center.y + 3.dp.toPx())
                 )
-                // White fill
-                drawCircle(
-                    color = Color.White,
-                    radius = r
-                )
-                // Colored inner ring tint
-                drawCircle(
-                    color = accentColor.copy(alpha = 0.18f),
-                    radius = r * 0.84f
-                )
-                // Sketchy double black outline
+                drawCircle(color = Color.White, radius = r)
+                drawCircle(color = accentColor.copy(alpha = 0.18f), radius = r * 0.84f)
                 drawCircle(
                     color = DoodleColors.InkBlack,
                     radius = r,
@@ -1529,7 +1731,6 @@ fun PowerUpCircularButton(
             iconContent()
         }
 
-        // Cost / Badge Pill at bottom-right / bottom-center
         SketchyContainer(
             fillColor = if (isCountBadge) accentColor else DoodleColors.DoodleYellow,
             cornerRadius = 10.dp,
@@ -1567,31 +1768,32 @@ fun PowerUpCircularButton(
 }
 
 // ============================================================================
-// 10. CORE PROCEDURAL CANVAS: STICKMAN, 6 BALLOONS, SHARK FIN/JAWS & "-1 ❤️"
+// 10. DYNAMIC PERIL SCENE CANVAS (ALL 4 HAZARDS PROCEDURALLY DRAWN)
 // ============================================================================
 
 @Composable
-fun BalloonSharkSceneCanvas(
-    balloonsRemaining: Int,
-    lastPoppedBalloonIndex: Int,
+fun DynamicPerilSceneCanvas(
+    perilType: PerilType,
+    livesRemaining: Int,
+    lastPoppedIndex: Int,
     popTrigger: Int,
+    lastDamageAmount: Int,
     isGameOver: Boolean,
     showSpeechBubble: Boolean,
     isMenuPreview: Boolean,
     fontFamily: FontFamily,
     modifier: Modifier = Modifier
 ) {
-    // Continuous animations for bobbing, water waves, and shark circling
-    val infiniteTransition = rememberInfiniteTransition(label = "sceneInfinite")
+    val infiniteTransition = rememberInfiniteTransition(label = "perilInfinite")
 
     val bobOffset by infiniteTransition.animateFloat(
-        initialValue = -6f,
-        targetValue = 6f,
+        initialValue = -5f,
+        targetValue = 5f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = FastOutSlowInEasing),
+            animation = tween(1500, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "stickmanBob"
+        label = "bobOffset"
     )
 
     val wavePhase by infiniteTransition.animateFloat(
@@ -1601,182 +1803,131 @@ fun BalloonSharkSceneCanvas(
             animation = tween(2200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "waterWave"
+        label = "wavePhase"
     )
 
-    val sharkPatrol by infiniteTransition.animateFloat(
+    val patrolPhase by infiniteTransition.animateFloat(
         initialValue = -1f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2800, easing = FastOutSlowInEasing),
+            animation = tween(2600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "sharkPatrol"
+        label = "patrolPhase"
     )
 
-    // Stickman altitude drops smoothly as balloons pop (6 -> high, 1 -> just above shark jaws, 0 -> in water)
-    val dropProgress by animateFloatAsState(
+    // Smooth 0f..1f hazard progress as lives drop from 6 -> 0
+    val dangerProgress by animateFloatAsState(
         targetValue = when {
-            isGameOver || balloonsRemaining <= 0 -> 1.0f
-            else -> (6 - balloonsRemaining) / 6.2f
+            isGameOver || livesRemaining <= 0 -> 1.0f
+            else -> ((6 - livesRemaining).coerceIn(0, 6)) / 6.0f
         },
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
         ),
-        label = "altitudeDrop"
+        label = "dangerProgress"
     )
 
-    // Popping balloon & floating "-1 ❤️" animation state
     val popProgress = remember { Animatable(1f) }
     LaunchedEffect(popTrigger) {
         if (popTrigger > 0) {
             popProgress.snapTo(0f)
             popProgress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = 950, easing = FastOutSlowInEasing)
             )
         }
     }
 
     Box(modifier = modifier) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val centerX = w * 0.5f
-            val waterY = h * 0.80f
-
-            // Calculate Stickman harness point (hands clasping the balloon strings)
-            val topSafeY = h * 0.34f
-            val dangerLowY = h * 0.62f
-            val splashedY = h * 0.82f
-
-            val baseHarnessY = if (balloonsRemaining <= 0 || isGameOver) {
-                splashedY
-            } else {
-                topSafeY + (dangerLowY - topSafeY) * (dropProgress * 1.15f)
-            }
-            val harnessY = baseHarnessY + bobOffset
-
-            // Balloon cluster layout (fan of 6 balloons above the stickman's hands)
-            val balloonOffsets = listOf(
-                Offset(-w * 0.24f, -h * 0.20f),
-                Offset(-w * 0.14f, -h * 0.27f),
-                Offset(-w * 0.04f, -h * 0.30f),
-                Offset(w * 0.06f, -h * 0.29f),
-                Offset(w * 0.16f, -h * 0.25f),
-                Offset(w * 0.24f, -h * 0.18f)
-            )
-
-            // 1. Draw Active Balloons & Strings
-            val handPoint = Offset(centerX, harnessY)
-            for (i in 0 until 6) {
-                val bCenter = Offset(
-                    x = centerX + balloonOffsets[i].x + sin(wavePhase + i) * 3.dp.toPx(),
-                    y = harnessY + balloonOffsets[i].y + cos(wavePhase + i) * 2.dp.toPx()
+            when (perilType) {
+                PerilType.SHARK_BALLOONS -> drawSharkBalloonsPeril(
+                    livesRemaining = livesRemaining,
+                    lastPoppedIndex = lastPoppedIndex,
+                    popTrigger = popTrigger,
+                    popProgress = popProgress.value,
+                    dangerProgress = dangerProgress,
+                    bobOffset = bobOffset,
+                    wavePhase = wavePhase,
+                    sharkPatrol = patrolPhase,
+                    isMenuPreview = isMenuPreview,
+                    isGameOver = isGameOver
                 )
-                val balloonRadiusX = (w * 0.085f).coerceIn(13.dp.toPx(), 24.dp.toPx())
-                val balloonRadiusY = balloonRadiusX * 1.18f
 
-                if (i < balloonsRemaining) {
-                    // Curvy string from stickman hand to balloon knot
-                    val stringPath = Path().apply {
-                        moveTo(handPoint.x, handPoint.y)
-                        quadraticTo(
-                            (handPoint.x + bCenter.x) * 0.5f,
-                            (handPoint.y + bCenter.y) * 0.5f + 8.dp.toPx(),
-                            bCenter.x,
-                            bCenter.y + balloonRadiusY
-                        )
-                    }
-                    drawPath(
-                        path = stringPath,
-                        color = DoodleColors.InkBlack,
-                        style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
-                    )
-
-                    // Balloon body
-                    drawDoodleBalloon(
-                        center = bCenter,
-                        rx = balloonRadiusX,
-                        ry = balloonRadiusY,
-                        color = DoodleColors.BalloonPalette[i]
-                    )
-                } else if (i == lastPoppedBalloonIndex && popTrigger > 0 && popProgress.value < 0.95f) {
-                    // Bursting balloon particles!
-                    drawPoppingBalloonBurst(
-                        center = bCenter,
-                        progress = popProgress.value,
-                        color = DoodleColors.BalloonPalette[i]
-                    )
-                }
-            }
-
-            // 2. Draw Stickman suspended from the strings
-            drawDoodleStickman(
-                handAnchor = handPoint,
-                scale = (w / 420f).coerceIn(0.68f, 1.15f),
-                isPanicking = balloonsRemaining in 1..2,
-                isSplashed = balloonsRemaining <= 0 || isGameOver,
-                wavePhase = wavePhase
-            )
-
-            // 3. Draw Shark (Jaws wide open if <= 2 balloons, or circling dorsal fin otherwise)
-            val isJawsOpen = (!isMenuPreview && balloonsRemaining <= 2)
-            if (isJawsOpen) {
-                drawOpenSharkJaws(
-                    centerX = centerX + sharkPatrol * (w * 0.04f),
-                    waterY = waterY,
-                    scale = (w / 380f).coerceIn(0.75f, 1.2f)
+                PerilType.UFO_ABDUCTION -> drawUfoAbductionPeril(
+                    livesRemaining = livesRemaining,
+                    popTrigger = popTrigger,
+                    popProgress = popProgress.value,
+                    dangerProgress = dangerProgress,
+                    bobOffset = bobOffset,
+                    wavePhase = wavePhase,
+                    ufoSway = patrolPhase,
+                    isGameOver = isGameOver
                 )
-            } else {
-                val sharkX = centerX + sharkPatrol * (w * 0.24f)
-                val movingRight = cos(wavePhase) >= 0f
-                drawCirclingSharkFin(
-                    x = sharkX,
-                    waterY = waterY,
-                    facingRight = sharkPatrol < 0f || movingRight,
-                    scale = (w / 380f).coerceIn(0.75f, 1.2f)
+
+                PerilType.VOLCANO_BLOCKS -> drawVolcanoBlocksPeril(
+                    livesRemaining = livesRemaining,
+                    popTrigger = popTrigger,
+                    popProgress = popProgress.value,
+                    bobOffset = bobOffset,
+                    wavePhase = wavePhase,
+                    isGameOver = isGameOver
+                )
+
+                PerilType.DINO_STEALTH -> drawDinoStealthPeril(
+                    livesRemaining = livesRemaining,
+                    popTrigger = popTrigger,
+                    popProgress = popProgress.value,
+                    bobOffset = bobOffset,
+                    wavePhase = wavePhase,
+                    isGameOver = isGameOver
                 )
             }
-
-            // 4. Draw Animated Wavy Water Lines in Foreground
-            drawDoodleWaterWaves(
-                waterY = waterY,
-                wavePhase = wavePhase
-            )
         }
 
-        // 5. Floating "-1 ❤️" Indicator on Wrong Guess
+        // Floating "-1 ❤️" or "-2 ❤️ 💥" + Peril Hit Effect (POP! / ZAP! / CRUMBLE! / CLANG!)
         if (popTrigger > 0 && popProgress.value < 0.95f) {
             val p = popProgress.value
-            Box(
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .offset(y = (36 - (p * 42)).dp)
                     .scale(1f + (1f - p) * 0.25f)
             ) {
                 Text(
-                    text = "-1 ❤️",
+                    text = if (lastDamageAmount >= 2) "-2 ❤️ 💥" else "-1 ❤️",
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.Black,
-                    fontSize = 22.sp,
+                    fontSize = 21.sp,
                     color = DoodleColors.WrongRed.copy(alpha = (1f - p).coerceIn(0f, 1f))
+                )
+                Text(
+                    text = perilType.hitEffectLabel,
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp,
+                    color = DoodleColors.InkBlack.copy(alpha = (1f - p).coerceIn(0f, 1f))
                 )
             }
         }
 
-        // 6. Speech Bubble when <= 2 balloons remain: "Come on, you can do that!"
+        // Contextual Hazard-Specific Speech Bubble when lives <= 2
         AnimatedVisibility(
             visible = showSpeechBubble && !isGameOver,
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut(),
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 2.dp, start = 4.dp, end = 4.dp)
+                .align(
+                    if (perilType == PerilType.UFO_ABDUCTION) Alignment.BottomCenter else Alignment.TopCenter
+                )
+                .padding(vertical = 4.dp, horizontal = 4.dp)
+                .testTag("panic_speech_bubble")
         ) {
             SketchySpeechBubble(
-                text = "Come on, you can do that!",
+                text = perilType.panicBubbleText,
                 fontFamily = fontFamily
             )
         }
@@ -1812,27 +1963,605 @@ fun SketchySpeechBubble(
     }
 }
 
+// ----------------------------------------------------------------------------
+// PERIL 1: SHARK_BALLOONS (Levels 1, 5, 9...)
+// ----------------------------------------------------------------------------
+private fun DrawScope.drawSharkBalloonsPeril(
+    livesRemaining: Int,
+    lastPoppedIndex: Int,
+    popTrigger: Int,
+    popProgress: Float,
+    dangerProgress: Float,
+    bobOffset: Float,
+    wavePhase: Float,
+    sharkPatrol: Float,
+    isMenuPreview: Boolean,
+    isGameOver: Boolean
+) {
+    val w = size.width
+    val h = size.height
+    val centerX = w * 0.5f
+    val waterY = h * 0.80f
+
+    val topSafeY = h * 0.34f
+    val dangerLowY = h * 0.62f
+    val splashedY = h * 0.82f
+
+    val baseHarnessY = if (livesRemaining <= 0 || isGameOver) {
+        splashedY
+    } else {
+        topSafeY + (dangerLowY - topSafeY) * (dangerProgress * 1.12f)
+    }
+    val harnessY = baseHarnessY + bobOffset
+
+    val balloonOffsets = listOf(
+        Offset(-w * 0.24f, -h * 0.20f),
+        Offset(-w * 0.14f, -h * 0.27f),
+        Offset(-w * 0.04f, -h * 0.30f),
+        Offset(w * 0.06f, -h * 0.29f),
+        Offset(w * 0.16f, -h * 0.25f),
+        Offset(w * 0.24f, -h * 0.18f)
+    )
+
+    val handPoint = Offset(centerX, harnessY)
+    for (i in 0 until 6) {
+        val bCenter = Offset(
+            x = centerX + balloonOffsets[i].x + sin(wavePhase + i) * 3.dp.toPx(),
+            y = harnessY + balloonOffsets[i].y + cos(wavePhase + i) * 2.dp.toPx()
+        )
+        val balloonRadiusX = (w * 0.085f).coerceIn(13.dp.toPx(), 24.dp.toPx())
+        val balloonRadiusY = balloonRadiusX * 1.18f
+
+        if (i < livesRemaining) {
+            val stringPath = Path().apply {
+                moveTo(handPoint.x, handPoint.y)
+                quadraticTo(
+                    (handPoint.x + bCenter.x) * 0.5f,
+                    (handPoint.y + bCenter.y) * 0.5f + 8.dp.toPx(),
+                    bCenter.x,
+                    bCenter.y + balloonRadiusY
+                )
+            }
+            drawPath(
+                path = stringPath,
+                color = DoodleColors.InkBlack,
+                style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+            )
+            drawDoodleBalloon(
+                center = bCenter,
+                rx = balloonRadiusX,
+                ry = balloonRadiusY,
+                color = DoodleColors.BalloonPalette[i]
+            )
+        } else if (i == lastPoppedIndex && popTrigger > 0 && popProgress < 0.95f) {
+            drawPoppingBalloonBurst(
+                center = bCenter,
+                progress = popProgress,
+                color = DoodleColors.BalloonPalette[i]
+            )
+        }
+    }
+
+    drawDoodleStickman(
+        handAnchor = handPoint,
+        scale = (w / 420f).coerceIn(0.68f, 1.12f),
+        isPanicking = livesRemaining in 1..2,
+        isSplashed = livesRemaining <= 0 || isGameOver,
+        wavePhase = wavePhase,
+        handsUp = true
+    )
+
+    val isJawsOpen = (!isMenuPreview && livesRemaining <= 2)
+    if (isJawsOpen) {
+        drawOpenSharkJaws(
+            centerX = centerX + sharkPatrol * (w * 0.04f),
+            waterY = waterY,
+            scale = (w / 380f).coerceIn(0.75f, 1.2f)
+        )
+    } else {
+        val sharkX = centerX + sharkPatrol * (w * 0.24f)
+        val movingRight = cos(wavePhase) >= 0f
+        drawCirclingSharkFin(
+            x = sharkX,
+            waterY = waterY,
+            facingRight = sharkPatrol < 0f || movingRight,
+            scale = (w / 380f).coerceIn(0.75f, 1.2f)
+        )
+    }
+
+    drawDoodleWaterWaves(waterY = waterY, wavePhase = wavePhase)
+}
+
+// ----------------------------------------------------------------------------
+// PERIL 2: UFO_ABDUCTION (Levels 2, 6, 10...)
+// Stickman on ground pulled upward step-by-step into UFO tractor beam at top
+// ----------------------------------------------------------------------------
+private fun DrawScope.drawUfoAbductionPeril(
+    livesRemaining: Int,
+    popTrigger: Int,
+    popProgress: Float,
+    dangerProgress: Float,
+    bobOffset: Float,
+    wavePhase: Float,
+    ufoSway: Float,
+    isGameOver: Boolean
+) {
+    val w = size.width
+    val h = size.height
+    val centerX = w * 0.5f + ufoSway * (w * 0.04f)
+    val ufoY = h * 0.17f
+    val groundY = h * 0.88f
+
+    // 1. Tractor Beam Cone from UFO down to ground
+    val beamTopHalfW = w * 0.14f
+    val beamBottomHalfW = w * 0.38f
+    val beamPath = Path().apply {
+        moveTo(centerX - beamTopHalfW, ufoY + 10.dp.toPx())
+        lineTo(centerX + beamTopHalfW, ufoY + 10.dp.toPx())
+        lineTo(centerX + beamBottomHalfW, groundY)
+        lineTo(centerX - beamBottomHalfW, groundY)
+        close()
+    }
+    val beamAlpha = if (popTrigger > 0 && popProgress < 0.5f) 0.40f else 0.22f
+    drawPath(
+        path = beamPath,
+        color = DoodleColors.UfoBeamGreen.copy(alpha = beamAlpha)
+    )
+    // Dashed sketch edges on beam
+    drawLine(
+        color = DoodleColors.CorrectGreen.copy(alpha = 0.7f),
+        start = Offset(centerX - beamTopHalfW, ufoY + 10.dp.toPx()),
+        end = Offset(centerX - beamBottomHalfW, groundY),
+        strokeWidth = 2.dp.toPx()
+    )
+    drawLine(
+        color = DoodleColors.CorrectGreen.copy(alpha = 0.7f),
+        start = Offset(centerX + beamTopHalfW, ufoY + 10.dp.toPx()),
+        end = Offset(centerX + beamBottomHalfW, groundY),
+        strokeWidth = 2.dp.toPx()
+    )
+
+    // 6 Tractor Beam Altitude Rings (representing the 6 steps to abduction)
+    for (stepIdx in 0 until 6) {
+        val frac = (stepIdx + 1) / 7f
+        val ringY = groundY - (groundY - ufoY - 24.dp.toPx()) * frac
+        val ringRx = beamTopHalfW + (beamBottomHalfW - beamTopHalfW) * (1f - frac) * 0.75f
+        val isAbductedStep = stepIdx >= livesRemaining
+        drawOval(
+            color = if (isAbductedStep) DoodleColors.WrongRed.copy(alpha = 0.65f)
+            else DoodleColors.CorrectGreen.copy(alpha = 0.55f),
+            topLeft = Offset(centerX - ringRx, ringY - 5.dp.toPx()),
+            size = Size(ringRx * 2f, 10.dp.toPx()),
+            style = Stroke(width = if (isAbductedStep) 2.4.dp.toPx() else 1.5.dp.toPx())
+        )
+    }
+
+    // 2. Sketched Ground Grass Line at bottom
+    drawLine(
+        color = DoodleColors.CorrectGreen,
+        start = Offset(w * 0.08f, groundY),
+        end = Offset(w * 0.92f, groundY),
+        strokeWidth = 4.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = DoodleColors.InkBlack,
+        start = Offset(w * 0.08f, groundY),
+        end = Offset(w * 0.92f, groundY),
+        strokeWidth = 2.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+
+    // 3. Stickman position: starts on ground (dangerProgress = 0) and rises into UFO hatch (dangerProgress = 1)
+    val startHandY = groundY - 76.dp.toPx()
+    val abductedHandY = ufoY + 12.dp.toPx()
+    val currentHandY = startHandY + (abductedHandY - startHandY) * dangerProgress + bobOffset
+
+    if (!isGameOver && livesRemaining > 0) {
+        drawDoodleStickman(
+            handAnchor = Offset(centerX, currentHandY),
+            scale = ((w / 420f) * (1f - dangerProgress * 0.25f)).coerceIn(0.55f, 1.1f),
+            isPanicking = livesRemaining <= 2,
+            isSplashed = false,
+            wavePhase = wavePhase,
+            handsUp = dangerProgress > 0.1f
+        )
+    }
+
+    // 4. Draw Doodle UFO Flying Saucer at top
+    val saucerRx = (w * 0.28f).coerceAtMost(64.dp.toPx())
+    val saucerRy = 14.dp.toPx()
+    val domeRx = saucerRx * 0.58f
+    val domeRy = 18.dp.toPx()
+
+    // Glass dome
+    drawOval(
+        color = DoodleColors.UfoDomeCyan,
+        topLeft = Offset(centerX - domeRx, ufoY - domeRy * 1.3f),
+        size = Size(domeRx * 2f, domeRy * 2f)
+    )
+    drawOval(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(centerX - domeRx, ufoY - domeRy * 1.3f),
+        size = Size(domeRx * 2f, domeRy * 2f),
+        style = Stroke(width = 2.2.dp.toPx())
+    )
+    // Little green alien silhouette inside dome
+    drawCircle(
+        color = DoodleColors.CorrectGreen,
+        radius = 6.dp.toPx(),
+        center = Offset(centerX, ufoY - domeRy * 0.55f)
+    )
+    drawCircle(
+        color = DoodleColors.InkBlack,
+        radius = 6.dp.toPx(),
+        center = Offset(centerX, ufoY - domeRy * 0.55f),
+        style = Stroke(width = 1.5.dp.toPx())
+    )
+
+    // Metallic Saucer Disc
+    drawOval(
+        color = DoodleColors.UfoSilver,
+        topLeft = Offset(centerX - saucerRx, ufoY - saucerRy),
+        size = Size(saucerRx * 2f, saucerRy * 2f)
+    )
+    drawOval(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(centerX - saucerRx, ufoY - saucerRy),
+        size = Size(saucerRx * 2f, saucerRy * 2f),
+        style = Stroke(width = 2.4.dp.toPx())
+    )
+
+    // Glowing UFO lights along saucer rim
+    for (i in -2..2) {
+        val lx = centerX + i * (saucerRx * 0.34f)
+        drawCircle(
+            color = if ((i + (wavePhase * 2).toInt()) % 2 == 0) DoodleColors.DoodleYellow else DoodleColors.WrongRed,
+            radius = 3.5.dp.toPx(),
+            center = Offset(lx, ufoY)
+        )
+        drawCircle(
+            color = DoodleColors.InkBlack,
+            radius = 3.5.dp.toPx(),
+            center = Offset(lx, ufoY),
+            style = Stroke(width = 1.2.dp.toPx())
+        )
+    }
+}
+
+// ----------------------------------------------------------------------------
+// PERIL 3: VOLCANO_BLOCKS (Levels 3, 7, 11...)
+// Stickman standing on a stack of 6 sketched stone crates over bubbling lava
+// ----------------------------------------------------------------------------
+private fun DrawScope.drawVolcanoBlocksPeril(
+    livesRemaining: Int,
+    popTrigger: Int,
+    popProgress: Float,
+    bobOffset: Float,
+    wavePhase: Float,
+    isGameOver: Boolean
+) {
+    val w = size.width
+    val h = size.height
+    val centerX = w * 0.5f
+    val lavaY = h * 0.82f
+
+    val crateW = (w * 0.34f).coerceIn(46.dp.toPx(), 78.dp.toPx())
+    val crateH = ((h * 0.44f) / 6f).coerceIn(14.dp.toPx(), 24.dp.toPx())
+
+    // 1. Draw Stack of Remaining Stone Crates above lavaY
+    val cratesCount = livesRemaining.coerceIn(0, 6)
+    for (i in 0 until cratesCount) {
+        val topY = lavaY - (i + 1) * crateH
+        val wobbleX = if (livesRemaining <= 2) sin(wavePhase * 3f + i) * 2.5.dp.toPx() else 0f
+        val leftX = centerX - crateW * 0.5f + wobbleX
+
+        // Stone crate fill
+        drawRoundRect(
+            color = if (i % 2 == 0) DoodleColors.CrateStone else DoodleColors.CrateStoneDark,
+            topLeft = Offset(leftX, topY),
+            size = Size(crateW, crateH - 1.5.dp.toPx()),
+            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+        )
+        // Sketchy black outline
+        drawRoundRect(
+            color = DoodleColors.InkBlack,
+            topLeft = Offset(leftX, topY),
+            size = Size(crateW, crateH - 1.5.dp.toPx()),
+            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+            style = Stroke(width = 2.dp.toPx())
+        )
+        // Diagonal stone brace / crack detail
+        drawLine(
+            color = DoodleColors.InkBlack.copy(alpha = 0.45f),
+            start = Offset(leftX + 6.dp.toPx(), topY + 3.dp.toPx()),
+            end = Offset(leftX + crateW - 6.dp.toPx(), topY + crateH - 5.dp.toPx()),
+            strokeWidth = 1.4.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
+
+    // Crumbling rock debris when a crate breaks
+    if (popTrigger > 0 && popProgress < 0.9f) {
+        val crumbleY = lavaY - cratesCount * crateH
+        for (r in 0 until 6) {
+            val angle = (r * PI / 3.0).toFloat()
+            val rx = centerX + cos(angle) * (16.dp.toPx() + popProgress * 28.dp.toPx())
+            val ry = crumbleY + sin(angle) * 12.dp.toPx() + popProgress * 26.dp.toPx()
+            drawCircle(
+                color = DoodleColors.CrateStoneDark.copy(alpha = (1f - popProgress).coerceIn(0f, 1f)),
+                radius = 4.dp.toPx(),
+                center = Offset(rx, ry)
+            )
+        }
+    }
+
+    // 2. Draw Stickman standing on top of the highest crate
+    val platformTopY = lavaY - cratesCount * crateH
+    val stickmanScale = (w / 440f).coerceIn(0.65f, 1.05f)
+    val feetHeight = 72.dp.toPx() * stickmanScale
+    val handY = if (isGameOver || livesRemaining <= 0) {
+        lavaY - 18.dp.toPx()
+    } else {
+        platformTopY - feetHeight + bobOffset * 0.4f
+    }
+
+    drawDoodleStickman(
+        handAnchor = Offset(centerX, handY),
+        scale = stickmanScale,
+        isPanicking = livesRemaining in 1..2,
+        isSplashed = livesRemaining <= 0 || isGameOver,
+        wavePhase = wavePhase,
+        handsUp = false
+    )
+
+    // 3. Draw Bubbling Red/Orange Lava at bottom
+    val lavaPath = Path().apply {
+        moveTo(0f, h)
+        lineTo(0f, lavaY)
+        var x = 0f
+        val step = 16.dp.toPx()
+        while (x <= w + step) {
+            val ly = lavaY + sin(wavePhase * 1.4f + x * 0.05f) * 5.dp.toPx()
+            lineTo(x, ly)
+            x += step
+        }
+        lineTo(w, h)
+        close()
+    }
+    drawPath(path = lavaPath, color = DoodleColors.LavaOrange.copy(alpha = 0.85f))
+
+    // Lava bubbles
+    for (b in 1..4) {
+        val bx = w * (0.18f * b) + sin(wavePhase + b) * 6.dp.toPx()
+        val by = lavaY + 8.dp.toPx() + cos(wavePhase * 2f + b) * 4.dp.toPx()
+        drawCircle(color = DoodleColors.LavaYellow, radius = 5.dp.toPx(), center = Offset(bx, by))
+        drawCircle(
+            color = DoodleColors.InkBlack,
+            radius = 5.dp.toPx(),
+            center = Offset(bx, by),
+            style = Stroke(width = 1.4.dp.toPx())
+        )
+    }
+
+    // Bold lava crust line
+    drawLine(
+        color = DoodleColors.InkBlack,
+        start = Offset(0f, lavaY),
+        end = Offset(w, lavaY),
+        strokeWidth = 2.4.dp.toPx()
+    )
+}
+
+// ----------------------------------------------------------------------------
+// PERIL 4: DINO_STEALTH (Levels 4, 8, 12...)
+// Stickman tiptoeing next to a giant sleeping T-Rex head + 6-bar Noise Meter
+// ----------------------------------------------------------------------------
+private fun DrawScope.drawDinoStealthPeril(
+    livesRemaining: Int,
+    popTrigger: Int,
+    popProgress: Float,
+    bobOffset: Float,
+    wavePhase: Float,
+    isGameOver: Boolean
+) {
+    val w = size.width
+    val h = size.height
+    val groundY = h * 0.84f
+    val noiseLevel = (6 - livesRemaining).coerceIn(0, 6)
+
+    // 1. Draw 6-Bar "Noise Meter" at top-left of canvas
+    val meterStartX = w * 0.08f
+    val meterTopY = h * 0.12f
+    val barW = (w * 0.11f).coerceIn(14.dp.toPx(), 24.dp.toPx())
+    val barGap = 4.dp.toPx()
+
+    for (i in 0 until 6) {
+        val barH = (10 + i * 3).dp.toPx()
+        val bx = meterStartX + i * (barW + barGap)
+        val by = meterTopY + (28.dp.toPx() - barH)
+        val isActiveNoise = i < noiseLevel
+        val barColor = when {
+            !isActiveNoise -> Color.White
+            i < 2 -> DoodleColors.DoodleYellow
+            i < 4 -> DoodleColors.HintBulbOrange
+            else -> DoodleColors.WrongRed
+        }
+        drawRoundRect(
+            color = barColor,
+            topLeft = Offset(bx, by),
+            size = Size(barW, barH),
+            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+        )
+        drawRoundRect(
+            color = DoodleColors.InkBlack,
+            topLeft = Offset(bx, by),
+            size = Size(barW, barH),
+            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx()),
+            style = Stroke(width = 1.6.dp.toPx())
+        )
+    }
+
+    // 2. Ground line
+    drawLine(
+        color = DoodleColors.InkBlack,
+        start = Offset(w * 0.05f, groundY),
+        end = Offset(w * 0.95f, groundY),
+        strokeWidth = 2.6.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+
+    // 3. Giant Sleeping / Waking T-Rex Head on the right half of the scene
+    val dinoX = w * 0.62f
+    val dinoY = groundY - 46.dp.toPx()
+    val jawOpenAngle = when {
+        isGameOver || livesRemaining <= 0 -> 26.dp.toPx()
+        livesRemaining <= 2 -> 16.dp.toPx()
+        livesRemaining <= 4 -> 5.dp.toPx()
+        else -> 0f
+    }
+
+    // T-Rex Upper Snout / Head
+    val upperHeadW = w * 0.34f
+    val upperHeadH = 38.dp.toPx()
+    drawRoundRect(
+        color = DoodleColors.DinoGreen,
+        topLeft = Offset(dinoX - upperHeadW * 0.4f, dinoY - upperHeadH - jawOpenAngle * 0.5f),
+        size = Size(upperHeadW, upperHeadH),
+        cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
+    )
+    drawRoundRect(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(dinoX - upperHeadW * 0.4f, dinoY - upperHeadH - jawOpenAngle * 0.5f),
+        size = Size(upperHeadW, upperHeadH),
+        cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+        style = Stroke(width = 2.4.dp.toPx())
+    )
+
+    // T-Rex Lower Jaw
+    val lowerJawH = 18.dp.toPx()
+    drawRoundRect(
+        color = DoodleColors.DinoLightGreen,
+        topLeft = Offset(dinoX - upperHeadW * 0.35f, dinoY + jawOpenAngle * 0.4f),
+        size = Size(upperHeadW * 0.9f, lowerJawH),
+        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
+    )
+    drawRoundRect(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(dinoX - upperHeadW * 0.35f, dinoY + jawOpenAngle * 0.4f),
+        size = Size(upperHeadW * 0.9f, lowerJawH),
+        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+        style = Stroke(width = 2.2.dp.toPx())
+    )
+
+    // Sharp T-Rex Teeth when mouth opens
+    if (jawOpenAngle > 2f) {
+        val startTx = dinoX - upperHeadW * 0.32f
+        val toothStep = (upperHeadW * 0.7f) / 4f
+        for (t in 0 until 4) {
+            val tx = startTx + t * toothStep
+            val ty = dinoY - jawOpenAngle * 0.5f
+            val toothPath = Path().apply {
+                moveTo(tx, ty)
+                lineTo(tx + toothStep * 0.4f, ty + 8.dp.toPx())
+                lineTo(tx + toothStep * 0.8f, ty)
+                close()
+            }
+            drawPath(toothPath, color = Color.White)
+            drawPath(toothPath, color = DoodleColors.InkBlack, style = Stroke(width = 1.4.dp.toPx()))
+        }
+    }
+
+    // T-Rex Eye (Closed sleeping arc when lives >= 5, half-open at 3..4, wide glowing eye at <= 2)
+    val eyeCenter = Offset(dinoX + upperHeadW * 0.15f, dinoY - upperHeadH * 0.55f - jawOpenAngle * 0.5f)
+    if (livesRemaining >= 5) {
+        // Sleeping closed eyelid + Zzz bubbles
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(eyeCenter.x - 7.dp.toPx(), eyeCenter.y),
+            end = Offset(eyeCenter.x + 7.dp.toPx(), eyeCenter.y),
+            strokeWidth = 2.6.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        // Floating Zzz circles
+        drawCircle(
+            color = DoodleColors.InkBlue.copy(alpha = 0.5f),
+            radius = 4.dp.toPx(),
+            center = Offset(eyeCenter.x + 12.dp.toPx(), eyeCenter.y - 16.dp.toPx() + bobOffset)
+        )
+        drawCircle(
+            color = DoodleColors.InkBlue.copy(alpha = 0.7f),
+            radius = 6.dp.toPx(),
+            center = Offset(eyeCenter.x + 22.dp.toPx(), eyeCenter.y - 28.dp.toPx() + bobOffset)
+        )
+    } else {
+        val eyeR = if (livesRemaining <= 2) 8.dp.toPx() else 5.5.dp.toPx()
+        drawCircle(
+            color = if (livesRemaining <= 2) DoodleColors.DoodleYellow else Color.White,
+            radius = eyeR,
+            center = eyeCenter
+        )
+        drawCircle(
+            color = DoodleColors.InkBlack,
+            radius = eyeR,
+            center = eyeCenter,
+            style = Stroke(width = 2.dp.toPx())
+        )
+        drawCircle(
+            color = DoodleColors.WrongRed,
+            radius = eyeR * 0.45f,
+            center = Offset(eyeCenter.x - 2.dp.toPx(), eyeCenter.y)
+        )
+    }
+
+    // 4. Stickman Tiptoeing on the left side
+    val stickmanX = w * 0.25f
+    val stickmanScale = (w / 420f).coerceIn(0.68f, 1.05f)
+    val stickmanHandY = groundY - 72.dp.toPx() * stickmanScale + bobOffset * 0.5f
+
+    drawDoodleStickman(
+        handAnchor = Offset(stickmanX, stickmanHandY),
+        scale = stickmanScale,
+        isPanicking = livesRemaining <= 2,
+        isSplashed = isGameOver || livesRemaining <= 0,
+        wavePhase = wavePhase,
+        handsUp = false
+    )
+
+    // 5. Comic "CLANG!" sound burst waves on wrong guess
+    if (popTrigger > 0 && popProgress < 0.9f) {
+        val clangCenter = Offset(stickmanX + 18.dp.toPx(), groundY - 16.dp.toPx())
+        for (ring in 1..2) {
+            drawCircle(
+                color = DoodleColors.WrongRed.copy(alpha = (1f - popProgress).coerceIn(0f, 1f)),
+                radius = (ring * 12.dp.toPx()) + popProgress * 22.dp.toPx(),
+                center = clangCenter,
+                style = Stroke(width = 2.2.dp.toPx())
+            )
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// SHARED DOODLE STICKMAN, BALLOONS & SHARK HELPERS
+// ----------------------------------------------------------------------------
+
 private fun DrawScope.drawDoodleBalloon(
     center: Offset,
     rx: Float,
     ry: Float,
     color: Color
 ) {
-    // Oval fill
     drawOval(
         color = color,
         topLeft = Offset(center.x - rx, center.y - ry),
         size = Size(rx * 2f, ry * 2f)
     )
-
-    // Glossy doodle highlight arc on top-left
     drawOval(
         color = Color.White.copy(alpha = 0.55f),
         topLeft = Offset(center.x - rx * 0.58f, center.y - ry * 0.62f),
         size = Size(rx * 0.42f, ry * 0.52f)
     )
-
-    // Balloon knot triangle at bottom
     val knotPath = Path().apply {
         moveTo(center.x, center.y + ry)
         lineTo(center.x - 4.dp.toPx(), center.y + ry + 5.dp.toPx())
@@ -1845,8 +2574,6 @@ private fun DrawScope.drawDoodleBalloon(
         color = DoodleColors.InkBlack,
         style = Stroke(width = 1.5.dp.toPx(), join = StrokeJoin.Round)
     )
-
-    // Hand-drawn black outline
     drawOval(
         color = DoodleColors.InkBlack,
         topLeft = Offset(center.x - rx, center.y - ry),
@@ -1882,7 +2609,8 @@ private fun DrawScope.drawDoodleStickman(
     scale: Float,
     isPanicking: Boolean,
     isSplashed: Boolean,
-    wavePhase: Float
+    wavePhase: Float,
+    handsUp: Boolean = true
 ) {
     val strokeW = (3.2.dp.toPx() * scale).coerceAtLeast(2.5.dp.toPx())
     val headRadius = 13.dp.toPx() * scale
@@ -1891,23 +2619,32 @@ private fun DrawScope.drawDoodleStickman(
     val headCenter = Offset(handAnchor.x, shoulderY - headRadius - 4.dp.toPx() * scale)
     val hipY = shoulderY + 28.dp.toPx() * scale
 
-    // Arms reaching up to hold the balloon strings at handAnchor
-    drawLine(
-        color = DoodleColors.InkBlack,
-        start = Offset(handAnchor.x, shoulderY),
-        end = Offset(handAnchor.x - 7.dp.toPx() * scale, handAnchor.y + 8.dp.toPx() * scale),
-        strokeWidth = strokeW,
-        cap = StrokeCap.Round
-    )
-    drawLine(
-        color = DoodleColors.InkBlack,
-        start = Offset(handAnchor.x - 7.dp.toPx() * scale, handAnchor.y + 8.dp.toPx() * scale),
-        end = handAnchor,
-        strokeWidth = strokeW,
-        cap = StrokeCap.Round
-    )
+    if (handsUp) {
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(handAnchor.x, shoulderY),
+            end = Offset(handAnchor.x - 7.dp.toPx() * scale, handAnchor.y + 8.dp.toPx() * scale),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(handAnchor.x - 7.dp.toPx() * scale, handAnchor.y + 8.dp.toPx() * scale),
+            end = handAnchor,
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+    } else {
+        val armSwing = sin(wavePhase * 2f) * 6.dp.toPx() * scale
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(handAnchor.x, shoulderY),
+            end = Offset(handAnchor.x - 16.dp.toPx() * scale, shoulderY + 12.dp.toPx() * scale + armSwing),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+    }
 
-    // Right arm (either holding strings or waving in panic)
     if (isPanicking) {
         val waveArmY = shoulderY - 10.dp.toPx() * scale + sin(wavePhase * 3f) * 8.dp.toPx()
         drawLine(
@@ -1917,7 +2654,7 @@ private fun DrawScope.drawDoodleStickman(
             strokeWidth = strokeW,
             cap = StrokeCap.Round
         )
-    } else {
+    } else if (handsUp) {
         drawLine(
             color = DoodleColors.InkBlack,
             start = Offset(handAnchor.x, shoulderY),
@@ -1932,6 +2669,15 @@ private fun DrawScope.drawDoodleStickman(
             strokeWidth = strokeW,
             cap = StrokeCap.Round
         )
+    } else {
+        val armSwing = cos(wavePhase * 2f) * 6.dp.toPx() * scale
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(handAnchor.x, shoulderY),
+            end = Offset(handAnchor.x + 16.dp.toPx() * scale, shoulderY + 12.dp.toPx() * scale + armSwing),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
     }
 
     // Torso
@@ -1943,7 +2689,7 @@ private fun DrawScope.drawDoodleStickman(
         cap = StrokeCap.Round
     )
 
-    // Legs kicking in air
+    // Legs
     val kick = if (isPanicking) sin(wavePhase * 4f) * 7.dp.toPx() else sin(wavePhase) * 3.dp.toPx()
     drawLine(
         color = DoodleColors.InkBlack,
@@ -1960,12 +2706,8 @@ private fun DrawScope.drawDoodleStickman(
         cap = StrokeCap.Round
     )
 
-    // Head (white fill + black outline)
-    drawCircle(
-        color = Color.White,
-        radius = headRadius,
-        center = headCenter
-    )
+    // Head
+    drawCircle(color = Color.White, radius = headRadius, center = headCenter)
     drawCircle(
         color = DoodleColors.InkBlack,
         radius = headRadius,
@@ -1973,7 +2715,6 @@ private fun DrawScope.drawDoodleStickman(
         style = Stroke(width = strokeW * 0.85f)
     )
 
-    // Facial Expression
     val eyeOffsetX = headRadius * 0.34f
     val eyeY = headCenter.y - headRadius * 0.15f
     drawCircle(
@@ -1988,21 +2729,18 @@ private fun DrawScope.drawDoodleStickman(
     )
 
     if (isPanicking || isSplashed) {
-        // Worried open "O" mouth + sweat drops
         drawCircle(
             color = DoodleColors.InkBlack,
             radius = 3.2.dp.toPx() * scale,
             center = Offset(headCenter.x, headCenter.y + headRadius * 0.35f),
             style = Stroke(width = 1.8.dp.toPx())
         )
-        // Sweat drop
         drawCircle(
             color = DoodleColors.WaterBlue,
             radius = 2.5.dp.toPx() * scale,
             center = Offset(headCenter.x + headRadius + 5.dp.toPx(), headCenter.y - 4.dp.toPx())
         )
     } else {
-        // Happy doodle smile
         val smilePath = Path().apply {
             moveTo(headCenter.x - headRadius * 0.35f, headCenter.y + headRadius * 0.22f)
             quadraticTo(
@@ -2063,7 +2801,6 @@ private fun DrawScope.drawOpenSharkJaws(
     val jawW = 46.dp.toPx() * scale
     val jawH = 44.dp.toPx() * scale
 
-    // Outer shark snout rising out of water
     val outerPath = Path().apply {
         moveTo(centerX - jawW, waterY + 8.dp.toPx())
         quadraticTo(centerX - jawW * 0.7f, waterY - jawH, centerX, waterY - jawH * 1.08f)
@@ -2077,7 +2814,6 @@ private fun DrawScope.drawOpenSharkJaws(
         style = Stroke(width = 2.6.dp.toPx(), join = StrokeJoin.Round)
     )
 
-    // Red inner mouth cavity
     val mouthPath = Path().apply {
         moveTo(centerX - jawW * 0.68f, waterY + 4.dp.toPx())
         quadraticTo(centerX, waterY - jawH * 0.85f, centerX + jawW * 0.68f, waterY + 4.dp.toPx())
@@ -2090,7 +2826,6 @@ private fun DrawScope.drawOpenSharkJaws(
         style = Stroke(width = 2.dp.toPx(), join = StrokeJoin.Round)
     )
 
-    // Sharp white jagged teeth along top & bottom of mouth
     val teethPath = Path().apply {
         val leftX = centerX - jawW * 0.52f
         val rightX = centerX + jawW * 0.52f
@@ -2131,13 +2866,8 @@ private fun DrawScope.drawDoodleWaterWaves(
         lineTo(w, h)
         close()
     }
+    drawPath(path = wavePath, color = DoodleColors.WaterBlue.copy(alpha = 0.35f))
 
-    drawPath(
-        path = wavePath,
-        color = DoodleColors.WaterBlue.copy(alpha = 0.35f)
-    )
-
-    // Bold hand-sketched top wave crest line
     val crestPath = Path().apply {
         moveTo(0f, waterY)
         var x = 0f
@@ -2175,6 +2905,8 @@ fun VictoryOverlay(
     fontFamily: FontFamily,
     onNextLevel: () -> Unit
 ) {
+    val rewardCoins = if (level.isBossLevel) 50 else 25
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -2190,15 +2922,14 @@ fun VictoryOverlay(
                 .clip(RoundedCornerShape(26.dp))
                 .background(DoodleColors.PaperOffWhite)
         ) {
-            // 1. Top splits into a chalkboard/dark header showing celebrating stickman + completed word & clue
+            // Top dark chalkboard header
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
+                    .height(215.dp)
                     .background(DoodleColors.ChalkboardDark)
                     .padding(16.dp)
             ) {
-                // Chalkboard subtle grid lines
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val step = 24.dp.toPx()
                     var x = 0f
@@ -2227,7 +2958,6 @@ fun VictoryOverlay(
                     modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Celebrating Stickman Canvas on left
                     Canvas(
                         modifier = Modifier
                             .weight(0.42f)
@@ -2236,7 +2966,6 @@ fun VictoryOverlay(
                         drawCelebratingStickmanOnChalkboard()
                     }
 
-                    // Completed Word & Clue on right
                     Column(
                         modifier = Modifier
                             .weight(0.58f)
@@ -2248,18 +2977,18 @@ fun VictoryOverlay(
                             text = level.word.uppercase(),
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Black,
-                            fontSize = 28.sp,
+                            fontSize = 27.sp,
                             letterSpacing = 3.sp,
                             color = DoodleColors.DoodleYellow,
                             textAlign = TextAlign.Center
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = level.clue,
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Medium,
-                            fontSize = 15.sp,
-                            lineHeight = 20.sp,
+                            fontSize = 14.sp,
+                            lineHeight = 19.sp,
                             color = Color.White.copy(alpha = 0.9f),
                             textAlign = TextAlign.Center
                         )
@@ -2267,7 +2996,7 @@ fun VictoryOverlay(
                 }
             }
 
-            // 2. Bottom white graph-paper card displays "WELL DONE!", stats, Chest/Theme bars, Next button
+            // Bottom white graph-paper card
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2288,7 +3017,6 @@ fun VictoryOverlay(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Stats Row: Perfect: X, Streak: X, Max Streak: X
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
@@ -2300,7 +3028,6 @@ fun VictoryOverlay(
 
                     Spacer(modifier = Modifier.height(18.dp))
 
-                    // Progress Bar 1: Chest (X/4 progress towards a treasure chest reward)
                     DoodleProgressRow(
                         label = "Chest",
                         current = chestProgress,
@@ -2313,7 +3040,6 @@ fun VictoryOverlay(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Progress Bar 2: Theme (X/10 progress towards unlocking a new visual theme)
                     DoodleProgressRow(
                         label = "Theme",
                         current = themeProgress,
@@ -2326,7 +3052,6 @@ fun VictoryOverlay(
 
                     Spacer(modifier = Modifier.height(22.dp))
 
-                    // Large Yellow Next Button (->) to load the next level and award +25 coins
                     SketchyContainer(
                         fillColor = DoodleColors.DoodleYellow,
                         cornerRadius = 28.dp,
@@ -2341,7 +3066,7 @@ fun VictoryOverlay(
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = "NEXT  (+25 Coins)",
+                                text = "NEXT  (+$rewardCoins Coins)",
                                 fontFamily = fontFamily,
                                 fontWeight = FontWeight.Black,
                                 fontSize = 21.sp,
@@ -2405,7 +3130,6 @@ private fun DoodleProgressRow(
             modifier = Modifier.width(64.dp)
         )
 
-        // Progress Bar Container
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -2415,18 +3139,15 @@ private fun DoodleProgressRow(
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val r = 12.dp.toPx()
-                // White track
                 drawRoundRect(
                     color = Color.White,
                     cornerRadius = CornerRadius(r, r)
                 )
-                // Filled progress
                 drawRoundRect(
                     color = barColor,
                     size = Size(size.width * fraction, size.height),
                     cornerRadius = CornerRadius(r, r)
                 )
-                // Black hand-drawn border
                 drawRoundRect(
                     color = DoodleColors.InkBlack,
                     cornerRadius = CornerRadius(r, r),
@@ -2442,7 +3163,6 @@ private fun DoodleProgressRow(
             )
         }
 
-        // Doodle Icon on the right
         Box(
             modifier = Modifier.size(36.dp),
             contentAlignment = Alignment.Center
@@ -2457,7 +3177,6 @@ private fun DrawScope.drawCelebratingStickmanOnChalkboard() {
     val cy = size.height * 0.52f
     val headR = 16.dp.toPx()
 
-    // Confetti stars around stickman
     val confettiColors = listOf(
         DoodleColors.DoodleYellow,
         DoodleColors.CorrectGreen,
@@ -2471,26 +3190,19 @@ private fun DrawScope.drawCelebratingStickmanOnChalkboard() {
         drawCircle(color = c, radius = 4.dp.toPx(), center = Offset(px, py))
     }
 
-    // Chalk white celebrating stickman with arms raised in "V" victory pose
     val chalk = Color.White
     val sw = 3.2.dp.toPx()
     val headCenter = Offset(cx, cy - 28.dp.toPx())
 
     drawCircle(color = chalk, radius = headR, center = headCenter, style = Stroke(width = sw))
-    // Happy eyes & grin
     drawCircle(color = chalk, radius = 2.dp.toPx(), center = Offset(headCenter.x - 5.dp.toPx(), headCenter.y - 2.dp.toPx()))
     drawCircle(color = chalk, radius = 2.dp.toPx(), center = Offset(headCenter.x + 5.dp.toPx(), headCenter.y - 2.dp.toPx()))
 
-    // Torso
     val neckY = headCenter.y + headR
     val hipY = neckY + 34.dp.toPx()
     drawLine(chalk, Offset(cx, neckY), Offset(cx, hipY), strokeWidth = sw, cap = StrokeCap.Round)
-
-    // Raised cheering arms
     drawLine(chalk, Offset(cx, neckY + 8.dp.toPx()), Offset(cx - 24.dp.toPx(), neckY - 14.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
     drawLine(chalk, Offset(cx, neckY + 8.dp.toPx()), Offset(cx + 24.dp.toPx(), neckY - 14.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
-
-    // Jumping legs
     drawLine(chalk, Offset(cx, hipY), Offset(cx - 18.dp.toPx(), hipY + 26.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
     drawLine(chalk, Offset(cx, hipY), Offset(cx + 18.dp.toPx(), hipY + 26.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
 }
@@ -2502,12 +3214,13 @@ private fun DrawScope.drawCelebratingStickmanOnChalkboard() {
 @Composable
 fun GameOverOverlay(
     level: WordLevel,
-    coins: Int,
     fontFamily: FontFamily,
     onRescue: () -> Unit,
     onRetry: () -> Unit,
     onMainMenu: () -> Unit
 ) {
+    val peril = level.perilType
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -2527,18 +3240,19 @@ fun GameOverOverlay(
                 modifier = Modifier.padding(24.dp)
             ) {
                 Text(
-                    text = "SPLASH! GAME OVER",
+                    text = peril.gameOverTitle,
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.Black,
-                    fontSize = 28.sp,
+                    fontSize = 26.sp,
                     color = DoodleColors.WrongRed,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("game_over_title")
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "All 6 balloons popped! The shark caught up.",
+                    text = peril.gameOverDescription,
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
@@ -2559,7 +3273,6 @@ fun GameOverOverlay(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Rescue option (keep progress with +3 Balloons for 250 coins)
                 SketchyContainer(
                     fillColor = DoodleColors.DoodleYellow,
                     cornerRadius = 24.dp,
@@ -2570,7 +3283,7 @@ fun GameOverOverlay(
                         .testTag("rescue_button")
                 ) {
                     Text(
-                        text = "Rescue (+3 Balloons • 250 Coins)",
+                        text = "Rescue (+3 Lives • 250 Coins)",
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Black,
                         fontSize = 16.sp,
@@ -2619,10 +3332,11 @@ fun GameOverOverlay(
 fun TwoPlayerSetupScreen(
     fontFamily: FontFamily,
     onBack: () -> Unit,
-    onStartGame: (word: String, clue: String) -> Unit
+    onStartGame: (word: String, clue: String, perilNumber: Int) -> Unit
 ) {
     var secretWord by remember { mutableStateOf("") }
     var secretClue by remember { mutableStateOf("") }
+    var selectedPerilNum by remember { mutableIntStateOf(1) }
 
     Column(
         modifier = Modifier
@@ -2663,15 +3377,15 @@ fun TwoPlayerSetupScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Player 1: Enter a secret word and clue, then hand the phone to Player 2!",
+                    text = "Player 1: Enter a secret word, clue & hazard for Player 2!",
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     color = DoodleColors.InkBlack,
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 OutlinedTextField(
                     value = secretWord,
@@ -2691,7 +3405,7 @@ fun TwoPlayerSetupScreen(
                         .testTag("two_player_word_input")
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedTextField(
                     value = secretClue,
@@ -2709,7 +3423,45 @@ fun TwoPlayerSetupScreen(
                         .testTag("two_player_clue_input")
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = "Pick Hazard:",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 14.sp,
+                    color = DoodleColors.InkBlack
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    PerilType.entries.forEachIndexed { idx, p ->
+                        val lvlNum = idx + 1
+                        val selected = selectedPerilNum == lvlNum
+                        SketchyContainer(
+                            fillColor = if (selected) DoodleColors.DoodleYellow else DoodleColors.PaperOffWhite,
+                            cornerRadius = 12.dp,
+                            strokeWidth = 1.5.dp,
+                            onClick = { selectedPerilNum = lvlNum },
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text(
+                                text = p.displayName.substringBefore(" "),
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = DoodleColors.InkBlack,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
 
                 SketchyContainer(
                     fillColor = DoodleColors.DoodleYellow,
@@ -2717,7 +3469,8 @@ fun TwoPlayerSetupScreen(
                     onClick = {
                         onStartGame(
                             secretWord.ifBlank { "SHARK" },
-                            secretClue.ifBlank { "Ocean predator with sharp teeth" }
+                            secretClue.ifBlank { "Ocean predator with sharp teeth" },
+                            selectedPerilNum
                         )
                     },
                     modifier = Modifier
@@ -2736,7 +3489,7 @@ fun TwoPlayerSetupScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
     }
 }
 
@@ -2773,7 +3526,6 @@ fun SettingsDoodleDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Toggle Font Family
                 SketchyContainer(
                     fillColor = Color.White,
                     cornerRadius = 18.dp,
@@ -2969,7 +3721,6 @@ fun CoinBalancePill(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
-            // Hand-drawn star/coin icon
             Canvas(modifier = Modifier.size(22.dp)) {
                 drawDoodleStarCoin()
             }
@@ -2986,7 +3737,6 @@ fun CoinBalancePill(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Yellow '+' circle badge
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(24.dp)
@@ -3086,7 +3836,6 @@ private fun DrawScope.drawDoodleStarCoin() {
     drawCircle(color = DoodleColors.DoodleYellow, radius = r)
     drawCircle(color = DoodleColors.InkBlack, radius = r, style = Stroke(width = 1.8.dp.toPx()))
 
-    // Small 5-point star inside coin
     val starPath = Path()
     val outer = r * 0.62f
     val inner = r * 0.28f
@@ -3109,13 +3858,11 @@ private fun DrawScope.drawDevilHornsBadge() {
     val cy = h * 0.58f
     val r = w * 0.32f
 
-    // Left horn
     val leftHorn = Path().apply {
         moveTo(cx - r * 0.8f, cy - r * 0.2f)
         quadraticTo(cx - r * 1.35f, cy - r * 1.25f, cx - r * 0.35f, cy - r * 1.15f)
         close()
     }
-    // Right horn
     val rightHorn = Path().apply {
         moveTo(cx + r * 0.8f, cy - r * 0.2f)
         quadraticTo(cx + r * 1.35f, cy - r * 1.25f, cx + r * 0.35f, cy - r * 1.15f)
@@ -3126,11 +3873,9 @@ private fun DrawScope.drawDevilHornsBadge() {
     drawPath(rightHorn, color = DoodleColors.WrongRed)
     drawPath(rightHorn, color = DoodleColors.InkBlack, style = Stroke(width = 1.6.dp.toPx()))
 
-    // Little red devil head
     drawCircle(color = DoodleColors.WrongRed, radius = r, center = Offset(cx, cy))
     drawCircle(color = DoodleColors.InkBlack, radius = r, center = Offset(cx, cy), style = Stroke(width = 1.8.dp.toPx()))
 
-    // Mischievous slanted eyes
     drawLine(
         color = DoodleColors.InkBlack,
         start = Offset(cx - r * 0.5f, cy - r * 0.25f),
@@ -3153,7 +3898,6 @@ private fun DrawDoodleMagnifierIcon() {
         val lensCenter = Offset(size.width * 0.42f, size.height * 0.42f)
         val lensR = size.minDimension * 0.28f
 
-        // Handle
         drawLine(
             color = DoodleColors.HintMagnifierGreen,
             start = Offset(lensCenter.x + lensR * 0.7f, lensCenter.y + lensR * 0.7f),
@@ -3169,7 +3913,6 @@ private fun DrawDoodleMagnifierIcon() {
             cap = StrokeCap.Round
         )
 
-        // Lens fill & rim
         drawCircle(
             color = DoodleColors.HintMagnifierGreen.copy(alpha = 0.35f),
             radius = lensR,
@@ -3202,7 +3945,6 @@ private fun DrawDoodlePotionShieldIcon() {
             color = DoodleColors.InkBlack,
             style = Stroke(width = 2.2.dp.toPx(), join = StrokeJoin.Round)
         )
-        // White '+' life cross inside shield
         drawLine(
             color = Color.White,
             start = Offset(w * 0.5f, h * 0.34f),
@@ -3228,7 +3970,6 @@ private fun DrawDoodleLightbulbIcon() {
         val bulbCenter = Offset(w * 0.5f, h * 0.40f)
         val r = size.minDimension * 0.27f
 
-        // Bulb globe
         drawCircle(color = DoodleColors.HintBulbOrange, radius = r, center = bulbCenter)
         drawCircle(
             color = DoodleColors.InkBlack,
@@ -3237,7 +3978,6 @@ private fun DrawDoodleLightbulbIcon() {
             style = Stroke(width = 2.2.dp.toPx())
         )
 
-        // Screw base
         drawRoundRect(
             color = Color.LightGray,
             topLeft = Offset(w * 0.38f, h * 0.64f),
@@ -3259,7 +3999,6 @@ private fun DrawDoodleChestIcon() {
     Canvas(modifier = Modifier.size(30.dp)) {
         val w = size.width
         val h = size.height
-        // Chest box
         drawRoundRect(
             color = Color(0xFFD35400),
             topLeft = Offset(w * 0.12f, h * 0.24f),
@@ -3273,7 +4012,6 @@ private fun DrawDoodleChestIcon() {
             cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
             style = Stroke(width = 2.dp.toPx())
         )
-        // Band & Golden Lock
         drawLine(
             color = DoodleColors.InkBlack,
             start = Offset(w * 0.12f, h * 0.50f),

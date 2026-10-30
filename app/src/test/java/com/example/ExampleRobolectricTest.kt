@@ -21,22 +21,30 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `viewModel balloon pop and victory mechanics work`() {
+    fun `perilType rotates every level mod 4 and contextual panic lines match`() {
+        assertEquals(PerilType.SHARK_BALLOONS, PerilType.forLevel(1))
+        assertEquals(PerilType.UFO_ABDUCTION, PerilType.forLevel(2))
+        assertEquals(PerilType.VOLCANO_BLOCKS, PerilType.forLevel(3))
+        assertEquals(PerilType.DINO_STEALTH, PerilType.forLevel(4))
+        assertEquals(PerilType.SHARK_BALLOONS, PerilType.forLevel(5))
+
+        assertEquals("Not the alien probe!", PerilType.UFO_ABDUCTION.panicBubbleText)
+        assertEquals("My shoes are melting!", PerilType.VOLCANO_BLOCKS.panicBubbleText)
+        assertEquals("Shhh! Don't wake Rex!", PerilType.DINO_STEALTH.panicBubbleText)
+    }
+
+    @Test
+    fun `boss level 5 generates 3 bomb letters that cost 2 lives`() {
         val vm = WordGameViewModel()
-        vm.startCampaignLevel()
+        vm.selectCampaignLevelNumber(5) // Level 5 is GIRAFFE (Boss Level)
+        assertTrue(vm.activeLevel.isBossLevel)
+        assertEquals(3, vm.bombLetters.size)
         assertEquals(6, vm.balloonsRemaining)
-        assertEquals("DIAMOND", vm.activeLevel.word)
 
-        // Wrong letter 'Z' pops 1 balloon
-        vm.onLetterTapped('Z')
-        assertEquals(5, vm.balloonsRemaining)
-        assertEquals(KeyStatus.WRONG, vm.keyStatuses['Z'])
-
-        // Solve DIAMOND
-        listOf('D', 'I', 'A', 'M', 'O', 'N').forEach { ch ->
-            vm.onLetterTapped(ch)
-        }
-        assertEquals(RoundOutcome.VICTORY, vm.roundOutcome)
-        assertTrue(vm.revealedChars.contains('D'))
+        // Tap one of the bomb letters -> costs 2 lives (6 -> 4)
+        val bombChar = vm.bombLetters.first()
+        vm.onLetterTapped(bombChar)
+        assertEquals(4, vm.balloonsRemaining)
+        assertEquals(2, vm.lastDamageAmount)
     }
 }
