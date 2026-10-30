@@ -1232,43 +1232,6 @@ fun MainMenuScreen(
                 )
             }
 
-            // Quick Peril Preview / Level Jump Row (Lets user see or jump to any of the 4 perils + Boss Level 5)
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 4.dp)
-            ) {
-                val quickPickLevels = listOf(
-                    1 to "1:Shark",
-                    2 to "2:UFO",
-                    3 to "3:Lava",
-                    4 to "4:Dino",
-                    5 to "5:Boss💣"
-                )
-                quickPickLevels.forEach { (lvl, label) ->
-                    val isCurrent = levelNumber == lvl
-                    SketchyContainer(
-                        fillColor = if (isCurrent) DoodleColors.DoodleYellow else Color.White,
-                        cornerRadius = 12.dp,
-                        strokeWidth = 1.5.dp,
-                        shadowOffset = 1.5.dp,
-                        onClick = { onSelectPerilLevel(lvl) },
-                        modifier = Modifier
-                            .height(32.dp)
-                            .testTag("quick_level_$lvl")
-                    ) {
-                        Text(
-                            text = label,
-                            fontFamily = fontFamily,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 11.sp,
-                            color = DoodleColors.InkBlack,
-                            modifier = Modifier.padding(horizontal = 7.dp)
-                        )
-                    }
-                }
-            }
-
             Spacer(modifier = Modifier.height(4.dp))
 
             DoodleWordTitleHeader(fontFamily = fontFamily)
@@ -1324,42 +1287,7 @@ fun MainMenuScreen(
                 }
             }
 
-            // 2. Adventure (White fill with red devil/horn doodle icon on top-left corner)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp)
-            ) {
-                SketchyContainer(
-                    fillColor = Color.White,
-                    cornerRadius = 28.dp,
-                    onClick = onPlayAdventure,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp)
-                        .align(Alignment.BottomCenter)
-                        .testTag("adventure_button")
-                ) {
-                    Text(
-                        text = "Adventure",
-                        fontFamily = fontFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 21.sp,
-                        color = DoodleColors.InkBlack
-                    )
-                }
-
-                Canvas(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .align(Alignment.TopStart)
-                        .offset(x = 12.dp, y = (-2).dp)
-                ) {
-                    drawDevilHornsBadge()
-                }
-            }
-
-            // 3. Two Player (White fill)
+            // 2. Two Player (White fill)
             SketchyContainer(
                 fillColor = Color.White,
                 cornerRadius = 28.dp,
@@ -1691,7 +1619,7 @@ fun GameplayScreen(
                                 .testTag("boss_warning_badge")
                         ) {
                             Text(
-                                text = "💣 BOSS: Red Dot Keys = -2 ❤️",
+                                text = "💣 BOSS: Hidden Bomb Keys = -2 ❤️",
                                 fontFamily = fontFamily,
                                 fontWeight = FontWeight.Black,
                                 fontSize = 11.sp,
@@ -1920,44 +1848,14 @@ fun DoodleLetterKey(
             }
         )
 
-        // Boss Level: Small red bomb dot with a tiny sizzling fuse at the top-right corner of the key
+        // Boss Level: Bomb dot is intentionally invisible so bomb letters remain hidden traps
         if (hasBombDot) {
-            Canvas(
+            Box(
                 modifier = Modifier
-                    .size(14.dp)
+                    .size(1.dp)
                     .align(Alignment.TopEnd)
-                    .offset(x = (-3).dp, y = 3.dp)
                     .testTag("bomb_dot_$letter")
-            ) {
-                val r = size.minDimension * 0.36f
-                val c = Offset(size.width * 0.45f, size.height * 0.58f)
-                // Fuse line
-                drawLine(
-                    color = DoodleColors.InkBlack,
-                    start = Offset(c.x + r * 0.5f, c.y - r * 0.5f),
-                    end = Offset(size.width * 0.88f, size.height * 0.14f),
-                    strokeWidth = 1.5.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-                // Spark tip
-                drawCircle(
-                    color = DoodleColors.DoodleYellow,
-                    radius = 2.2.dp.toPx(),
-                    center = Offset(size.width * 0.88f, size.height * 0.14f)
-                )
-                // Red bomb dot
-                drawCircle(
-                    color = DoodleColors.WrongRed,
-                    radius = r,
-                    center = c
-                )
-                drawCircle(
-                    color = DoodleColors.InkBlack,
-                    radius = r,
-                    center = c,
-                    style = Stroke(width = 1.3.dp.toPx())
-                )
-            }
+            )
         }
 
         // Hand-drawn Green Circle or Red Cross overlay
@@ -3470,50 +3368,55 @@ private fun DrawScope.drawCirclingSharkFin(
     facingRight: Boolean,
     scale: Float
 ) {
-    val finH = 38.dp.toPx() * scale
-    val finW = 34.dp.toPx() * scale
+    val finH = 36.dp.toPx() * scale
+    val finW = 32.dp.toPx() * scale
     val dir = if (facingRight) 1f else -1f
+    val baseY = waterY + 6.dp.toPx()
 
-    // Iconic Shark Dorsal Fin:
-    // - Starts at front base (x + 0.52 * finW * dir)
-    // - Sweeps up & backward along convex leading edge to sharp hooked tip (x - 0.34 * finW * dir, waterY - finH)
-    // - Curves down along concave scalloped trailing edge to rear base (x - 0.48 * finW * dir)
-    val frontBaseX = x + finW * 0.52f * dir
-    val rearBaseX = x - finW * 0.48f * dir
-    val tipX = x - finW * 0.34f * dir
+    // Iconic Shark Dorsal Fin: solid slate-grey fill + crisp ink outline, no white lines inside
+    val frontBaseX = x + finW * 0.53f * dir
+    val rearBaseX = x - finW * 0.47f * dir
+    val tipX = x - finW * 0.28f * dir
     val tipY = waterY - finH
 
-    val finPath = Path().apply {
-        moveTo(frontBaseX, waterY + 5.dp.toPx())
+    val finFillPath = Path().apply {
+        moveTo(frontBaseX, baseY)
         quadraticTo(
-            x + finW * 0.28f * dir,
-            waterY - finH * 0.68f,
+            x + finW * 0.34f * dir,
+            waterY - finH * 0.66f,
             tipX,
             tipY
         )
         quadraticTo(
-            x - finW * 0.08f * dir,
+            x - finW * 0.15f * dir,
             waterY - finH * 0.38f,
             rearBaseX,
-            waterY + 5.dp.toPx()
+            baseY
         )
         close()
     }
 
-    drawPath(path = finPath, color = DoodleColors.SharkGrey)
-    drawPath(
-        path = finPath,
-        color = DoodleColors.InkBlack,
-        style = Stroke(width = 2.5.dp.toPx(), join = StrokeJoin.Round)
-    )
+    val finOutlinePath = Path().apply {
+        moveTo(frontBaseX, baseY - 1.dp.toPx())
+        quadraticTo(
+            x + finW * 0.34f * dir,
+            waterY - finH * 0.66f,
+            tipX,
+            tipY
+        )
+        quadraticTo(
+            x - finW * 0.15f * dir,
+            waterY - finH * 0.38f,
+            rearBaseX,
+            baseY - 1.dp.toPx()
+        )
+    }
 
-    // White water foam wake at front base of fin
-    drawLine(
-        color = Color.White,
-        start = Offset(frontBaseX + 5.dp.toPx() * dir, waterY + 1.dp.toPx()),
-        end = Offset(frontBaseX - 7.dp.toPx() * dir, waterY + 2.dp.toPx()),
-        strokeWidth = 2.6.dp.toPx(),
-        cap = StrokeCap.Round
+    drawPath(path = finFillPath, color = DoodleColors.SharkGrey)
+    drawPath(
+        path = finOutlinePath,
+        color = DoodleColors.InkBlack,
+        style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
     )
 }
 
@@ -3590,7 +3493,7 @@ private fun DrawScope.drawDoodleWaterWaves(
         lineTo(w, h)
         close()
     }
-    drawPath(path = wavePath, color = DoodleColors.WaterBlue.copy(alpha = 0.35f))
+    drawPath(path = wavePath, color = Color(0xFFB3E5FC))
 
     val crestPath = Path().apply {
         moveTo(0f, waterY)

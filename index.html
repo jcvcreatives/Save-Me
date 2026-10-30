@@ -439,15 +439,9 @@
     }
 
     .bomb-dot {
-      position: absolute;
-      top: 3px;
-      right: 3px;
-      width: 11px;
-      height: 11px;
-      border-radius: 50%;
-      background: var(--wrong-red);
-      border: 1.5px solid var(--ink-black);
-      box-shadow: 0 0 0 2px var(--doodle-yellow);
+      display: none;
+      opacity: 0;
+      visibility: hidden;
       pointer-events: none;
     }
 
@@ -688,8 +682,6 @@
       <div class="menu-hero">
         <canvas id="menuCanvas" width="420" height="270"></canvas>
 
-        <div class="quick-peril-row" id="quickPerilRow"></div>
-
         <div class="word-title-row">
           <div class="word-letter-col">W<div class="word-underline" style="background:#FF595E"></div></div>
           <div class="word-letter-col">O<div class="word-underline" style="background:#2ECC71"></div></div>
@@ -712,11 +704,6 @@
         <button class="sketch-box sketch-btn sketch-yellow menu-btn" onclick="startCampaign()">
           <span id="menuLevelBtnText">Level 1</span>
           <small id="menuPerilSubText">Shark &amp; Balloons</small>
-        </button>
-
-        <button class="sketch-box sketch-btn menu-btn" onclick="startAdventure()">
-          <span class="devil-badge">😈 Devil Boss</span>
-          <span>Adventure</span>
         </button>
 
         <button class="sketch-box sketch-btn menu-btn" onclick="openTwoPlayerModal()">
@@ -747,7 +734,7 @@
         </div>
         <div class="clue-half">
           <div id="livesDots" class="lives-dots"></div>
-          <div id="bossBadge" class="boss-badge" style="display:none;">💣 BOSS: Red Dot Keys = -2 ❤️</div>
+          <div id="bossBadge" class="boss-badge" style="display:none;">💣 BOSS: Hidden Bomb Keys = -2 ❤️</div>
           <div id="clueText" class="clue-text">Guess a precious gemstone</div>
         </div>
       </div>
@@ -1027,6 +1014,7 @@
         id: 'SHARK_BALLOONS',
         name: 'Shark & Balloons',
         panic: 'Come on, you can do that!',
+        hitLabel: 'POP!',
         overTitle: 'SPLASH! SHARK SNACK',
         overDesc: 'All 6 balloons popped! The shark caught up.',
         sound: 'pop',
@@ -1036,6 +1024,7 @@
         id: 'UFO_ABDUCTION',
         name: 'UFO Abduction',
         panic: 'Not the alien probe!',
+        hitLabel: 'ZAP!',
         overTitle: 'ZAP! ABDUCTED!',
         overDesc: 'The UFO tractor beam pulled the stickman aboard!',
         sound: 'zap',
@@ -1045,6 +1034,7 @@
         id: 'VOLCANO_BLOCKS',
         name: 'Volcano Crates',
         panic: 'My shoes are melting!',
+        hitLabel: 'CRUMBLE!',
         overTitle: 'SIZZLE! MELTDOWN!',
         overDesc: 'All 6 stone crates crumbled into the bubbling lava!',
         sound: 'crunch',
@@ -1054,6 +1044,7 @@
         id: 'DINO_STEALTH',
         name: 'Sleeping T-Rex',
         panic: "Shhh! Don't wake Rex!",
+        hitLabel: 'CLANG!',
         overTitle: 'ROOOAR! REX AWOKE!',
         overDesc: 'The Noise Meter maxed out and woke the giant T-Rex!',
         sound: 'clang',
@@ -1151,9 +1142,10 @@
           life: 1.0
         });
       }
+      const hitLabel = (PERILS[perilId] && PERILS[perilId].hitLabel) || 'HIT!';
       floatingHits.push({
-        text: isBomb ? '-2 ❤️ 💥' : '-1 ❤️',
-        rx: 0.52,
+        text: isBomb ? `-2 ❤️ 💥 ${hitLabel}` : `-1 ❤️ ${hitLabel}`,
+        rx: 0.44,
         ry: 0.36,
         life: 1.0
       });
@@ -1180,16 +1172,6 @@
       document.getElementById('menuLevelBtnText').textContent =
         (lvlNum % 5 === 0) ? `Level ${lvlNum} (BOSS 💣)` : `Level ${lvlNum}`;
       document.getElementById('menuPerilSubText').textContent = peril.name;
-
-      const row = document.getElementById('quickPerilRow');
-      row.innerHTML = '';
-      [[1,'1:Shark'],[2,'2:UFO'],[3,'3:Lava'],[4,'4:Dino'],[5,'5:Boss💣']].forEach(([n, label]) => {
-        const btn = document.createElement('button');
-        btn.className = 'sketch-box sketch-btn quick-chip' + (lvlNum === n ? ' sketch-yellow' : '');
-        btn.textContent = label;
-        btn.onclick = () => { campaignIdx = n - 1; updateMenuUI(); startCampaign(); };
-        row.appendChild(btn);
-      });
     }
 
     function isBoss(level) {
@@ -2070,43 +2052,36 @@
     }
 
     function drawSleekSharkFin(ctx, sx, waterY, dir, s, t) {
-      // Iconic shark dorsal fin: convex swept-back leading edge + concave hooked trailing edge
-      const frontBaseX = sx + 18 * s * dir;
-      const rearBaseX = sx - 16 * s * dir;
-      const tipX = sx - 11 * s * dir;
-      const tipY = waterY - 38 * s + Math.sin(t * 5) * 1.5;
+      // Iconic shark dorsal fin: solid slate-grey fill + crisp ink outline, zero white artifacts
+      const waveAtShark = Math.sin(t * 3.2 + sx * 0.05) * 3.5;
+      const baseY = waterY + waveAtShark + 6;
+      const frontBaseX = sx + 17 * s * dir;
+      const rearBaseX = sx - 15 * s * dir;
+      const tipX = sx - 9 * s * dir;
+      const tipY = waterY + waveAtShark - 36 * s;
 
+      ctx.save();
       ctx.fillStyle = '#546E7A';
       ctx.strokeStyle = '#1E1E1E';
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 2.6;
+      ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+
+      // Fill complete closed dorsal fin shape
       ctx.beginPath();
-      // Start at front base (leading edge cutting through water)
-      ctx.moveTo(frontBaseX, waterY + 5);
-      // Sweep up & backward along convex leading edge to sharp dorsal tip
-      ctx.quadraticCurveTo(sx + 10 * s * dir, waterY - 26 * s, tipX, tipY);
-      // Curve down along concave scalloped trailing edge to rear base
-      ctx.quadraticCurveTo(sx - 2 * s * dir, waterY - 15 * s, rearBaseX, waterY + 5);
+      ctx.moveTo(frontBaseX, baseY);
+      ctx.quadraticCurveTo(sx + 11 * s * dir, waterY + waveAtShark - 24 * s, tipX, tipY);
+      ctx.quadraticCurveTo(sx - 5 * s * dir, waterY + waveAtShark - 14 * s, rearBaseX, baseY);
       ctx.closePath();
       ctx.fill();
-      ctx.stroke();
 
-      // Subtle lighter highlight along leading edge of fin
-      ctx.strokeStyle = '#78909C';
-      ctx.lineWidth = 2;
+      // Stroke only the dorsal edges above the waterline
       ctx.beginPath();
-      ctx.moveTo(frontBaseX - 3 * s * dir, waterY);
-      ctx.quadraticCurveTo(sx + 7 * s * dir, waterY - 22 * s, tipX + 2 * s * dir, tipY + 4 * s);
+      ctx.moveTo(frontBaseX, baseY - 1);
+      ctx.quadraticCurveTo(sx + 11 * s * dir, waterY + waveAtShark - 24 * s, tipX, tipY);
+      ctx.quadraticCurveTo(sx - 5 * s * dir, waterY + waveAtShark - 14 * s, rearBaseX, baseY - 1);
       ctx.stroke();
-
-      // White foam water wake at front base of fin
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(frontBaseX + 5 * s * dir, waterY + 1);
-      ctx.quadraticCurveTo(frontBaseX, waterY - 3 * s, frontBaseX - 8 * s * dir, waterY + 2);
-      ctx.stroke();
+      ctx.restore();
     }
 
     function renderPerilScene(canvas, peril, livesCount, smoothL, isPreview, t, dt) {
@@ -2224,8 +2199,8 @@
           drawSleekSharkFin(ctx, sx, waterY, dir, s, t);
         }
 
-        // Layered HD Water Waves
-        ctx.fillStyle = 'rgba(79, 195, 247, 0.38)';
+        // Layered HD Water Waves (opaque enough to cleanly submerge the fin base)
+        ctx.fillStyle = '#B3E5FC';
         ctx.beginPath();
         ctx.moveTo(0, h);
         for (let x = 0; x <= w; x += 10) {
@@ -2259,12 +2234,13 @@
         ctx.closePath();
         ctx.fill();
 
-        ctx.strokeStyle = 'rgba(118, 255, 3, 0.72)';
-        ctx.lineWidth = 2;
-        for (let r = 0; r < 4; r++) {
-          const prog = (1 - ((t * (livesCount <= 0 ? 2.2 : 0.8) + r * 0.25) % 1));
-          const ry = ufoY + 22 + prog * (groundY - ufoY - 32);
-          const rw = 26 + prog * 48;
+        for (let stepIdx = 0; stepIdx < 6; stepIdx++) {
+          const frac = (stepIdx + 1) / 7;
+          const ry = groundY - (groundY - ufoY - 22) * frac;
+          const rw = 26 + (1 - frac) * 48;
+          const isAbductedStep = stepIdx >= livesCount;
+          ctx.strokeStyle = isAbductedStep ? 'rgba(231, 76, 60, 0.72)' : 'rgba(118, 255, 3, 0.65)';
+          ctx.lineWidth = isAbductedStep ? 2.4 : 1.7;
           ctx.beginPath();
           ctx.ellipse(ufoX, ry, rw, 5.5, 0, 0, Math.PI * 2);
           ctx.stroke();
