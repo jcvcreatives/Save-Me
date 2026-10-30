@@ -514,16 +514,43 @@
     .modal-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.58);
+      background: rgba(0, 0, 0, 0.52);
       display: none;
       justify-content: center;
       align-items: center;
-      padding: 18px;
+      padding: 16px;
       z-index: 25;
     }
 
     .modal-backdrop.active {
       display: flex;
+    }
+
+    /* Non-blocking bottom-docked Game Over sheet so the Stickman death animation in the top half is NEVER covered */
+    .modal-backdrop.bottom-dock {
+      background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 48%, rgba(20,20,20,0.34) 68%);
+      align-items: flex-end;
+      padding: 10px 14px 14px;
+      pointer-events: none;
+    }
+
+    .modal-backdrop.bottom-dock .dialog-card {
+      pointer-events: auto;
+      max-width: 440px;
+      padding: 14px 18px 14px;
+      border-radius: 24px;
+      box-shadow: 0 -2px 16px rgba(0,0,0,0.14), 4px 5px 0 rgba(30,30,30,0.28);
+      animation: slideUpDock 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+      transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+
+    .modal-backdrop.bottom-dock.minimized .dialog-card {
+      transform: translateY(calc(100% - 46px));
+    }
+
+    @keyframes slideUpDock {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
 
     .victory-card {
@@ -534,20 +561,44 @@
       border-radius: 26px;
       overflow: hidden;
       box-shadow: 5px 6px 0 rgba(0,0,0,0.3);
+      animation: popInCard 0.34s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes popInCard {
+      from { transform: scale(0.86); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
     }
 
     .chalk-header {
       background: var(--chalk-dark);
       color: #FFF;
-      padding: 16px;
+      padding: 12px 14px;
       display: flex;
       align-items: center;
-      gap: 12px;
-      height: 190px;
+      gap: 10px;
+      height: 195px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .celebration-badge {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      background: rgba(255, 209, 102, 0.95);
+      color: var(--ink-black);
+      border: 2px solid var(--ink-black);
+      border-radius: 12px;
+      padding: 2px 9px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      z-index: 3;
+      box-shadow: 1.5px 2px 0 rgba(0,0,0,0.25);
     }
 
     .victory-body {
-      padding: 18px;
+      padding: 16px 18px 18px;
       text-align: center;
     }
 
@@ -555,7 +606,7 @@
       display: flex;
       justify-content: space-evenly;
       gap: 6px;
-      margin: 12px 0 16px;
+      margin: 10px 0 14px;
     }
 
     .stat-chip {
@@ -568,7 +619,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      margin: 10px 0;
+      margin: 8px 0;
     }
 
     .progress-track {
@@ -725,15 +776,17 @@
   <!-- ================= VICTORY OVERLAY ("WELL DONE!") ================= -->
   <div id="victoryModal" class="modal-backdrop">
     <div class="victory-card">
-      <div class="chalk-header">
-        <canvas id="victoryCanvas" width="140" height="150"></canvas>
-        <div style="flex:1;text-align:center;">
-          <div id="victoryWord" style="font-size:26px;font-weight:700;color:var(--doodle-yellow);letter-spacing:3px;">DIAMOND</div>
-          <div id="victoryClue" style="font-size:14px;opacity:0.9;margin-top:6px;">Guess a precious gemstone</div>
+      <div class="chalk-header" onclick="cycleVictoryCelebration()" title="Tap to switch celebration!">
+        <div id="victoryStyleBadge" class="celebration-badge">🕺 Disco Party! 🎲</div>
+        <canvas id="victoryCanvas" width="165" height="170" style="width:165px;height:170px;flex-shrink:0;"></canvas>
+        <div style="flex:1;text-align:center;z-index:2;">
+          <div id="victoryWord" style="font-size:25px;font-weight:700;color:var(--doodle-yellow);letter-spacing:2.5px;">DIAMOND</div>
+          <div id="victoryClue" style="font-size:13px;opacity:0.92;margin-top:5px;">Guess a precious gemstone</div>
+          <div id="victoryCheerText" style="font-size:12px;color:#76FF03;font-weight:700;margin-top:8px;">✨ Boogie Champion! ✨</div>
         </div>
       </div>
       <div class="victory-body">
-        <div style="font-size:30px;font-weight:700;color:var(--correct-green);">WELL DONE!</div>
+        <div style="font-size:30px;font-weight:700;color:var(--correct-green);">WELL DONE! 🎉</div>
         <div class="stats-row">
           <div class="sketch-box stat-chip" id="statPerfect">Perfect: 3</div>
           <div class="sketch-box stat-chip" id="statStreak">Streak: 2</div>
@@ -758,26 +811,34 @@
           <span style="font-size:24px;">🎨</span>
         </div>
 
-        <button id="nextLevelBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-top:16px;" onclick="nextLevelAfterVictory()">
+        <button id="nextLevelBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-top:14px;" onclick="nextLevelAfterVictory()">
           NEXT (+25 Coins) →
         </button>
       </div>
     </div>
   </div>
 
-  <!-- ================= GAME OVER OVERLAY ================= -->
-  <div id="gameOverModal" class="modal-backdrop">
+  <!-- ================= GAME OVER BOTTOM SHEET (NEVER BLOCKS STICKMAN ANIMATION) ================= -->
+  <div id="gameOverModal" class="modal-backdrop bottom-dock">
     <div class="sketch-box dialog-card">
-      <div id="gameOverTitle" style="font-size:26px;font-weight:700;color:var(--wrong-red);">SPLASH! SHARK SNACK</div>
-      <p id="gameOverDesc" style="font-weight:700;margin:8px 0;">All 6 balloons popped! The shark caught up.</p>
-      <p id="gameOverClue" style="color:var(--ink-blue);font-style:italic;margin-bottom:18px;"></p>
-      <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-bottom:10px;" onclick="rescuePlayer()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:11px;font-weight:700;color:var(--ink-blue);opacity:0.85;">⬆️ Watch Stickman Above!</span>
+        <button class="sketch-box sketch-btn quick-chip" style="padding:2px 8px;font-size:11px;" onclick="togglePeekGameOver()">👁️ Peek Scene</button>
+      </div>
+      <div id="gameOverTitle" style="font-size:22px;font-weight:700;color:var(--wrong-red);">SPLASH! SHARK SNACK</div>
+      <p id="gameOverDesc" style="font-weight:700;font-size:13px;margin:4px 0;"></p>
+      <p id="gameOverClue" style="color:var(--ink-blue);font-style:italic;font-size:13px;margin:2px 0 10px;"></p>
+      <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:46px;font-size:16px;margin-bottom:8px;" onclick="rescuePlayer()">
         Rescue (+3 Lives • 250 Coins)
       </button>
-      <button class="sketch-box sketch-btn menu-btn" style="height:48px;margin-bottom:8px;" onclick="retryLevel()">
-        Try Again
-      </button>
-      <div style="cursor:pointer;padding:6px;opacity:0.75;font-weight:700;" onclick="closeModalsAndGoMenu()">Back to Main Menu</div>
+      <div style="display:flex;gap:8px;">
+        <button class="sketch-box sketch-btn menu-btn" style="height:44px;font-size:16px;flex:1;" onclick="retryLevel()">
+          🔄 Try Again
+        </button>
+        <button class="sketch-box sketch-btn menu-btn" style="height:44px;font-size:14px;flex:0.85;background:#F5F5F5;" onclick="closeModalsAndGoMenu()">
+          🏠 Menu
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1310,7 +1371,10 @@
         if (lives <= 0) {
           playProceduralSound(peril.overSound);
           streak = 0;
-          showGameOverModal();
+          clearTimeout(window._gameOverDelayTimer);
+          window._gameOverDelayTimer = setTimeout(() => {
+            if (lives <= 0) showGameOverModal();
+          }, 700);
         } else {
           playProceduralSound(peril.sound);
         }
@@ -1380,6 +1444,54 @@
       renderGameplayUI();
     }
 
+    // 4 Random Cheerful Winner Celebrations
+    const VICTORY_CELEBRATIONS = [
+      { id: 'DISCO_FEVER', badge: '🕺 Disco Party! 🎲', cheer: '✨ Funky Boogie Champion! ✨' },
+      { id: 'TROPHY_FLIP', badge: '🏆 Trophy Jump! 🎲', cheer: '🌟 Golden Cup Winner! 🌟' },
+      { id: 'BALLOON_FIESTA', badge: '🎈 Balloon Fiesta! 🎲', cheer: '🎉 Sky-High Party Time! 🎉' },
+      { id: 'SUPER_HERO', badge: '🦸 Superhero Flyby! 🎲', cheer: '🚀 Unstoppable Word Hero! 🚀' }
+    ];
+    let activeVictoryStyleIdx = 0;
+    let victoryConfetti = [];
+
+    function spawnVictoryConfetti() {
+      victoryConfetti = [];
+      for (let i = 0; i < 34; i++) {
+        victoryConfetti.push({
+          rx: Math.random(),
+          ry: Math.random(),
+          vy: 0.25 + Math.random() * 0.45,
+          vx: (Math.random() - 0.5) * 0.25,
+          rot: Math.random() * Math.PI * 2,
+          vrot: (Math.random() - 0.5) * 6,
+          w: 5 + Math.random() * 5,
+          h: 3 + Math.random() * 4,
+          color: BALLOON_COLORS[i % BALLOON_COLORS.length]
+        });
+      }
+    }
+
+    function selectRandomVictoryCelebration() {
+      let nextIdx = Math.floor(Math.random() * VICTORY_CELEBRATIONS.length);
+      if ( nextIdx === activeVictoryStyleIdx && VICTORY_CELEBRATIONS.length > 1) {
+        nextIdx = (nextIdx + 1 + Math.floor(Math.random() * (VICTORY_CELEBRATIONS.length - 1))) % VICTORY_CELEBRATIONS.length;
+      }
+      activeVictoryStyleIdx = nextIdx;
+      const style = VICTORY_CELEBRATIONS[activeVictoryStyleIdx];
+      document.getElementById('victoryStyleBadge').textContent = style.badge;
+      document.getElementById('victoryCheerText').textContent = style.cheer;
+      spawnVictoryConfetti();
+    }
+
+    function cycleVictoryCelebration() {
+      activeVictoryStyleIdx = (activeVictoryStyleIdx + 1) % VICTORY_CELEBRATIONS.length;
+      const style = VICTORY_CELEBRATIONS[activeVictoryStyleIdx];
+      document.getElementById('victoryStyleBadge').textContent = style.badge;
+      document.getElementById('victoryCheerText').textContent = style.cheer;
+      spawnVictoryConfetti();
+      playProceduralSound('pop');
+    }
+
     // Modals
     function showVictoryModal() {
       const reward = isBoss(activeLevel) ? 50 : 25;
@@ -1393,8 +1505,8 @@
       document.getElementById('themeFill').style.width = `${(themeProg / 10) * 100}%`;
       document.getElementById('themeText').textContent = `${themeProg}/10`;
       document.getElementById('nextLevelBtn').textContent = `NEXT (+${reward} Coins) →`;
+      selectRandomVictoryCelebration();
       document.getElementById('victoryModal').classList.add('active');
-      drawCelebratingChalkStickman();
     }
 
     function nextLevelAfterVictory() {
@@ -1415,7 +1527,14 @@
       document.getElementById('gameOverTitle').textContent = peril.overTitle;
       document.getElementById('gameOverDesc').textContent = peril.overDesc;
       document.getElementById('gameOverClue').textContent = `Clue: ${activeLevel.clue}`;
-      document.getElementById('gameOverModal').classList.add('active');
+      const modal = document.getElementById('gameOverModal');
+      modal.classList.remove('minimized');
+      modal.classList.add('active');
+    }
+
+    function togglePeekGameOver() {
+      const modal = document.getElementById('gameOverModal');
+      modal.classList.toggle('minimized');
     }
 
     function rescuePlayer() {
@@ -1444,7 +1563,11 @@
       document.getElementById('coinModal').classList.add('active');
     }
     function closeAllModals() {
-      document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('active'));
+      clearTimeout(window._gameOverDelayTimer);
+      document.querySelectorAll('.modal-backdrop').forEach(m => {
+        m.classList.remove('active');
+        m.classList.remove('minimized');
+      });
     }
 
     function claimFreeCoins() {
@@ -1628,12 +1751,29 @@
         ctx.stroke();
       }
 
-      // Stickman tiptoeing on left
-      const stickX = w * 0.23;
+      // Stickman tiptoeing on left (or scrambling in a cartoon wheel-blur when lives === 0!)
+      const stickX = (!isPreview && livesCount <= 0)
+        ? w * 0.20 + Math.sin(t * 14) * 10
+        : w * 0.23;
       const stickFootY = groundY - 4;
       const stickScale = Math.min(0.86, w / 290);
-      const handY = stickFootY - 64 * stickScale + Math.sin(t * 2.2) * 3;
+      const handY = stickFootY - 64 * stickScale + Math.sin(t * (livesCount <= 0 ? 16 : 2.2)) * (livesCount <= 0 ? 7 : 3);
       drawStickman(ctx, stickX, handY, stickScale, !isPreview && livesCount <= 2, false, t);
+
+      if (!isPreview && livesCount <= 0) {
+        // Cartoon dust clouds & spinning leg blur when Rex wakes up!
+        for (let d = 0; d < 4; d++) {
+          const dx = stickX - 14 + d * 9 + Math.cos(t * 12 + d) * 4;
+          const dy = groundY - 5 - Math.abs(Math.sin(t * 10 + d)) * 8;
+          ctx.fillStyle = 'rgba(215, 204, 200, 0.85)';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(dx, dy, 5 + (d % 2) * 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
 
       // Clumsy noise rings when noise > 0
       if (!isPreview && noise > 0) {
@@ -1648,17 +1788,21 @@
       // =========================================================
       // ORGANIC BEZIER-SCULPTED T-REX (Right Half)
       // =========================================================
+      const isDead = !isPreview && livesCount <= 0;
       const isAwake = !isPreview && livesCount <= 2;
       const isStirring = !isPreview && livesCount <= 4;
       const breath = Math.sin(t * (isAwake ? 6 : 2)) * (isAwake ? 4.5 : 2.5);
-      const jawAngleDeg = isAwake
-        ? 22 + Math.sin(t * 9) * 5
-        : isStirring
-          ? 5 + Math.sin(t * 3) * 2
-          : 0;
+      const jawAngleDeg = isDead
+        ? 28 + Math.sin(t * 16) * 8
+        : isAwake
+          ? 22 + Math.sin(t * 9) * 5
+          : isStirring
+            ? 5 + Math.sin(t * 3) * 2
+            : 0;
 
       const s = Math.min(1.05, Math.max(0.72, w / 265));
-      const headPivotX = w * 0.67;
+      const lungeX = isDead ? -14 * s + Math.sin(t * 12) * 5 * s : 0;
+      const headPivotX = w * 0.67 + lungeX;
       const headPivotY = groundY - 56 * s + breath * 0.5;
 
       // 1. Curved Muscular Neck & Back Torso
@@ -1916,13 +2060,53 @@
       } else {
         ctx.strokeStyle = '#E74C3C';
         ctx.lineWidth = 2.4;
-        for (let r = 1; r <= 2; r++) {
+        for (let r = 1; r <= (isDead ? 3 : 2); r++) {
           const rad = (16 + r * 12 + ((t * 40) % 12)) * s;
           ctx.beginPath();
           ctx.arc(headPivotX - 54 * s, headPivotY - 4 * s, rad, 0.75 * Math.PI, 1.25 * Math.PI);
           ctx.stroke();
         }
       }
+    }
+
+    function drawSleekSharkFin(ctx, sx, waterY, dir, s, t) {
+      // Iconic shark dorsal fin: convex swept-back leading edge + concave hooked trailing edge
+      const frontBaseX = sx + 18 * s * dir;
+      const rearBaseX = sx - 16 * s * dir;
+      const tipX = sx - 11 * s * dir;
+      const tipY = waterY - 38 * s + Math.sin(t * 5) * 1.5;
+
+      ctx.fillStyle = '#546E7A';
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      // Start at front base (leading edge cutting through water)
+      ctx.moveTo(frontBaseX, waterY + 5);
+      // Sweep up & backward along convex leading edge to sharp dorsal tip
+      ctx.quadraticCurveTo(sx + 10 * s * dir, waterY - 26 * s, tipX, tipY);
+      // Curve down along concave scalloped trailing edge to rear base
+      ctx.quadraticCurveTo(sx - 2 * s * dir, waterY - 15 * s, rearBaseX, waterY + 5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Subtle lighter highlight along leading edge of fin
+      ctx.strokeStyle = '#78909C';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(frontBaseX - 3 * s * dir, waterY);
+      ctx.quadraticCurveTo(sx + 7 * s * dir, waterY - 22 * s, tipX + 2 * s * dir, tipY + 4 * s);
+      ctx.stroke();
+
+      // White foam water wake at front base of fin
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(frontBaseX + 5 * s * dir, waterY + 1);
+      ctx.quadraticCurveTo(frontBaseX, waterY - 3 * s, frontBaseX - 8 * s * dir, waterY + 2);
+      ctx.stroke();
     }
 
     function renderPerilScene(canvas, peril, livesCount, smoothL, isPreview, t, dt) {
@@ -1970,11 +2154,40 @@
           ctx.fill();
         }
 
-        drawStickman(ctx, cx, harnessY, 0.88 * s, !isPreview && livesCount <= 2, true, t);
+        if (!isPreview && livesCount <= 0) {
+          // 0-LIVES DEATH ANIMATION: Stickman upside-down in shark jaws with legs kicking frantically above water!
+          const kickL = Math.sin(t * 16) * 12 * s;
+          const kickR = -Math.sin(t * 16) * 12 * s;
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 3.2 * s;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(cx - 5 * s, waterY - 6 * s);
+          ctx.lineTo(cx - 16 * s, waterY - 28 * s + kickL);
+          ctx.lineTo(cx - 23 * s, waterY - 26 * s + kickL);
+          ctx.moveTo(cx + 5 * s, waterY - 6 * s);
+          ctx.lineTo(cx + 16 * s, waterY - 28 * s + kickR);
+          ctx.lineTo(cx + 23 * s, waterY - 26 * s + kickR);
+          ctx.stroke();
+
+          // Animated water splash droplets
+          for (let sp = 0; sp < 6; sp++) {
+            const prog = (t * 2.2 + sp * 0.17) % 1;
+            const ang = -Math.PI * (0.18 + (sp / 5) * 0.64);
+            const sxDrop = cx + Math.cos(ang) * (18 + prog * 36) * s;
+            const syDrop = waterY - 6 + Math.sin(ang) * (14 + prog * 28) * s + prog * prog * 28;
+            ctx.fillStyle = '#4FC3F7';
+            ctx.beginPath();
+            ctx.arc(sxDrop, syDrop, (1 - prog * 0.5) * 3.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          drawStickman(ctx, cx, harnessY, 0.88 * s, !isPreview && livesCount <= 2, true, t);
+        }
 
         // Shark Fin or Open Jaws with Serrated Teeth
         if (!isPreview && livesCount <= 2) {
-          const jBob = Math.sin(t * 5) * 3;
+          const jBob = Math.sin(t * (livesCount <= 0 ? 12 : 5)) * (livesCount <= 0 ? 5 : 3);
           ctx.fillStyle = '#546E7A';
           ctx.strokeStyle = '#1E1E1E';
           ctx.lineWidth = 2.5;
@@ -2008,16 +2221,7 @@
         } else {
           const sx = cx + Math.sin(t * 1.45) * (w * 0.23);
           const dir = Math.cos(t * 1.45) >= 0 ? 1 : -1;
-          ctx.fillStyle = '#546E7A';
-          ctx.strokeStyle = '#1E1E1E';
-          ctx.lineWidth = 2.4;
-          ctx.beginPath();
-          ctx.moveTo(sx - 15 * dir, waterY + 4);
-          ctx.quadraticCurveTo(sx + 4 * dir, waterY - 26, sx - 16 * dir, waterY - 32);
-          ctx.quadraticCurveTo(sx - 8 * dir, waterY - 12, sx + 14 * dir, waterY + 4);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
+          drawSleekSharkFin(ctx, sx, waterY, dir, s, t);
         }
 
         // Layered HD Water Waves
@@ -2043,10 +2247,10 @@
       } else if (peril.id === 'UFO_ABDUCTION') {
         const ufoY = h * 0.19;
         const groundY = h * 0.88;
-        const ufoX = cx + Math.sin(t * 1.6) * 10;
+        const ufoX = cx + Math.sin(t * (livesCount <= 0 ? 5 : 1.6)) * (livesCount <= 0 ? 16 : 10);
 
         // Tractor Beam Cone + Pulsing Rings
-        ctx.fillStyle = 'rgba(118, 255, 3, 0.22)';
+        ctx.fillStyle = livesCount <= 0 ? 'rgba(118, 255, 3, 0.36)' : 'rgba(118, 255, 3, 0.22)';
         ctx.beginPath();
         ctx.moveTo(ufoX - 32, ufoY + 8);
         ctx.lineTo(ufoX + 32, ufoY + 8);
@@ -2055,10 +2259,10 @@
         ctx.closePath();
         ctx.fill();
 
-        ctx.strokeStyle = 'rgba(118, 255, 3, 0.65)';
+        ctx.strokeStyle = 'rgba(118, 255, 3, 0.72)';
         ctx.lineWidth = 2;
         for (let r = 0; r < 4; r++) {
-          const prog = (1 - ((t * 0.8 + r * 0.25) % 1));
+          const prog = (1 - ((t * (livesCount <= 0 ? 2.2 : 0.8) + r * 0.25) % 1));
           const ry = ufoY + 22 + prog * (groundY - ufoY - 32);
           const rw = 26 + prog * 48;
           ctx.beginPath();
@@ -2066,8 +2270,17 @@
           ctx.stroke();
         }
 
-        const handY = (groundY - 72) + ((ufoY + 14) - (groundY - 72)) * danger + bob;
-        drawStickman(ctx, ufoX, handY, 0.85 * (1 - danger * 0.2), !isPreview && livesCount <= 2, danger > 0.08, t);
+        if (!isPreview && livesCount <= 0) {
+          // 0-LIVES DEATH ANIMATION: Stickman tumbling 360° in zero-gravity at top of UFO beam!
+          ctx.save();
+          ctx.translate(ufoX, ufoY + 34 + Math.sin(t * 6) * 5);
+          ctx.rotate(t * 5.5);
+          drawStickman(ctx, 0, -22, 0.62, true, false, t);
+          ctx.restore();
+        } else {
+          const handY = (groundY - 72) + ((ufoY + 14) - (groundY - 72)) * danger + bob;
+          drawStickman(ctx, ufoX, handY, 0.85 * (1 - danger * 0.2), !isPreview && livesCount <= 2, danger > 0.08, t);
+        }
 
         // UFO Glass Dome + Little Alien Head
         ctx.fillStyle = '#80DEEA';
@@ -2143,7 +2356,23 @@
         }
 
         const platformY = lavaY - smoothL * crateH;
-        drawStickman(ctx, cx, platformY - 64 + bob * 0.35, 0.85, !isPreview && livesCount <= 2, false, t);
+        const stickY = (!isPreview && livesCount <= 0)
+          ? lavaY - 38 + Math.sin(t * 10) * 4
+          : platformY - 64 + bob * 0.35;
+        drawStickman(ctx, cx + ((!isPreview && livesCount <= 0) ? Math.sin(t * 8) * 5 : 0), stickY, 0.85, !isPreview && livesCount <= 2, false, t);
+
+        if (!isPreview && livesCount <= 0) {
+          // Rising SIZZLE steam puffs when stickman is in the lava!
+          for (let sm = 0; sm < 4; sm++) {
+            const prog = (t * 1.4 + sm * 0.25) % 1;
+            const sxPuff = cx + Math.sin(t * 4 + sm * 2) * 18;
+            const syPuff = lavaY - 14 - prog * 55;
+            ctx.fillStyle = `rgba(220, 220, 220, ${(1 - prog) * 0.75})`;
+            ctx.beginPath();
+            ctx.arc(sxPuff, syPuff, 5 + prog * 9, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
 
         // Bubbling Molten Lava
         ctx.fillStyle = '#FF5722';
@@ -2215,27 +2444,254 @@
       ctx.restore();
     }
 
-    function drawCelebratingChalkStickman() {
+    // =========================================================================
+    // 4. RANDOM CHEERFUL 60FPS WINNER CELEBRATION RENDERER
+    // =========================================================================
+    function renderVictoryCelebration(t, dt) {
       const c = document.getElementById('victoryCanvas');
-      const { ctx, w, h } = syncCanvasHD(c, 140, 140);
+      if (!c) return;
+      const { ctx, w, h } = syncCanvasHD(c, 165, 170);
       ctx.clearRect(0, 0, w, h);
+
+      // Subtle chalkboard grid lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1;
+      for (let gx = 0; gx <= w; gx += 22) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
+      }
+      for (let gy = 0; gy <= h; gy += 22) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+      }
+
+      // Falling & swirling colorful party confetti
+      if (!victoryConfetti.length) spawnVictoryConfetti();
+      victoryConfetti.forEach(cf => {
+        cf.ry = (cf.ry + cf.vy * dt) % 1.05;
+        cf.rx = (cf.rx + cf.vx * dt + Math.sin(t * 3 + cf.rot) * 0.002 + 1) % 1;
+        cf.rot += cf.vrot * dt;
+        ctx.save();
+        ctx.translate(cf.rx * w, cf.ry * h);
+        ctx.rotate(cf.rot);
+        ctx.fillStyle = cf.color;
+        ctx.fillRect(-cf.w * 0.5, -cf.h * 0.5, cf.w, cf.h);
+        ctx.restore();
+      });
+
+      const style = VICTORY_CELEBRATIONS[activeVictoryStyleIdx] || VICTORY_CELEBRATIONS[0];
+      const cx = w * 0.5;
+      const cy = h * 0.56;
+
+      ctx.save();
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 3.2;
       ctx.lineCap = 'round';
-      const cx = w * 0.5, cy = h * 0.56;
-      ctx.beginPath();
-      ctx.arc(cx, cy - 28, 15, 0, Math.PI * 2);
-      ctx.moveTo(cx, cy - 13);
-      ctx.lineTo(cx, cy + 20);
-      ctx.moveTo(cx, cy - 5);
-      ctx.lineTo(cx - 22, cy - 25);
-      ctx.moveTo(cx, cy - 5);
-      ctx.lineTo(cx + 22, cy - 25);
-      ctx.moveTo(cx, cy + 20);
-      ctx.lineTo(cx - 16, cy + 46);
-      ctx.moveTo(cx, cy + 20);
-      ctx.lineTo(cx + 16, cy + 46);
-      ctx.stroke();
+      ctx.lineJoin = 'round';
+
+      if (style.id === 'DISCO_FEVER') {
+        // 1. DISCO PARTY DANCE: Flashing disco floor tiles + groovy pointing dance + sunglasses!
+        const tileColors = ['#FF595E', '#FFD166', '#2ECC71', '#4FC3F7', '#9B5DE5'];
+        for (let ti = 0; ti < 5; ti++) {
+          ctx.fillStyle = tileColors[(ti + Math.floor(t * 6)) % tileColors.length];
+          ctx.fillRect(14 + ti * ((w - 28) / 5), h - 14, (w - 28) / 5 - 3, 7);
+        }
+
+        const sway = Math.sin(t * 7) * 9;
+        const bounce = Math.abs(Math.sin(t * 7)) * 6;
+        const headX = cx + sway * 0.6;
+        const headY = cy - 30 - bounce;
+        const hipX = cx - sway * 0.5;
+        const hipY = cy + 16 - bounce * 0.5;
+
+        // Disco torso & groovy legs
+        ctx.beginPath();
+        ctx.moveTo(headX, headY + 14);
+        ctx.lineTo(hipX, hipY);
+        ctx.moveTo(hipX, hipY);
+        ctx.lineTo(cx - 18 + Math.sin(t * 7) * 6, h - 16);
+        ctx.moveTo(hipX, hipY);
+        ctx.lineTo(cx + 18 + Math.cos(t * 7) * 6, h - 16);
+
+        // Alternating disco pointing arms
+        const pointUpRight = Math.sin(t * 3.5) >= 0;
+        ctx.moveTo(headX, headY + 20);
+        if (pointUpRight) {
+          ctx.lineTo(headX + 26, headY - 16);
+          ctx.moveTo(headX, headY + 20);
+          ctx.lineTo(headX - 22, headY + 34);
+        } else {
+          ctx.lineTo(headX - 26, headY - 16);
+          ctx.moveTo(headX, headY + 20);
+          ctx.lineTo(headX + 22, headY + 34);
+        }
+        ctx.stroke();
+
+        // Head + Cool Party Sunglasses
+        ctx.fillStyle = '#263238';
+        ctx.beginPath();
+        ctx.arc(headX, headY, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#FFD166';
+        ctx.fillRect(headX - 11, headY - 5, 9, 6);
+        ctx.fillRect(headX + 2, headY - 5, 9, 6);
+        ctx.strokeStyle = '#FFD166';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(headX, headY + 4, 5, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+
+        // Floating music notes
+        ctx.font = '700 16px var(--font-main)';
+        ctx.fillStyle = '#76FF03';
+        ctx.fillText('♪', cx - 48, cy - 25 - ((t * 25) % 24));
+        ctx.fillStyle = '#FFD166';
+        ctx.fillText('♫', cx + 36, cy - 15 - (((t + 0.4) * 25) % 24));
+
+      } else if (style.id === 'TROPHY_FLIP') {
+        // 2. GOLDEN TROPHY JUMP: #1 Podium + joyful jump + hoisting gleaming gold cup!
+        ctx.fillStyle = '#FFD166';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2;
+        ctx.fillRect(cx - 28, h - 26, 56, 22);
+        ctx.strokeRect(cx - 28, h - 26, 56, 22);
+        ctx.fillStyle = '#1E1E1E';
+        ctx.font = '700 13px var(--font-main)';
+        ctx.fillText('#1', cx - 8, h - 10);
+
+        const jump = Math.abs(Math.sin(t * 6.5)) * 18;
+        const headY = cy - 26 - jump;
+        const shoulderY = headY + 14;
+        const hipY = shoulderY + 26;
+
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.arc(cx, headY, 13, 0, Math.PI * 2);
+        ctx.moveTo(cx, shoulderY);
+        ctx.lineTo(cx, hipY);
+        // Both arms hoisting trophy overhead
+        ctx.moveTo(cx, shoulderY + 4);
+        ctx.lineTo(cx - 18, headY - 14);
+        ctx.moveTo(cx, shoulderY + 4);
+        ctx.lineTo(cx + 18, headY - 14);
+        // Jumping V-legs
+        ctx.moveTo(cx, hipY);
+        ctx.lineTo(cx - 16 - jump * 0.3, hipY + 20 - jump * 0.2);
+        ctx.moveTo(cx, hipY);
+        ctx.lineTo(cx + 16 + jump * 0.3, hipY + 20 - jump * 0.2);
+        ctx.stroke();
+
+        // Gleaming Gold Trophy Cup above head
+        const ty = headY - 28;
+        ctx.fillStyle = '#FFD166';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(cx - 12, ty - 8);
+        ctx.lineTo(cx + 12, ty - 8);
+        ctx.quadraticCurveTo(cx + 10, ty + 8, cx, ty + 8);
+        ctx.quadraticCurveTo(cx - 10, ty + 8, cx - 12, ty - 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillRect(cx - 3, ty + 8, 6, 5);
+        ctx.fillRect(cx - 8, ty + 13, 16, 4);
+
+      } else if (style.id === 'BALLOON_FIESTA') {
+        // 3. BALLOON FIESTA: Floating joyfully with party hat & rainbow balloon bouquet!
+        const floatY = Math.sin(t * 3.5) * 9;
+        const handX = cx - 16;
+        const handY = cy - 18 + floatY;
+
+        // 3 Party Balloons
+        const bCols = ['#FF595E', '#2ECC71', '#4FC3F7'];
+        [-20, 0, 20].forEach((ox, idx) => {
+          const bx = handX + ox + Math.sin(t * 3 + idx) * 3;
+          const by = handY - 38 - (idx === 1 ? 8 : 0);
+          ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(handX, handY);
+          ctx.lineTo(bx, by + 12);
+          ctx.stroke();
+
+          ctx.fillStyle = bCols[idx];
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.ellipse(bx, by, 11, 13.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
+
+        const headY = cy - 12 + floatY;
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.arc(cx + 8, headY, 13, 0, Math.PI * 2);
+        ctx.moveTo(cx + 8, headY + 13);
+        ctx.lineTo(cx + 8, headY + 40);
+        ctx.moveTo(cx + 8, headY + 18);
+        ctx.lineTo(handX, handY);
+        ctx.moveTo(cx + 8, headY + 18);
+        ctx.lineTo(cx + 30, headY + 4 + Math.sin(t * 8) * 6);
+        ctx.moveTo(cx + 8, headY + 40);
+        ctx.lineTo(cx - 4, headY + 62 + Math.sin(t * 6) * 5);
+        ctx.moveTo(cx + 8, headY + 40);
+        ctx.lineTo(cx + 22, headY + 60 - Math.sin(t * 6) * 5);
+        ctx.stroke();
+
+        // Striped Party Hat
+        ctx.fillStyle = '#FF595E';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(cx, headY - 11);
+        ctx.lineTo(cx + 8, headY - 30);
+        ctx.lineTo(cx + 16, headY - 11);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+      } else {
+        // 4. SUPERHERO FLYBY: Soaring stickman with fluttering red cape & shooting stars!
+        const flyX = cx + Math.cos(t * 3) * 14;
+        const flyY = cy - 6 + Math.sin(t * 6) * 8;
+
+        // Fluttering Red Superhero Cape
+        ctx.fillStyle = '#E74C3C';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(flyX - 4, flyY - 4);
+        ctx.quadraticCurveTo(flyX - 28, flyY + 4 + Math.sin(t * 14) * 8, flyX - 46, flyY + 18 + Math.cos(t * 12) * 6);
+        ctx.lineTo(flyX - 36, flyY + 30);
+        ctx.quadraticCurveTo(flyX - 18, flyY + 14, flyX - 4, flyY + 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Diagonal flying pose
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.arc(flyX + 14, flyY - 12, 13, 0, Math.PI * 2);
+        ctx.moveTo(flyX + 4, flyY - 2);
+        ctx.lineTo(flyX - 20, flyY + 20);
+        // Hero fist punching forward!
+        ctx.moveTo(flyX + 2, flyY);
+        ctx.lineTo(flyX + 36, flyY - 20);
+        ctx.moveTo(flyX + 2, flyY);
+        ctx.lineTo(flyX - 12, flyY + 4);
+        // Trailing legs
+        ctx.moveTo(flyX - 20, flyY + 20);
+        ctx.lineTo(flyX - 42, flyY + 32);
+        ctx.moveTo(flyX - 20, flyY + 20);
+        ctx.lineTo(flyX - 36, flyY + 40);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     // Physical keyboard support for desktop, Chromebooks, & tablets
@@ -2272,6 +2728,9 @@
       const gameCanvas = document.getElementById('gameCanvas');
       if (gameCanvas && document.getElementById('gameScreen').classList.contains('active')) {
         renderPerilScene(gameCanvas, getPerilForLevel(activeLevel.number), lives, smoothLives, false, t, dt);
+      }
+      if (document.getElementById('victoryModal').classList.contains('active')) {
+        renderVictoryCelebration(t, dt);
       }
       requestAnimationFrame(animate);
     }

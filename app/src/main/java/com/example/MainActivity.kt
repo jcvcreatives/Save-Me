@@ -2453,14 +2453,45 @@ private fun DrawScope.drawSharkBalloonsPeril(
         }
     }
 
-    drawDoodleStickman(
-        handAnchor = handPoint,
-        scale = (w / 420f).coerceIn(0.68f, 1.12f),
-        isPanicking = livesRemaining in 1..2,
-        isSplashed = livesRemaining <= 0 || isGameOver,
-        wavePhase = wavePhase,
-        handsUp = true
-    )
+    if (!isMenuPreview && (livesRemaining <= 0 || isGameOver)) {
+        // 0-LIVES DEATH ANIMATION: Stickman upside-down in shark jaws with legs kicking above splashing waves!
+        val s = (w / 420f).coerceIn(0.68f, 1.12f)
+        val kickL = sin(wavePhase * 4f) * 11.dp.toPx() * s
+        val kickR = -sin(wavePhase * 4f) * 11.dp.toPx() * s
+        val strokeW = 3.2.dp.toPx() * s
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(centerX - 6.dp.toPx() * s, waterY - 6.dp.toPx() * s),
+            end = Offset(centerX - 18.dp.toPx() * s, waterY - 28.dp.toPx() * s + kickL),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(centerX + 6.dp.toPx() * s, waterY - 6.dp.toPx() * s),
+            end = Offset(centerX + 18.dp.toPx() * s, waterY - 28.dp.toPx() * s + kickR),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+        for (sp in 0..4) {
+            val ang = (-PI * (0.2 + sp * 0.15)).toFloat()
+            val dist = (16 + ((wavePhase * 12f + sp * 7f) % 24f)).dp.toPx() * s
+            drawCircle(
+                color = DoodleColors.WaterBlue,
+                radius = 3.2.dp.toPx() * s,
+                center = Offset(centerX + cos(ang) * dist, waterY - 6.dp.toPx() + sin(ang) * dist * 0.7f)
+            )
+        }
+    } else {
+        drawDoodleStickman(
+            handAnchor = handPoint,
+            scale = (w / 420f).coerceIn(0.68f, 1.12f),
+            isPanicking = livesRemaining in 1..2,
+            isSplashed = false,
+            wavePhase = wavePhase,
+            handsUp = true
+        )
+    }
 
     val isJawsOpen = (!isMenuPreview && livesRemaining <= 2)
     if (isJawsOpen) {
@@ -2470,12 +2501,12 @@ private fun DrawScope.drawSharkBalloonsPeril(
             scale = (w / 380f).coerceIn(0.75f, 1.2f)
         )
     } else {
-        val sharkX = centerX + sharkPatrol * (w * 0.24f)
+        val sharkX = centerX + sin(wavePhase) * (w * 0.23f)
         val movingRight = cos(wavePhase) >= 0f
         drawCirclingSharkFin(
             x = sharkX,
             waterY = waterY,
-            facingRight = sharkPatrol < 0f || movingRight,
+            facingRight = movingRight,
             scale = (w / 380f).coerceIn(0.75f, 1.2f)
         )
     }
@@ -2568,7 +2599,22 @@ private fun DrawScope.drawUfoAbductionPeril(
     val abductedHandY = ufoY + 12.dp.toPx()
     val currentHandY = startHandY + (abductedHandY - startHandY) * dangerProgress + bobOffset
 
-    if (!isGameOver && livesRemaining > 0) {
+    if (isGameOver || livesRemaining <= 0) {
+        // 0-LIVES DEATH ANIMATION: Stickman tumbling 360° in zero-gravity at top of UFO beam!
+        val spinPivot = Offset(centerX, ufoY + 34.dp.toPx() + sin(wavePhase * 2f) * 4.dp.toPx())
+        withTransform({
+            rotate(degrees = (wavePhase * 114f) % 360f, pivot = spinPivot)
+        }) {
+            drawDoodleStickman(
+                handAnchor = Offset(spinPivot.x, spinPivot.y - 20.dp.toPx()),
+                scale = ((w / 420f) * 0.65f).coerceIn(0.48f, 0.85f),
+                isPanicking = true,
+                isSplashed = true,
+                wavePhase = wavePhase,
+                handsUp = false
+            )
+        }
+    } else {
         drawDoodleStickman(
             handAnchor = Offset(centerX, currentHandY),
             scale = ((w / 420f) * (1f - dangerProgress * 0.25f)).coerceIn(0.55f, 1.1f),
@@ -3424,23 +3470,32 @@ private fun DrawScope.drawCirclingSharkFin(
     facingRight: Boolean,
     scale: Float
 ) {
-    val finH = 34.dp.toPx() * scale
-    val finW = 28.dp.toPx() * scale
+    val finH = 38.dp.toPx() * scale
+    val finW = 34.dp.toPx() * scale
     val dir = if (facingRight) 1f else -1f
 
+    // Iconic Shark Dorsal Fin:
+    // - Starts at front base (x + 0.52 * finW * dir)
+    // - Sweeps up & backward along convex leading edge to sharp hooked tip (x - 0.34 * finW * dir, waterY - finH)
+    // - Curves down along concave scalloped trailing edge to rear base (x - 0.48 * finW * dir)
+    val frontBaseX = x + finW * 0.52f * dir
+    val rearBaseX = x - finW * 0.48f * dir
+    val tipX = x - finW * 0.34f * dir
+    val tipY = waterY - finH
+
     val finPath = Path().apply {
-        moveTo(x - finW * 0.5f * dir, waterY + 4.dp.toPx())
+        moveTo(frontBaseX, waterY + 5.dp.toPx())
         quadraticTo(
-            x - finW * 0.1f * dir,
-            waterY - finH * 0.7f,
-            x + finW * 0.55f * dir,
-            waterY - finH
+            x + finW * 0.28f * dir,
+            waterY - finH * 0.68f,
+            tipX,
+            tipY
         )
         quadraticTo(
-            x + finW * 0.25f * dir,
-            waterY - finH * 0.35f,
-            x + finW * 0.5f * dir,
-            waterY + 4.dp.toPx()
+            x - finW * 0.08f * dir,
+            waterY - finH * 0.38f,
+            rearBaseX,
+            waterY + 5.dp.toPx()
         )
         close()
     }
@@ -3449,7 +3504,16 @@ private fun DrawScope.drawCirclingSharkFin(
     drawPath(
         path = finPath,
         color = DoodleColors.InkBlack,
-        style = Stroke(width = 2.4.dp.toPx(), join = StrokeJoin.Round)
+        style = Stroke(width = 2.5.dp.toPx(), join = StrokeJoin.Round)
+    )
+
+    // White water foam wake at front base of fin
+    drawLine(
+        color = Color.White,
+        start = Offset(frontBaseX + 5.dp.toPx() * dir, waterY + 1.dp.toPx()),
+        end = Offset(frontBaseX - 7.dp.toPx() * dir, waterY + 2.dp.toPx()),
+        strokeWidth = 2.6.dp.toPx(),
+        cap = StrokeCap.Round
     )
 }
 
@@ -3554,6 +3618,13 @@ private fun DrawScope.drawDoodleWaterWaves(
 // 11. SCREEN 3: VICTORY / LEVEL COMPLETE OVERLAY ("WELL DONE!")
 // ============================================================================
 
+enum class VictoryCelebrationStyle(val badgeLabel: String, val cheerSubtitle: String) {
+    DISCO_FEVER("🕺 Disco Party! 🎲", "✨ Funky Boogie Champion! ✨"),
+    TROPHY_FLIP("🏆 Trophy Jump! 🎲", "🌟 Golden Cup Winner! 🌟"),
+    BALLOON_FIESTA("🎈 Balloon Fiesta! 🎲", "🎉 Sky-High Party Time! 🎉"),
+    SUPER_HERO("🦸 Superhero Flyby! 🎲", "🚀 Unstoppable Word Hero! 🚀")
+}
+
 @Composable
 fun VictoryOverlay(
     level: WordLevel,
@@ -3566,11 +3637,27 @@ fun VictoryOverlay(
     onNextLevel: () -> Unit
 ) {
     val rewardCoins = if (level.isBossLevel) 50 else 25
+    val styles = remember { VictoryCelebrationStyle.entries }
+    var celebrationIndex by remember(level.number, level.word) {
+        mutableIntStateOf(kotlin.random.Random.nextInt(styles.size))
+    }
+    val activeStyle = styles[celebrationIndex % styles.size]
+
+    val infiniteTransition = rememberInfiniteTransition(label = "victory60fps")
+    val animPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "victoryAnimPhase"
+    )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f))
+            .background(Color.Black.copy(alpha = 0.52f))
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         contentAlignment = Alignment.Center
@@ -3582,13 +3669,16 @@ fun VictoryOverlay(
                 .clip(RoundedCornerShape(26.dp))
                 .background(DoodleColors.PaperOffWhite)
         ) {
-            // Top dark chalkboard header
+            // Top dark chalkboard header with 60fps random winner animation & tap-to-switch badge
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(215.dp)
                     .background(DoodleColors.ChalkboardDark)
-                    .padding(16.dp)
+                    .clickable {
+                        celebrationIndex = (celebrationIndex + 1) % styles.size
+                    }
+                    .padding(14.dp)
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val step = 24.dp.toPx()
@@ -3620,15 +3710,18 @@ fun VictoryOverlay(
                 ) {
                     Canvas(
                         modifier = Modifier
-                            .weight(0.42f)
+                            .weight(0.45f)
                             .fillMaxHeight()
                     ) {
-                        drawCelebratingStickmanOnChalkboard()
+                        drawCelebratingStickmanOnChalkboard(
+                            style = activeStyle,
+                            phase = animPhase
+                        )
                     }
 
                     Column(
                         modifier = Modifier
-                            .weight(0.58f)
+                            .weight(0.55f)
                             .padding(start = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
@@ -3637,22 +3730,52 @@ fun VictoryOverlay(
                             text = level.word.uppercase(),
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Black,
-                            fontSize = 27.sp,
-                            letterSpacing = 3.sp,
+                            fontSize = 26.sp,
+                            letterSpacing = 2.5.sp,
                             color = DoodleColors.DoodleYellow,
                             textAlign = TextAlign.Center
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = level.clue,
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Medium,
-                            fontSize = 14.sp,
-                            lineHeight = 19.sp,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
                             color = Color.White.copy(alpha = 0.9f),
                             textAlign = TextAlign.Center
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = activeStyle.cheerSubtitle,
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp,
+                            color = DoodleColors.UfoBeamGreen,
+                            textAlign = TextAlign.Center
+                        )
                     }
+                }
+
+                // Celebration Style Chip (Top-Right)
+                SketchyContainer(
+                    fillColor = DoodleColors.DoodleYellow,
+                    cornerRadius = 12.dp,
+                    strokeWidth = 1.5.dp,
+                    shadowOffset = 1.5.dp,
+                    onClick = { celebrationIndex = (celebrationIndex + 1) % styles.size },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .height(26.dp)
+                ) {
+                    Text(
+                        text = activeStyle.badgeLabel,
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        color = DoodleColors.InkBlack,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
                 }
             }
 
@@ -3832,43 +3955,164 @@ private fun DoodleProgressRow(
     }
 }
 
-private fun DrawScope.drawCelebratingStickmanOnChalkboard() {
+private fun DrawScope.drawCelebratingStickmanOnChalkboard(
+    style: VictoryCelebrationStyle = VictoryCelebrationStyle.DISCO_FEVER,
+    phase: Float = 0f
+) {
     val cx = size.width * 0.5f
-    val cy = size.height * 0.52f
-    val headR = 16.dp.toPx()
-
-    val confettiColors = listOf(
-        DoodleColors.DoodleYellow,
-        DoodleColors.CorrectGreen,
-        DoodleColors.WaterBlue,
-        Color(0xFFFF595E)
-    )
-    confettiColors.forEachIndexed { idx, c ->
-        val angle = (idx * PI / 2.0 + 0.4).toFloat()
-        val px = cx + cos(angle) * 44.dp.toPx()
-        val py = cy - 12.dp.toPx() + sin(angle) * 44.dp.toPx()
-        drawCircle(color = c, radius = 4.dp.toPx(), center = Offset(px, py))
-    }
-
+    val cy = size.height * 0.55f
+    val headR = 14.dp.toPx()
     val chalk = Color.White
     val sw = 3.2.dp.toPx()
-    val headCenter = Offset(cx, cy - 28.dp.toPx())
 
-    drawCircle(color = chalk, radius = headR, center = headCenter, style = Stroke(width = sw))
-    drawCircle(color = chalk, radius = 2.dp.toPx(), center = Offset(headCenter.x - 5.dp.toPx(), headCenter.y - 2.dp.toPx()))
-    drawCircle(color = chalk, radius = 2.dp.toPx(), center = Offset(headCenter.x + 5.dp.toPx(), headCenter.y - 2.dp.toPx()))
+    // Animated falling & swirling confetti particles
+    for (i in 0 until 14) {
+        val c = DoodleColors.BalloonPalette[i % DoodleColors.BalloonPalette.size]
+        val rx = ((i * 0.19f + sin(phase + i) * 0.08f) % 1f).let { if (it < 0f) it + 1f else it }
+        val ry = (((phase / (2f * PI.toFloat())) + i * 0.14f) % 1f)
+        drawRoundRect(
+            color = c,
+            topLeft = Offset(rx * size.width, ry * size.height),
+            size = Size(6.dp.toPx(), 4.dp.toPx()),
+            cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
+        )
+    }
 
-    val neckY = headCenter.y + headR
-    val hipY = neckY + 34.dp.toPx()
-    drawLine(chalk, Offset(cx, neckY), Offset(cx, hipY), strokeWidth = sw, cap = StrokeCap.Round)
-    drawLine(chalk, Offset(cx, neckY + 8.dp.toPx()), Offset(cx - 24.dp.toPx(), neckY - 14.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
-    drawLine(chalk, Offset(cx, neckY + 8.dp.toPx()), Offset(cx + 24.dp.toPx(), neckY - 14.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
-    drawLine(chalk, Offset(cx, hipY), Offset(cx - 18.dp.toPx(), hipY + 26.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
-    drawLine(chalk, Offset(cx, hipY), Offset(cx + 18.dp.toPx(), hipY + 26.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+    when (style) {
+        VictoryCelebrationStyle.DISCO_FEVER -> {
+            // Disco floor tiles + groovy dance + party sunglasses
+            for (ti in 0 until 5) {
+                val tileW = (size.width - 16.dp.toPx()) / 5f
+                val col = DoodleColors.BalloonPalette[(ti + (phase * 2f).toInt()) % DoodleColors.BalloonPalette.size]
+                drawRoundRect(
+                    color = col,
+                    topLeft = Offset(8.dp.toPx() + ti * tileW, size.height - 10.dp.toPx()),
+                    size = Size(tileW - 3.dp.toPx(), 6.dp.toPx()),
+                    cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                )
+            }
+            val sway = sin(phase * 2f) * 8.dp.toPx()
+            val bounce = kotlin.math.abs(sin(phase * 2f)) * 6.dp.toPx()
+            val headCenter = Offset(cx + sway * 0.5f, cy - 28.dp.toPx() - bounce)
+            val neckY = headCenter.y + headR
+            val hipCenter = Offset(cx - sway * 0.4f, neckY + 28.dp.toPx())
+
+            drawCircle(color = chalk, radius = headR, center = headCenter, style = Stroke(width = sw))
+            // Cool golden sunglasses
+            drawRect(
+                color = DoodleColors.DoodleYellow,
+                topLeft = Offset(headCenter.x - 10.dp.toPx(), headCenter.y - 4.dp.toPx()),
+                size = Size(8.dp.toPx(), 5.dp.toPx())
+            )
+            drawRect(
+                color = DoodleColors.DoodleYellow,
+                topLeft = Offset(headCenter.x + 2.dp.toPx(), headCenter.y - 4.dp.toPx()),
+                size = Size(8.dp.toPx(), 5.dp.toPx())
+            )
+            drawLine(chalk, Offset(headCenter.x, neckY), hipCenter, strokeWidth = sw, cap = StrokeCap.Round)
+            val pointRight = sin(phase) >= 0f
+            drawLine(
+                chalk,
+                Offset(headCenter.x, neckY + 6.dp.toPx()),
+                if (pointRight) Offset(headCenter.x + 24.dp.toPx(), headCenter.y - 14.dp.toPx())
+                else Offset(headCenter.x - 24.dp.toPx(), headCenter.y - 14.dp.toPx()),
+                strokeWidth = sw,
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                chalk,
+                Offset(headCenter.x, neckY + 6.dp.toPx()),
+                if (pointRight) Offset(headCenter.x - 20.dp.toPx(), neckY + 20.dp.toPx())
+                else Offset(headCenter.x + 20.dp.toPx(), neckY + 20.dp.toPx()),
+                strokeWidth = sw,
+                cap = StrokeCap.Round
+            )
+            drawLine(chalk, hipCenter, Offset(cx - 16.dp.toPx(), size.height - 14.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, hipCenter, Offset(cx + 16.dp.toPx(), size.height - 14.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+        }
+
+        VictoryCelebrationStyle.TROPHY_FLIP -> {
+            // Golden podium + jumping champion hoisting trophy cup
+            drawRoundRect(
+                color = DoodleColors.DoodleYellow,
+                topLeft = Offset(cx - 26.dp.toPx(), size.height - 22.dp.toPx()),
+                size = Size(52.dp.toPx(), 18.dp.toPx()),
+                cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+            )
+            val jump = kotlin.math.abs(sin(phase * 2f)) * 16.dp.toPx()
+            val headCenter = Offset(cx, cy - 22.dp.toPx() - jump)
+            val neckY = headCenter.y + headR
+            val hipY = neckY + 26.dp.toPx()
+
+            drawCircle(color = chalk, radius = headR, center = headCenter, style = Stroke(width = sw))
+            drawLine(chalk, Offset(cx, neckY), Offset(cx, hipY), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(cx, neckY + 5.dp.toPx()), Offset(cx - 18.dp.toPx(), headCenter.y - 14.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(cx, neckY + 5.dp.toPx()), Offset(cx + 18.dp.toPx(), headCenter.y - 14.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(cx, hipY), Offset(cx - 18.dp.toPx(), hipY + 20.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(cx, hipY), Offset(cx + 18.dp.toPx(), hipY + 20.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+
+            // Trophy cup above head
+            drawRoundRect(
+                color = DoodleColors.DoodleYellow,
+                topLeft = Offset(cx - 11.dp.toPx(), headCenter.y - 34.dp.toPx()),
+                size = Size(22.dp.toPx(), 16.dp.toPx()),
+                cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+            )
+        }
+
+        VictoryCelebrationStyle.BALLOON_FIESTA -> {
+            // Floating with party balloons
+            val floatY = sin(phase) * 8.dp.toPx()
+            val headCenter = Offset(cx + 6.dp.toPx(), cy - 10.dp.toPx() + floatY)
+            val handPos = Offset(cx - 16.dp.toPx(), cy - 18.dp.toPx() + floatY)
+            for (b in 0..2) {
+                val bx = handPos.x + (b - 1) * 16.dp.toPx()
+                val by = handPos.y - 34.dp.toPx() - (if (b == 1) 6.dp.toPx() else 0f)
+                drawLine(chalk.copy(alpha = 0.7f), handPos, Offset(bx, by + 10.dp.toPx()), strokeWidth = 1.5.dp.toPx())
+                drawOval(
+                    color = DoodleColors.BalloonPalette[b],
+                    topLeft = Offset(bx - 9.dp.toPx(), by - 11.dp.toPx()),
+                    size = Size(18.dp.toPx(), 22.dp.toPx())
+                )
+            }
+            drawCircle(color = chalk, radius = headR, center = headCenter, style = Stroke(width = sw))
+            val neckY = headCenter.y + headR
+            val hipY = neckY + 26.dp.toPx()
+            drawLine(chalk, Offset(headCenter.x, neckY), Offset(headCenter.x, hipY), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(headCenter.x, neckY + 5.dp.toPx()), handPos, strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(headCenter.x, neckY + 5.dp.toPx()), Offset(headCenter.x + 22.dp.toPx(), neckY - 8.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(headCenter.x, hipY), Offset(headCenter.x - 12.dp.toPx(), hipY + 22.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(headCenter.x, hipY), Offset(headCenter.x + 12.dp.toPx(), hipY + 22.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+        }
+
+        VictoryCelebrationStyle.SUPER_HERO -> {
+            // Soaring superhero stickman with fluttering red cape
+            val flyX = cx + cos(phase) * 10.dp.toPx()
+            val flyY = cy - 6.dp.toPx() + sin(phase * 2f) * 7.dp.toPx()
+            val capePath = Path().apply {
+                moveTo(flyX - 4.dp.toPx(), flyY - 4.dp.toPx())
+                quadraticTo(
+                    flyX - 26.dp.toPx(),
+                    flyY + 6.dp.toPx() + sin(phase * 3f) * 8.dp.toPx(),
+                    flyX - 42.dp.toPx(),
+                    flyY + 20.dp.toPx()
+                )
+                lineTo(flyX - 30.dp.toPx(), flyY + 30.dp.toPx())
+                close()
+            }
+            drawPath(capePath, color = DoodleColors.WrongRed)
+            val headCenter = Offset(flyX + 14.dp.toPx(), flyY - 12.dp.toPx())
+            drawCircle(color = chalk, radius = headR, center = headCenter, style = Stroke(width = sw))
+            drawLine(chalk, Offset(flyX + 4.dp.toPx(), flyY - 2.dp.toPx()), Offset(flyX - 18.dp.toPx(), flyY + 18.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(flyX + 2.dp.toPx(), flyY), Offset(flyX + 34.dp.toPx(), flyY - 18.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(flyX - 18.dp.toPx(), flyY + 18.dp.toPx()), Offset(flyX - 38.dp.toPx(), flyY + 32.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+            drawLine(chalk, Offset(flyX - 18.dp.toPx(), flyY + 18.dp.toPx()), Offset(flyX - 32.dp.toPx(), flyY + 38.dp.toPx()), strokeWidth = sw, cap = StrokeCap.Round)
+        }
+    }
 }
 
 // ============================================================================
-// 12. GAME OVER OVERLAY & TWO-PLAYER PASS-AND-PLAY SETUP
+// 12. GAME OVER BOTTOM SHEET (NEVER BLOCKS STICKMAN ANIMATION) & TWO-PLAYER
 // ============================================================================
 
 @Composable
@@ -3880,109 +4124,156 @@ fun GameOverOverlay(
     onMainMenu: () -> Unit
 ) {
     val peril = level.perilType
+    var peekMinimized by remember { mutableStateOf(false) }
 
+    // Docked at BottomCenter with a clear upper viewport so the Stickman death animation in the top half is NEVER covered!
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.58f))
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        contentAlignment = Alignment.BottomCenter
     ) {
         SketchyContainer(
             fillColor = DoodleColors.PaperOffWhite,
-            cornerRadius = 26.dp,
+            cornerRadius = 24.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 420.dp)
+                .widthIn(max = 440.dp)
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(24.dp)
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp)
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⬆️ Watch Stickman Above!",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp,
+                        color = DoodleColors.InkBlue
+                    )
+                    SketchyContainer(
+                        fillColor = Color.White,
+                        cornerRadius = 10.dp,
+                        strokeWidth = 1.4.dp,
+                        shadowOffset = 1.5.dp,
+                        onClick = { peekMinimized = !peekMinimized },
+                        modifier = Modifier.height(26.dp)
+                    ) {
+                        Text(
+                            text = if (peekMinimized) "🔼 Expand" else "👁️ Peek Scene",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = DoodleColors.InkBlack,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Text(
                     text = peril.gameOverTitle,
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.Black,
-                    fontSize = 26.sp,
+                    fontSize = 22.sp,
                     color = DoodleColors.WrongRed,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.testTag("game_over_title")
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                if (!peekMinimized) {
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                Text(
-                    text = peril.gameOverDescription,
-                    fontFamily = fontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = DoodleColors.InkBlack,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = "Clue: ${level.clue}",
-                    fontFamily = fontFamily,
-                    fontStyle = FontStyle.Italic,
-                    fontSize = 15.sp,
-                    color = DoodleColors.InkBlue,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                SketchyContainer(
-                    fillColor = DoodleColors.DoodleYellow,
-                    cornerRadius = 24.dp,
-                    onClick = onRescue,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp)
-                        .testTag("rescue_button")
-                ) {
                     Text(
-                        text = "Rescue (+3 Lives • 250 Coins)",
+                        text = peril.gameOverDescription,
                         fontFamily = fontFamily,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 16.sp,
-                        color = DoodleColors.InkBlack
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = DoodleColors.InkBlack,
+                        textAlign = TextAlign.Center
                     )
-                }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                SketchyContainer(
-                    fillColor = Color.White,
-                    cornerRadius = 24.dp,
-                    onClick = onRetry,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("retry_button")
-                ) {
                     Text(
-                        text = "Try Again",
+                        text = "Clue: ${level.clue}",
                         fontFamily = fontFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 18.sp,
-                        color = DoodleColors.InkBlack
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 13.sp,
+                        color = DoodleColors.InkBlue,
+                        textAlign = TextAlign.Center
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    SketchyContainer(
+                        fillColor = DoodleColors.DoodleYellow,
+                        cornerRadius = 22.dp,
+                        onClick = onRescue,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .testTag("rescue_button")
+                    ) {
+                        Text(
+                            text = "Rescue (+3 Lives • 250 Coins)",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                            color = DoodleColors.InkBlack
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SketchyContainer(
+                            fillColor = Color.White,
+                            cornerRadius = 22.dp,
+                            onClick = onRetry,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                                .testTag("retry_button")
+                        ) {
+                            Text(
+                                text = "Try Again",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 16.sp,
+                                color = DoodleColors.InkBlack
+                            )
+                        }
+
+                        SketchyContainer(
+                            fillColor = Color(0xFFF5F5F5),
+                            cornerRadius = 22.dp,
+                            onClick = onMainMenu,
+                            modifier = Modifier
+                                .weight(0.85f)
+                                .height(44.dp)
+                        ) {
+                            Text(
+                                text = "Back to Main Menu",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = DoodleColors.InkBlack.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
                 }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = "Back to Main Menu",
-                    fontFamily = fontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = DoodleColors.InkBlack.copy(alpha = 0.7f),
-                    modifier = Modifier
-                        .clickable(onClick = onMainMenu)
-                        .padding(8.dp)
-                )
             }
         }
     }
