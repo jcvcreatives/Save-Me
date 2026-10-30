@@ -694,16 +694,16 @@
         <div class="sketch-box" style="padding:8px 14px;border-radius:16px;width:100%;">
           <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;margin-bottom:5px;">
             <span>⭐ Campaign Progress</span>
-            <span id="menuCampaignProgressText" style="color:var(--ink-blue);">0 / 20 Completed</span>
+            <span id="menuCampaignProgressText" style="color:var(--ink-blue);">0 / 100 Completed</span>
           </div>
           <div class="progress-track" style="height:14px;">
             <div id="menuCampaignProgressFill" class="progress-fill" style="background:var(--correct-green);width:0%;"></div>
           </div>
         </div>
 
-        <button class="sketch-box sketch-btn sketch-yellow menu-btn" onclick="startCampaign()">
+        <button class="sketch-box sketch-btn sketch-yellow menu-btn" onclick="openWorldMapModal()">
           <span id="menuLevelBtnText">Level 1</span>
-          <small id="menuPerilSubText">Shark &amp; Balloons</small>
+          <small id="menuPerilSubText">Shark &amp; Balloons • Tap for 100-Level Map</small>
         </button>
 
         <button class="sketch-box sketch-btn menu-btn" onclick="openTwoPlayerModal()">
@@ -735,6 +735,7 @@
         <div class="clue-half">
           <div id="livesDots" class="lives-dots"></div>
           <div id="bossBadge" class="boss-badge" style="display:none;">💣 BOSS: Hidden Bomb Keys = -2 ❤️</div>
+          <div id="frozenBadge" class="boss-badge" style="display:none;background:rgba(129,212,250,0.28);border-color:#0288D1;color:#01579B;">🧊 Frozen Vowels: 0/3 Consonants</div>
           <div id="clueText" class="clue-text">Guess a precious gemstone</div>
         </div>
       </div>
@@ -874,6 +875,26 @@
     </div>
   </div>
 
+  <!-- ================= 100-LEVEL BOARD GAME WORLD MAP MODAL ================= -->
+  <div id="worldMapModal" class="modal-backdrop">
+    <div class="sketch-box dialog-card" style="width:min(520px,96vw);max-height:90vh;display:flex;flex-direction:column;padding:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <button class="sketch-box sketch-btn icon-btn" style="width:38px;height:38px;font-size:16px;" onclick="closeAllModals()">←</button>
+        <div>
+          <div style="font-size:19px;font-weight:700;">100-Level World Map</div>
+          <div id="worldMapSubStats" style="font-size:12px;color:var(--ink-blue);font-weight:700;">0/100 Solved • ⭐ 0/300 Stars</div>
+        </div>
+        <button id="freePlayToggleBtn" class="sketch-box sketch-btn quick-chip" style="padding:5px 9px;font-size:11px;" onclick="toggleFreePlayAll()">🔒 Campaign</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <button id="worldMapQuickPlayBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:42px;font-size:16px;flex:1;" onclick="closeAllModals();startCampaign();">
+          ▶ Play Level 1
+        </button>
+      </div>
+      <div id="worldMapScroll" style="overflow-y:auto;flex:1;padding-right:4px;text-align:left;"></div>
+    </div>
+  </div>
+
   <script>
     // =========================================================================
     // 1. PROCEDURAL WEB AUDIO ENGINE (POP, SPLASH, CRUNCH, ZAP, CLANG, VICTORY)
@@ -899,7 +920,6 @@
       const now = ctx.currentTime;
 
       if (type === 'pop') {
-        // Sharp balloon pop pitch drop + impulse burst
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -912,7 +932,6 @@
         osc.start(now);
         osc.stop(now + 0.12);
       } else if (type === 'splash') {
-        // Filtered white noise splash into shark water
         const bufferSize = ctx.sampleRate * 0.45;
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
@@ -934,7 +953,6 @@
         gain.connect(ctx.destination);
         noise.start(now);
       } else if (type === 'crunch') {
-        // Granular multi-impulse rock crunch for Volcano Crates
         const bufferSize = ctx.sampleRate * 0.32;
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
@@ -1005,14 +1023,16 @@
     }
 
     // =========================================================================
-    // 2. GAME DATA & PERIL DEFINITIONS
+    // 2. GAME DATA & 6 PERIL SCENARIOS ACROSS 100 LEVELS
     // =========================================================================
     const BALLOON_COLORS = ['#FF595E', '#FFCA3A', '#8AC926', '#1982C4', '#6A4C93', '#FF924C'];
+    const VOWELS_SET = new Set(['A', 'E', 'I', 'O', 'U']);
 
     const PERILS = {
       SHARK_BALLOONS: {
         id: 'SHARK_BALLOONS',
         name: 'Shark & Balloons',
+        rangeLabel: 'Levels 1–16',
         panic: 'Come on, you can do that!',
         hitLabel: 'POP!',
         overTitle: 'SPLASH! SHARK SNACK',
@@ -1023,7 +1043,8 @@
       UFO_ABDUCTION: {
         id: 'UFO_ABDUCTION',
         name: 'UFO Abduction',
-        panic: 'Not the alien probe!',
+        rangeLabel: 'Levels 17–33',
+        panic: 'Beam me up... wait, no!',
         hitLabel: 'ZAP!',
         overTitle: 'ZAP! ABDUCTED!',
         overDesc: 'The UFO tractor beam pulled the stickman aboard!',
@@ -1032,7 +1053,8 @@
       },
       VOLCANO_BLOCKS: {
         id: 'VOLCANO_BLOCKS',
-        name: 'Volcano Crates',
+        name: 'Volcano Lava',
+        rangeLabel: 'Levels 34–50',
         panic: 'My shoes are melting!',
         hitLabel: 'CRUMBLE!',
         overTitle: 'SIZZLE! MELTDOWN!',
@@ -1040,47 +1062,163 @@
         sound: 'crunch',
         overSound: 'crunch'
       },
+      GIANT_VENUS_FLYTRAP: {
+        id: 'GIANT_VENUS_FLYTRAP',
+        name: 'Giant Venus Flytrap',
+        rangeLabel: 'Levels 51–66',
+        panic: 'Vegetarian option!',
+        hitLabel: 'SNAP!',
+        overTitle: 'CHOMP! PLANT SALAD!',
+        overDesc: 'Every vine node snapped! The Giant Flytrap got its lunch.',
+        sound: 'crunch',
+        overSound: 'crunch'
+      },
       DINO_STEALTH: {
         id: 'DINO_STEALTH',
         name: 'Sleeping T-Rex',
+        rangeLabel: 'Levels 67–83',
         panic: "Shhh! Don't wake Rex!",
         hitLabel: 'CLANG!',
         overTitle: 'ROOOAR! REX AWOKE!',
         overDesc: 'The Noise Meter maxed out and woke the giant T-Rex!',
         sound: 'clang',
         overSound: 'clang'
+      },
+      LEAKY_SUBMARINE: {
+        id: 'LEAKY_SUBMARINE',
+        name: 'Leaky Submarine',
+        rangeLabel: 'Levels 84–100',
+        panic: 'Glub glub! Holding my breath!',
+        hitLabel: 'PING!',
+        overTitle: 'GLUB! TANK FLOODED!',
+        overDesc: 'All 6 bolts popped and the submarine glass tank flooded!',
+        sound: 'pop',
+        overSound: 'splash'
       }
     };
 
     function getPerilForLevel(lvlNum) {
-      const m = ((lvlNum <= 0 ? 1 : lvlNum) % 4);
-      if (m === 1) return PERILS.SHARK_BALLOONS;
-      if (m === 2) return PERILS.UFO_ABDUCTION;
-      if (m === 3) return PERILS.VOLCANO_BLOCKS;
-      return PERILS.DINO_STEALTH;
+      const normalized = (((lvlNum <= 0 ? 1 : lvlNum) - 1) % 100) + 1;
+      if (normalized <= 16) return PERILS.SHARK_BALLOONS;
+      if (normalized <= 33) return PERILS.UFO_ABDUCTION;
+      if (normalized <= 50) return PERILS.VOLCANO_BLOCKS;
+      if (normalized <= 66) return PERILS.GIANT_VENUS_FLYTRAP;
+      if (normalized <= 83) return PERILS.DINO_STEALTH;
+      return PERILS.LEAKY_SUBMARINE;
     }
 
     const CAMPAIGN_LEVELS = [
-      { number: 1, word: 'DIAMOND', clue: 'Guess a precious gemstone' },
-      { number: 2, word: 'CHINA', clue: 'What country was paper invented in?' },
-      { number: 3, word: 'PRANK', clue: "April Fool's Day tradition" },
-      { number: 4, word: 'CAKE', clue: 'Sweet baked treat with birthday candles' },
-      { number: 5, word: 'GIRAFFE', clue: 'Boss Level: Tallest mammal with a long neck' },
-      { number: 6, word: 'COMPASS', clue: 'Navigation tool that always points north' },
-      { number: 7, word: 'VOLCANO', clue: 'Mountain that erupts with glowing lava' },
-      { number: 8, word: 'PENGUIN', clue: 'Tuxedo-wearing bird that cannot fly' },
-      { number: 9, word: 'RAINBOW', clue: 'Colorful arc seen in the sky after rain' },
-      { number: 10, word: 'PIRATE', clue: 'Boss Level: High-seas sailor seeking treasure' },
-      { number: 11, word: 'CACTUS', clue: 'Spiky desert plant that stores water' },
-      { number: 12, word: 'GUITAR', clue: 'Six-stringed musical instrument' },
-      { number: 13, word: 'OCTOPUS', clue: 'Clever sea creature with eight tentacles' },
-      { number: 14, word: 'POPCORN', clue: 'Buttery snack eaten at the movie theater' },
-      { number: 15, word: 'ASTRONAUT', clue: 'Boss Level: Explorer who travels into outer space' },
-      { number: 16, word: 'IGLOO', clue: 'Dome-shaped shelter built from snow blocks' },
-      { number: 17, word: 'TORNADO', clue: 'Violently rotating column of wind' },
-      { number: 18, word: 'PANCAKE', clue: 'Flat breakfast cake served with maple syrup' },
-      { number: 19, word: 'DINOSAUR', clue: 'Prehistoric reptile that ruled the Earth' },
-      { number: 20, word: 'TREASURE', clue: 'Boss Level: Chest overflowing with gold and jewels' }
+      // WORLD 1: SHARK & BALLOONS (Levels 1–16)
+      { number: 1, word: 'DIAMOND', clue: 'Hard Science & Tech: Guess a precious carbon gemstone' },
+      { number: 2, word: 'CHINA', clue: 'World History & Geography: What country was paper invented in?' },
+      { number: 3, word: 'PRANK', clue: "Pop Culture & Idioms: April Fool's Day tradition" },
+      { number: 4, word: 'CAKE', clue: 'Food & Desserts: Sweet baked treat with birthday candles' },
+      { number: 5, word: 'GIRAFFE', clue: 'Boss • Animals & Nature: Tallest mammal with a spotted neck' },
+      { number: 6, word: 'COMPASS', clue: 'Hard Science & Tech: Magnetic tool that points north' },
+      { number: 7, word: 'VOLCANO', clue: 'Animals & Nature: Mountain that erupts with molten lava' },
+      { number: 8, word: 'PENGUIN', clue: 'Animals & Nature: Tuxedo-wearing Antarctic bird' },
+      { number: 9, word: 'RAINBOW', clue: 'Animals & Nature: Colorful arc seen in the sky after rain' },
+      { number: 10, word: 'PIRATE', clue: 'Boss • World History: High-seas buccaneer seeking treasure' },
+      { number: 11, word: 'CACTUS', clue: 'Animals & Nature: Spiky desert plant that stores water' },
+      { number: 12, word: 'GUITAR', clue: 'Pop Culture & Idioms: Six-stringed musical instrument' },
+      { number: 13, word: 'OCTOPUS', clue: 'Animals & Nature: Clever sea creature with eight tentacles' },
+      { number: 14, word: 'POPCORN', clue: 'Food & Desserts: Buttery snack eaten at the cinema' },
+      { number: 15, word: 'ASTRONAUT', clue: 'Boss • Hard Science: Explorer who travels into outer space' },
+      { number: 16, word: 'IGLOO', clue: 'World History & Geography: Dome shelter built from snow blocks' },
+
+      // WORLD 2: UFO ABDUCTION (Levels 17–33)
+      { number: 17, word: 'TORNADO', clue: 'Animals & Nature: Violently rotating column of wind' },
+      { number: 18, word: 'PANCAKE', clue: 'Food & Desserts: Flat breakfast cake served with syrup' },
+      { number: 19, word: 'DINOSAUR', clue: 'Animals & Nature: Prehistoric reptile that ruled Earth' },
+      { number: 20, word: 'TREASURE', clue: 'Boss • Pop Culture: Chest overflowing with gold and jewels' },
+      { number: 21, word: 'ELEPHANT', clue: 'Animals & Nature: Giant mammal with a trunk and tusks' },
+      { number: 22, word: 'BURRITO', clue: 'Food & Desserts: Flour tortilla wrapped around fillings' },
+      { number: 23, word: 'PYRAMIDS', clue: 'World History & Geography: Ancient stone tombs in Giza' },
+      { number: 24, word: 'MOONWALK', clue: 'Pop Culture & Idioms: Iconic backward gliding dance step' },
+      { number: 25, word: 'TELESCOPE', clue: 'Boss • Hard Science: Optical instrument for viewing distant stars' },
+      { number: 26, word: 'DOLPHIN', clue: 'Animals & Nature: Playful ocean mammal that uses echolocation' },
+      { number: 27, word: 'WAFFLE', clue: 'Food & Desserts: Crisp gridded batter cake' },
+      { number: 28, word: 'EGYPT', clue: 'World History & Geography: Land of the Nile and Pharaohs' },
+      { number: 29, word: 'SPACESHIP', clue: 'Pop Culture & Idioms: Vessel designed for interstellar travel' },
+      { number: 30, word: 'ALGORITHM', clue: 'Boss • Hard Science: Step-by-step problem-solving code rules' },
+      { number: 31, word: 'CHEETAH', clue: 'Animals & Nature: Fastest land feline with black tear stripes' },
+      { number: 32, word: 'CUPCAKE', clue: 'Food & Desserts: Single-serving frosted cake in a paper cup' },
+      { number: 33, word: 'SAMURAI', clue: 'World History & Geography: Feudal Japanese armored warrior' },
+
+      // WORLD 3: VOLCANO LAVA (Levels 34–50)
+      { number: 34, word: 'SUPERHERO', clue: 'Pop Culture & Idioms: Masked crime-fighter with superpowers' },
+      { number: 35, word: 'ROBOTICS', clue: 'Boss • Hard Science: Engineering branch that builds automatons' },
+      { number: 36, word: 'KOALA', clue: 'Animals & Nature: Eucalyptus-munching Australian marsupial' },
+      { number: 37, word: 'CROISSANT', clue: 'Food & Desserts: Flaky crescent-shaped French pastry' },
+      { number: 38, word: 'GLADIATOR', clue: 'World History & Geography: Roman Colosseum arena fighter' },
+      { number: 39, word: 'JACKPOT', clue: 'Pop Culture & Idioms: Grand prize win on a lucky machine' },
+      { number: 40, word: 'SATELLITE', clue: 'Boss • Hard Science: Spacecraft orbiting around a planet' },
+      { number: 41, word: 'FLAMINGO', clue: 'Animals & Nature: Pink wading bird that stands on one leg' },
+      { number: 42, word: 'PRETZEL', clue: 'Food & Desserts: Baked bread twisted into a salted knot' },
+      { number: 43, word: 'VIKINGS', clue: 'World History & Geography: Norse seafarers who sailed longships' },
+      { number: 44, word: 'SLAPSTICK', clue: 'Pop Culture & Idioms: Exaggerated physical comedy style' },
+      { number: 45, word: 'LASER', clue: 'Boss • Hard Science: Focused coherent beam of light' },
+      { number: 46, word: 'CHAMELEON', clue: 'Animals & Nature: Lizard famous for shifting its skin colors' },
+      { number: 47, word: 'MACARON', clue: 'Food & Desserts: Delicate French almond meringue sandwich cookie' },
+      { number: 48, word: 'AMAZON', clue: 'World History & Geography: Vast South American river and rainforest' },
+      { number: 49, word: 'KARAOKE', clue: 'Pop Culture & Idioms: Singing along to instrumental tracks' },
+      { number: 50, word: 'QUANTUM', clue: 'Boss • Frozen Vowels! Hard Science: Subatomic physics realm' },
+
+      // WORLD 4: GIANT VENUS FLYTRAP (Levels 51–66, Frozen Vowels Active!)
+      { number: 51, word: 'PLATYPUS', clue: 'Animals & Nature: Duck-billed egg-laying mammal' },
+      { number: 52, word: 'TIRAMISU', clue: 'Food & Desserts: Coffee-flavored Italian layered dessert' },
+      { number: 53, word: 'SPARTA', clue: 'World History & Geography: Ancient Greek warrior city-state' },
+      { number: 54, word: 'CLIFFHANGER', clue: 'Pop Culture & Idioms: Suspenseful story ending before resolution' },
+      { number: 55, word: 'GRAVITY', clue: 'Boss • Hard Science: Force that pulls objects toward Earth' },
+      { number: 56, word: 'HEDGEHOG', clue: 'Animals & Nature: Small spiny mammal that curls into a ball' },
+      { number: 57, word: 'DUMPLING', clue: 'Food & Desserts: Steamed or fried dough parcel with filling' },
+      { number: 58, word: 'ATLANTIS', clue: 'World History & Geography: Legendary sunken island civilization' },
+      { number: 59, word: 'BLOCKBUSTER', clue: 'Pop Culture & Idioms: Huge box-office hit movie' },
+      { number: 60, word: 'MOLECULE', clue: 'Boss • Hard Science: Group of atoms bonded together' },
+      { number: 61, word: 'NARWHAL', clue: 'Animals & Nature: Arctic whale with a spiral unicorn tusk' },
+      { number: 62, word: 'CINNAMON', clue: 'Food & Desserts: Fragrant spice made from inner tree bark' },
+      { number: 63, word: 'COLOSSEUM', clue: 'World History & Geography: Iconic oval amphitheater in Rome' },
+      { number: 64, word: 'BRAINSTORM', clue: 'Pop Culture & Idioms: Group session generating creative ideas' },
+      { number: 65, word: 'NEUTRON', clue: 'Boss • Hard Science: Subatomic particle with zero electric charge' },
+      { number: 66, word: 'PEACOCK', clue: 'Animals & Nature: Bird with iridescent tail feathers and eyespots' },
+
+      // WORLD 5: SLEEPING T-REX (Levels 67–83, Frozen Vowels Active!)
+      { number: 67, word: 'BROWNIE', clue: 'Food & Desserts: Rich square baked chocolate fudge treat' },
+      { number: 68, word: 'ACROPOLIS', clue: 'World History & Geography: Ancient citadel perched above Athens' },
+      { number: 69, word: 'UNDERDOG', clue: 'Pop Culture & Idioms: Competitor thought least likely to win' },
+      { number: 70, word: 'HOLOGRAM', clue: 'Boss • Hard Science: Three-dimensional light projection' },
+      { number: 71, word: 'SCORPION', clue: 'Animals & Nature: Desert arachnid with pincers and a curved stinger' },
+      { number: 72, word: 'SMOOTHIE', clue: 'Food & Desserts: Blended drink of fresh fruit and yogurt' },
+      { number: 73, word: 'EVEREST', clue: 'World History & Geography: Highest mountain peak in the Himalayas' },
+      { number: 74, word: 'BOOMERANG', clue: 'Pop Culture & Idioms: Curved throwing tool that returns to you' },
+      { number: 75, word: 'SPECTRUM', clue: 'Boss • Hard Science: Band of wavelengths of electromagnetic light' },
+      { number: 76, word: 'JELLYFISH', clue: 'Animals & Nature: Bell-shaped sea drifter with stinging tentacles' },
+      { number: 77, word: 'ESPRESSO', clue: 'Food & Desserts: Concentrated Italian dark roast coffee shot' },
+      { number: 78, word: 'POMPEII', clue: 'World History & Geography: Roman city preserved under Vesuvius ash' },
+      { number: 79, word: 'SLINGSHOT', clue: 'Pop Culture & Idioms: Y-shaped frame with elastic band projectile' },
+      { number: 80, word: 'MICROCHIP', clue: 'Boss • Hard Science: Tiny silicon circuit inside computers' },
+      { number: 81, word: 'WALRUS', clue: 'Animals & Nature: Whiskered Arctic marine mammal with long tusks' },
+      { number: 82, word: 'CHEESECAKE', clue: 'Food & Desserts: Creamy graham-crust dessert made with soft cheese' },
+      { number: 83, word: 'SILKROAD', clue: 'World History & Geography: Ancient Eurasian trade route network' },
+
+      // WORLD 6: LEAKY SUBMARINE (Levels 84–100, Frozen Vowels Active!)
+      { number: 84, word: 'TIMEWARP', clue: 'Pop Culture & Idioms: Distortion of time in sci-fi adventures' },
+      { number: 85, word: 'SUPERNOVA', clue: 'Boss • Hard Science: Brilliant explosion of a dying giant star' },
+      { number: 86, word: 'MEERKAT', clue: 'Animals & Nature: Upright-standing desert mongoose sentry' },
+      { number: 87, word: 'GUACAMOLE', clue: 'Food & Desserts: Mexican dip mashed from ripe avocados' },
+      { number: 88, word: 'BABYLON', clue: 'World History & Geography: Ancient Mesopotamian city of Hanging Gardens' },
+      { number: 89, word: 'PLOTTWIST', clue: 'Pop Culture & Idioms: Unexpected turn in a story narrative' },
+      { number: 90, word: 'CRYSTAL', clue: 'Boss • Hard Science: Solid material with atoms in a repeating lattice' },
+      { number: 91, word: 'PELICAN', clue: 'Animals & Nature: Coastal bird with a large throat pouch' },
+      { number: 92, word: 'PISTACHIO', clue: 'Food & Desserts: Green nut inside a naturally splitting shell' },
+      { number: 93, word: 'SAHARA', clue: 'World History & Geography: Vast hot desert spanning North Africa' },
+      { number: 94, word: 'MARATHON', clue: 'Pop Culture & Idioms: Grueling 26.2-mile long-distance footrace' },
+      { number: 95, word: 'REACTOR', clue: 'Boss • Hard Science: Core chamber that generates nuclear energy' },
+      { number: 96, word: 'ALBATROSS', clue: 'Animals & Nature: Giant seabird with the longest wingspan' },
+      { number: 97, word: 'GELATO', clue: 'Food & Desserts: Dense artisanal Italian frozen dessert' },
+      { number: 98, word: 'MACHUPICCHU', clue: 'World History & Geography: Incan citadel high in the Andes Mountains' },
+      { number: 99, word: 'SHOWDOWN', clue: 'Pop Culture & Idioms: Final dramatic confrontation between rivals' },
+      { number: 100, word: 'SINGULARITY', clue: 'Final Boss • Hard Science: Point of infinite density at a black hole center' }
     ];
 
     const ADVENTURE_LEVELS = [
@@ -1094,11 +1232,14 @@
       { number: 8, word: 'KALEIDOSCOPE', clue: 'Devil Boss: Optical tube of mirrors and colorful glass', isAdventure: true }
     ];
 
-    // State
+    // State & Persistence
     let coins = 1231;
     let campaignIdx = 0;
     let adventureIdx = 0;
     let completedCampaignSet = new Set();
+    let levelStarsMap = {};
+    let claimedChestsSet = new Set();
+    let freePlayAll = false;
     let freePotions = 2;
     let perfectCount = 3;
     let streak = 2;
@@ -1106,6 +1247,43 @@
     let chestProg = 1;
     let themeProg = 1;
     let useCursive = false;
+
+    const STORAGE_KEY = 'doodle_word_shark_100_v2';
+    function loadSavedState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (typeof data.coins === 'number') coins = data.coins;
+        if (typeof data.campaignIdx === 'number') campaignIdx = Math.max(0, Math.min(99, data.campaignIdx));
+        if (Array.isArray(data.completed)) completedCampaignSet = new Set(data.completed);
+        if (data.stars && typeof data.stars === 'object') levelStarsMap = data.stars;
+        if (Array.isArray(data.chests)) claimedChestsSet = new Set(data.chests);
+        if (typeof data.freePlayAll === 'boolean') freePlayAll = data.freePlayAll;
+        if (typeof data.freePotions === 'number') freePotions = data.freePotions;
+        if (typeof data.perfectCount === 'number') perfectCount = data.perfectCount;
+        if (typeof data.streak === 'number') streak = data.streak;
+        if (typeof data.maxStreak === 'number') maxStreak = data.maxStreak;
+      } catch (e) {}
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          coins,
+          campaignIdx,
+          completed: Array.from(completedCampaignSet),
+          stars: levelStarsMap,
+          chests: Array.from(claimedChestsSet),
+          freePlayAll,
+          freePotions,
+          perfectCount,
+          streak,
+          maxStreak
+        }));
+      } catch (e) {}
+    }
+    loadSavedState();
 
     let activeLevel = CAMPAIGN_LEVELS[0];
     let lives = 6;
@@ -1120,6 +1298,38 @@
     let floatingHits = [];
     let lastFrameMs = performance.now();
 
+    function hasFrozenVowelsModifier(level) {
+      return Boolean(level && !level.isAdventure && level.number >= 50);
+    }
+
+    function getGuessedConsonantsCount() {
+      let count = 0;
+      revealed.forEach(ch => {
+        if (!VOWELS_SET.has(ch)) count++;
+      });
+      return count;
+    }
+
+    function getRequiredConsonantsToThaw(level) {
+      const uniqueConsonants = new Set(
+        level.word.toUpperCase().split('').filter(c => !VOWELS_SET.has(c))
+      );
+      return Math.min(3, uniqueConsonants.size);
+    }
+
+    function areVowelsCurrentlyFrozen() {
+      if (!hasFrozenVowelsModifier(activeLevel)) return false;
+      return getGuessedConsonantsCount() < getRequiredConsonantsToThaw(activeLevel);
+    }
+
+    function isLevelUnlocked(lvlNum) {
+      if (freePlayAll) return true;
+      // First level of each of the 6 Peril Worlds is unlocked so players can sample any world
+      if ([1, 17, 34, 51, 67, 84].includes(lvlNum)) return true;
+      const highestDone = completedCampaignSet.size ? Math.max(...Array.from(completedCampaignSet)) : 0;
+      return lvlNum <= Math.max(highestDone + 1, campaignIdx + 1);
+    }
+
     function spawnDamageParticles(perilId, isBomb) {
       const count = isBomb ? 20 : 12;
       const colors = perilId === 'SHARK_BALLOONS'
@@ -1128,7 +1338,11 @@
           ? ['#76FF03', '#80DEEA', '#FFD166']
           : perilId === 'VOLCANO_BLOCKS'
             ? ['#A1887F', '#FF5722', '#FFD166', '#D7CCC8']
-            : ['#E74C3C', '#FFD166', '#9CCC65'];
+            : perilId === 'GIANT_VENUS_FLYTRAP'
+              ? ['#43A047', '#AED581', '#E53935']
+              : perilId === 'LEAKY_SUBMARINE'
+                ? ['#29B6F6', '#B3E5FC', '#90A4AE']
+                : ['#E74C3C', '#FFD166', '#9CCC65'];
       for (let i = 0; i < count; i++) {
         const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
         const speed = 45 + Math.random() * 95;
@@ -1160,9 +1374,9 @@
     }
 
     function updateMenuUI() {
-      const lvlNum = campaignIdx + 1;
+      const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
       const peril = getPerilForLevel(lvlNum);
-      const totalLevels = CAMPAIGN_LEVELS.length;
+      const totalLevels = CAMPAIGN_LEVELS.length; // 100
       const doneCount = completedCampaignSet.size;
 
       document.getElementById('menuCoinText').textContent = coins;
@@ -1171,7 +1385,7 @@
       document.getElementById('menuCampaignProgressFill').style.width = `${(doneCount / totalLevels) * 100}%`;
       document.getElementById('menuLevelBtnText').textContent =
         (lvlNum % 5 === 0) ? `Level ${lvlNum} (BOSS 💣)` : `Level ${lvlNum}`;
-      document.getElementById('menuPerilSubText').textContent = peril.name;
+      document.getElementById('menuPerilSubText').textContent = `${peril.name} • Tap for 100-Level Map`;
     }
 
     function isBoss(level) {
@@ -1192,7 +1406,9 @@
 
       if (isBoss(level)) {
         const targetSet = new Set(level.word.toUpperCase().split(''));
-        const wrongPool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(c => !targetSet.has(c));
+        const wrongPool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(c =>
+          !targetSet.has(c) && (!hasFrozenVowelsModifier(level) || !VOWELS_SET.has(c))
+        );
         let idx = (level.number * 3) % wrongPool.length;
         while (bombLetters.size < 3 && bombLetters.size < wrongPool.length) {
           bombLetters.add(wrongPool[idx % wrongPool.length]);
@@ -1204,8 +1420,126 @@
 
     function startCampaign() {
       const template = CAMPAIGN_LEVELS[campaignIdx % CAMPAIGN_LEVELS.length];
-      loadLevel({ ...template, number: campaignIdx + 1, isAdventure: false });
+      loadLevel({ ...template, number: (campaignIdx % CAMPAIGN_LEVELS.length) + 1, isAdventure: false });
       switchScreen('gameScreen');
+    }
+
+    function selectCampaignLevelFromMap(lvlNum) {
+      if (!isLevelUnlocked(lvlNum)) {
+        showToast(`🔒 Level ${lvlNum} is locked! Complete previous levels or tap Free Play.`);
+        return;
+      }
+      campaignIdx = lvlNum - 1;
+      saveState();
+      closeAllModals();
+      startCampaign();
+    }
+
+    function toggleFreePlayAll() {
+      freePlayAll = !freePlayAll;
+      saveState();
+      renderWorldMapModal();
+      showToast(freePlayAll ? '🔓 Free Play enabled: All 100 levels unlocked!' : '🔒 Standard Campaign progression enabled');
+    }
+
+    function claimMilestoneChest(milestoneLvl) {
+      if (claimedChestsSet.has(milestoneLvl)) {
+        showToast(`Chest ${milestoneLvl} already opened!`);
+        return;
+      }
+      if (!freePlayAll && !completedCampaignSet.has(milestoneLvl)) {
+        showToast(`Complete Level ${milestoneLvl} first to unlock this Milestone Chest!`);
+        return;
+      }
+      claimedChestsSet.add(milestoneLvl);
+      coins += 200;
+      freePotions += 1;
+      saveState();
+      playProceduralSound('victory');
+      renderWorldMapModal();
+      updateMenuUI();
+      showToast(`🎁 Level ${milestoneLvl} Chest Opened! +200 Coins & +1 Shield Potion!`);
+    }
+
+    function openWorldMapModal() {
+      renderWorldMapModal();
+      document.getElementById('worldMapModal').classList.add('active');
+    }
+
+    function renderWorldMapModal() {
+      const totalStars = Object.values(levelStarsMap).reduce((a, b) => a + b, 0);
+      const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
+      const peril = getPerilForLevel(lvlNum);
+      document.getElementById('worldMapSubStats').textContent =
+        `${completedCampaignSet.size}/100 Solved • ⭐ ${totalStars}/300 Stars`;
+      document.getElementById('worldMapQuickPlayBtn').textContent =
+        `▶ Play Level ${lvlNum} (${peril.name})`;
+      const fpBtn = document.getElementById('freePlayToggleBtn');
+      fpBtn.textContent = freePlayAll ? '🔓 All Open' : '🔒 Campaign';
+      fpBtn.style.background = freePlayAll ? '#FFF9C4' : '#FFFFFF';
+
+      const worlds = [
+        { title: 'World 1: Shark & Balloons', start: 1, end: 16, color: '#0288D1' },
+        { title: 'World 2: UFO Abduction', start: 17, end: 33, color: '#558B2F' },
+        { title: 'World 3: Volcano Lava', start: 34, end: 50, color: '#D84315' },
+        { title: 'World 4: Giant Venus Flytrap (🧊 Frozen Vowels)', start: 51, end: 66, color: '#2E7D32' },
+        { title: 'World 5: Sleeping T-Rex (🧊 Frozen Vowels)', start: 67, end: 83, color: '#4E342E' },
+        { title: 'World 6: Leaky Submarine (🧊 Frozen Vowels)', start: 84, end: 100, color: '#0277BD' }
+      ];
+
+      const container = document.getElementById('worldMapScroll');
+      container.innerHTML = '';
+
+      worlds.forEach(w => {
+        const header = document.createElement('div');
+        header.className = 'sketch-box';
+        header.style.cssText = `padding:8px 12px;margin:8px 0 6px;border-color:${w.color};background:#FFF;display:flex;justify-content:space-between;align-items:center;`;
+        header.innerHTML = `<strong style="color:${w.color};font-size:14px;">${w.title}</strong><span style="font-size:11px;font-weight:700;">Lv ${w.start}–${w.end}</span>`;
+        container.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;margin-bottom:8px;';
+
+        for (let lv = w.start; lv <= w.end; lv++) {
+          const unlocked = isLevelUnlocked(lv);
+          const done = completedCampaignSet.has(lv);
+          const stars = levelStarsMap[lv] || 0;
+          const isCurrent = (campaignIdx + 1) === lv;
+          const boss = (lv % 5 === 0);
+
+          const node = document.createElement('button');
+          node.className = 'sketch-box sketch-btn';
+          node.style.cssText = `height:56px;flex-direction:column;padding:3px;border-radius:12px;position:relative;background:${
+            isCurrent ? 'var(--doodle-yellow)' : done ? '#E8F8F0' : unlocked ? '#FFFFFF' : '#E0E0E0'
+          };opacity:${unlocked ? '1' : '0.78'};`;
+          node.onclick = () => selectCampaignLevelFromMap(lv);
+
+          const badge = boss ? '<span style="position:absolute;top:2px;right:4px;font-size:10px;">💣</span>' : (lv >= 50 ? '<span style="position:absolute;top:2px;left:4px;font-size:9px;">🧊</span>' : '');
+          if (unlocked) {
+            const starRow = [1, 2, 3].map(s => `<span style="color:${s <= stars ? '#FBC02D' : '#BDBDBD'};font-size:10px;">★</span>`).join('');
+            node.innerHTML = `${badge}<div style="font-size:15px;font-weight:700;line-height:1.1;">${lv}</div><div style="line-height:1;">${starRow}</div>`;
+          } else {
+            node.innerHTML = `${badge}<div style="font-size:13px;">🔒</div><div style="font-size:11px;font-weight:700;color:#616161;">${lv}</div>`;
+          }
+          grid.appendChild(node);
+
+          if (lv % 10 === 0) {
+            const chestClaimed = claimedChestsSet.has(lv);
+            const chestReady = (freePlayAll || completedCampaignSet.has(lv)) && !chestClaimed;
+            const chestBtn = document.createElement('button');
+            chestBtn.className = 'sketch-box sketch-btn';
+            chestBtn.style.cssText = `grid-column:1 / -1;height:40px;justify-content:space-between;padding:0 12px;border-radius:12px;font-size:13px;background:${
+              chestClaimed ? '#E8F5E9' : chestReady ? '#FFF8E1' : '#F5F5F5'
+            };`;
+            chestBtn.onclick = () => claimMilestoneChest(lv);
+            chestBtn.innerHTML = `<span>🧰 Level ${lv} Milestone Chest</span><strong style="color:${chestClaimed ? 'var(--correct-green)' : 'var(--hint-orange)'};">${
+              chestClaimed ? '✓ Claimed' : chestReady ? 'Tap: +200 ⭐ & 🛡️' : 'Solve Lv ' + lv
+            }</strong>`;
+            grid.appendChild(chestBtn);
+          }
+        }
+        container.appendChild(grid);
+      });
     }
 
     function startAdventure() {
@@ -1241,6 +1575,7 @@
     function renderGameplayUI() {
       const peril = getPerilForLevel(activeLevel.number);
       const boss = isBoss(activeLevel);
+      const vowelsFrozen = areVowelsCurrentlyFrozen();
 
       document.getElementById('gameCoinText').textContent = coins;
       document.getElementById('gameHeaderTitle').textContent =
@@ -1250,6 +1585,18 @@
       sub.style.color = boss ? 'var(--wrong-red)' : 'var(--ink-blue)';
 
       document.getElementById('bossBadge').style.display = boss ? 'block' : 'none';
+      const frozenBadge = document.getElementById('frozenBadge');
+      if (hasFrozenVowelsModifier(activeLevel)) {
+        frozenBadge.style.display = 'block';
+        const gCount = getGuessedConsonantsCount();
+        const reqCount = getRequiredConsonantsToThaw(activeLevel);
+        frozenBadge.textContent = vowelsFrozen
+          ? `🧊 Vowels Frozen: ${gCount}/${reqCount} Consonants`
+          : '💧 Vowels Thawed!';
+      } else {
+        frozenBadge.style.display = 'none';
+      }
+
       document.getElementById('clueText').textContent = activeLevel.clue;
       document.getElementById('potionBadge').textContent = freePotions > 0 ? `${freePotions}` : '⭐ 200';
 
@@ -1258,7 +1605,7 @@
       if (lives >= 1 && lives <= 2) {
         bubble.textContent = peril.panic;
         bubble.style.display = 'block';
-        bubble.classList.toggle('bottom-pos', peril.id === 'UFO_ABDUCTION');
+        bubble.classList.toggle('bottom-pos', peril.id === 'UFO_ABDUCTION' || peril.id === 'GIANT_VENUS_FLYTRAP');
       } else {
         bubble.style.display = 'none';
       }
@@ -1299,14 +1646,23 @@
         rDiv.className = 'kb-row';
         rStr.split('').forEach(ch => {
           const st = keyStatuses[ch] || 'DEFAULT';
+          const isFrozenKey = vowelsFrozen && VOWELS_SET.has(ch) && st === 'DEFAULT';
           const btn = document.createElement('button');
           btn.className = 'kb-key' + (st === 'CORRECT' ? ' correct' : st === 'WRONG' ? ' wrong' : '');
           btn.textContent = ch;
+          if (isFrozenKey) {
+            btn.style.color = '#01579B';
+          }
 
           if (bombLetters.has(ch)) {
             const dot = document.createElement('span');
             dot.className = 'bomb-dot';
             btn.appendChild(dot);
+          }
+
+          if (isFrozenKey) {
+            btn.insertAdjacentHTML('beforeend',
+              `<svg class="key-mark" viewBox="0 0 40 40"><rect x="4" y="4" width="32" height="32" rx="6" fill="rgba(129,212,250,0.42)" stroke="#0288D1" stroke-width="2.2"/><path d="M9,13 L18,7 M12,29 L30,13" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/></svg>`);
           }
 
           if (st === 'CORRECT') {
@@ -1326,13 +1682,24 @@
 
     function onLetterTapped(ch) {
       if (keyStatuses[ch]) return;
+      if (areVowelsCurrentlyFrozen() && VOWELS_SET.has(ch)) {
+        const rem = Math.max(1, getRequiredConsonantsToThaw(activeLevel) - getGuessedConsonantsCount());
+        playProceduralSound('clang');
+        showToast(`🧊 Vowel '${ch}' is frozen! Guess ${rem} more consonant(s) first!`);
+        return;
+      }
+
       const word = activeLevel.word.toUpperCase();
       const peril = getPerilForLevel(activeLevel.number);
+      const wasFrozen = areVowelsCurrentlyFrozen();
 
       if (word.includes(ch)) {
         keyStatuses[ch] = 'CORRECT';
         revealed.add(ch);
         playProceduralSound('chime');
+        if (wasFrozen && !areVowelsCurrentlyFrozen()) {
+          showToast('💧 Ice shattered! Vowels (A, E, I, O, U) are now unlocked!');
+        }
         renderGameplayUI();
         checkVictory();
       } else {
@@ -1353,6 +1720,7 @@
         if (lives <= 0) {
           playProceduralSound(peril.overSound);
           streak = 0;
+          saveState();
           clearTimeout(window._gameOverDelayTimer);
           window._gameOverDelayTimer = setTimeout(() => {
             if (lives <= 0) showGameOverModal();
@@ -1369,12 +1737,15 @@
         if (!activeLevel.isAdventure && activeLevel.number > 0) {
           const normLvl = ((activeLevel.number - 1) % CAMPAIGN_LEVELS.length) + 1;
           completedCampaignSet.add(normLvl);
+          const earnedStars = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
+          levelStarsMap[normLvl] = Math.max(levelStarsMap[normLvl] || 0, earnedStars);
         }
         if (mistakes === 0) perfectCount++;
         streak++;
         if (streak > maxStreak) maxStreak = streak;
         chestProg = (chestProg % 4) + 1;
         themeProg = (themeProg % 10) + 1;
+        saveState();
         playProceduralSound('victory');
         showVictoryModal();
       }
@@ -1389,6 +1760,7 @@
       const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)];
       keyStatuses[pick] = 'CORRECT';
       revealed.add(pick);
+      saveState();
       playProceduralSound('chime');
       showToast(`Magnifier revealed '${pick}'!`);
       renderGameplayUI();
@@ -1400,11 +1772,13 @@
       if (freePotions > 0) {
         freePotions--;
         lives++;
+        saveState();
         playProceduralSound('chime');
         showToast('+1 Life restored! (Used free potion)');
       } else if (coins >= 200) {
         coins -= 200;
         lives++;
+        saveState();
         playProceduralSound('chime');
         showToast('+1 Life restored!');
       } else {
@@ -1421,6 +1795,7 @@
       coins -= 125;
       candidates.sort((a, b) => (bombLetters.has(b) ? 1 : 0) - (bombLetters.has(a) ? 1 : 0));
       candidates.slice(0, 3).forEach(c => { keyStatuses[c] = 'WRONG'; });
+      saveState();
       playProceduralSound('chime');
       showToast('Safely cleared 3 wrong letters!');
       renderGameplayUI();
@@ -1455,7 +1830,7 @@
 
     function selectRandomVictoryCelebration() {
       let nextIdx = Math.floor(Math.random() * VICTORY_CELEBRATIONS.length);
-      if ( nextIdx === activeVictoryStyleIdx && VICTORY_CELEBRATIONS.length > 1) {
+      if (nextIdx === activeVictoryStyleIdx && VICTORY_CELEBRATIONS.length > 1) {
         nextIdx = (nextIdx + 1 + Math.floor(Math.random() * (VICTORY_CELEBRATIONS.length - 1))) % VICTORY_CELEBRATIONS.length;
       }
       activeVictoryStyleIdx = nextIdx;
@@ -1497,9 +1872,11 @@
       closeAllModals();
       if (activeLevel.isAdventure) {
         adventureIdx++;
+        saveState();
         startAdventure();
       } else {
-        campaignIdx++;
+        campaignIdx = (campaignIdx + 1) % CAMPAIGN_LEVELS.length;
+        saveState();
         startCampaign();
       }
     }
@@ -1523,6 +1900,7 @@
       if (coins < 250) { showToast('Need 250 coins! Tap + at top right.'); return; }
       coins -= 250;
       lives = 3;
+      saveState();
       closeAllModals();
       renderGameplayUI();
       showToast('Rescued with 3 lives!');
@@ -1554,6 +1932,7 @@
 
     function claimFreeCoins() {
       coins += 150;
+      saveState();
       playProceduralSound('chime');
       closeAllModals();
       updateMenuUI();
@@ -2255,7 +2634,20 @@
           ctx.restore();
         } else {
           const handY = (groundY - 72) + ((ufoY + 14) - (groundY - 72)) * danger + bob;
-          drawStickman(ctx, ufoX, handY, 0.85 * (1 - danger * 0.2), !isPreview && livesCount <= 2, danger > 0.08, t);
+          const sc = 0.85 * (1 - danger * 0.2);
+          drawStickman(ctx, ufoX, handY, sc, !isPreview && livesCount <= 2, danger > 0.08, t);
+          if (!isPreview && livesCount <= 2) {
+            // Dangling untied shoelaces pulled upward by tractor beam!
+            const footY = handY + 64 * sc;
+            ctx.strokeStyle = '#FF595E';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(ufoX - 10 * sc, footY);
+            ctx.lineTo(ufoX - 18 * sc, footY - 12 * sc + Math.sin(t * 14) * 4);
+            ctx.moveTo(ufoX + 10 * sc, footY);
+            ctx.lineTo(ufoX + 18 * sc, footY - 12 * sc + Math.cos(t * 14) * 4);
+            ctx.stroke();
+          }
         }
 
         // UFO Glass Dome + Little Alien Head
@@ -2332,10 +2724,22 @@
         }
 
         const platformY = lavaY - smoothL * crateH;
+        const hotFootHop = (!isPreview && livesCount > 0 && livesCount <= 2) ? Math.abs(Math.sin(t * 14)) * 9 : 0;
         const stickY = (!isPreview && livesCount <= 0)
           ? lavaY - 38 + Math.sin(t * 10) * 4
-          : platformY - 64 + bob * 0.35;
+          : platformY - 64 - hotFootHop + bob * 0.35;
         drawStickman(ctx, cx + ((!isPreview && livesCount <= 0) ? Math.sin(t * 8) * 5 : 0), stickY, 0.85, !isPreview && livesCount <= 2, false, t);
+
+        if (!isPreview && livesCount > 0 && livesCount <= 2) {
+          // Smoking shoes when lives <= 2!
+          for (let sm = 0; sm < 3; sm++) {
+            const prog = (t * 2.1 + sm * 0.33) % 1;
+            ctx.fillStyle = `rgba(120, 144, 156, ${(1 - prog) * 0.7})`;
+            ctx.beginPath();
+            ctx.arc(cx + (sm - 1) * 12, platformY - 4 - prog * 24, 3.5 + prog * 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
 
         if (!isPreview && livesCount <= 0) {
           // Rising SIZZLE steam puffs when stickman is in the lava!
@@ -2370,8 +2774,203 @@
         }
         ctx.stroke();
 
+      } else if (peril.id === 'GIANT_VENUS_FLYTRAP') {
+        const branchY = h * 0.08;
+        const plantBaseY = h * 0.88;
+        const swayX = Math.sin(t * 2.2) * 6;
+        const maxVineBottomY = h * 0.64;
+        const minVineBottomY = h * 0.30;
+        const vineBottomY = minVineBottomY + (maxVineBottomY - minVineBottomY) * danger + bob * 0.5;
+
+        // Top jungle branch
+        ctx.strokeStyle = '#5D4037';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(w * 0.12, branchY);
+        ctx.lineTo(w * 0.88, branchY - 4);
+        ctx.stroke();
+
+        // Twisting vine with 6 leaf nodes
+        for (let n = 0; n < 6; n++) {
+          const intact = n < livesCount;
+          const ny = branchY + (vineBottomY - branchY) * ((n + 0.5) / 6);
+          const nx = cx + Math.sin(n * 1.3 + t * 2) * 5;
+          ctx.strokeStyle = intact ? '#2E7D32' : '#E53935';
+          ctx.lineWidth = intact ? 3.5 : 1.5;
+          ctx.beginPath();
+          ctx.moveTo(nx, ny - 8);
+          ctx.lineTo(nx, ny + 8);
+          ctx.stroke();
+          if (intact) {
+            ctx.fillStyle = '#66BB6A';
+            ctx.strokeStyle = '#1E1E1E';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.ellipse(nx + (n % 2 === 0 ? 8 : -8), ny, 6, 3.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+        }
+
+        // Chewing caterpillar on top vine node
+        const catY = branchY + (vineBottomY - branchY) * (Math.max(0, livesCount - 1) / 6) + 8;
+        for (let seg = 0; seg < 4; seg++) {
+          ctx.fillStyle = seg === 0 ? '#8BC34A' : '#AED581';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(cx + 8 + seg * 5.5, catY + Math.sin(t * 10 + seg) * 1.5, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Stickman or legs sticking out of flytrap
+        if (!isPreview && livesCount <= 0) {
+          const kick = Math.sin(t * 16) * 10;
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 3.2;
+          ctx.beginPath();
+          ctx.moveTo(cx - 6, plantBaseY - 44);
+          ctx.lineTo(cx - 16, plantBaseY - 68 + kick);
+          ctx.moveTo(cx + 6, plantBaseY - 44);
+          ctx.lineTo(cx + 16, plantBaseY - 68 - kick);
+          ctx.stroke();
+        } else {
+          drawStickman(ctx, cx + swayX, vineBottomY, 0.84, !isPreview && livesCount <= 2, true, t);
+        }
+
+        // Venus Flytrap stalk
+        ctx.strokeStyle = '#2E7D32';
+        ctx.lineWidth = 6.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, plantBaseY);
+        ctx.lineTo(cx, plantBaseY - 36);
+        ctx.stroke();
+
+        // Dinner bib + fork & knife when lives <= 2!
+        if (!isPreview && livesCount <= 2) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(cx - 16, plantBaseY - 32);
+          ctx.lineTo(cx + 16, plantBaseY - 32);
+          ctx.lineTo(cx + 12, plantBaseY - 10);
+          ctx.lineTo(cx, plantBaseY - 5);
+          ctx.lineTo(cx - 12, plantBaseY - 10);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Fork & Knife on sides
+          ctx.strokeStyle = '#90A4AE';
+          ctx.lineWidth = 2.6;
+          ctx.beginPath();
+          ctx.moveTo(cx - 42, plantBaseY - 12);
+          ctx.lineTo(cx - 42, plantBaseY - 36);
+          ctx.moveTo(cx + 42, plantBaseY - 12);
+          ctx.lineTo(cx + 42, plantBaseY - 36);
+          ctx.stroke();
+        }
+
+        // Flytrap jaws
+        const jawSpread = (!isPreview && livesCount <= 0) ? 6 : (!isPreview && livesCount <= 2) ? 38 : 26;
+        [-1, 1].forEach(side => {
+          ctx.fillStyle = '#43A047';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(cx, plantBaseY - 36);
+          ctx.quadraticCurveTo(cx + side * (jawSpread + 18), plantBaseY - 72, cx + side * jawSpread, plantBaseY - 46);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        });
+
       } else if (peril.id === 'DINO_STEALTH') {
         drawSculptedDinoPeril(ctx, w, h, livesCount, smoothL, isPreview, t);
+
+      } else if (peril.id === 'LEAKY_SUBMARINE') {
+        const tankW = w * 0.64;
+        const tankH = h * 0.76;
+        const tankLeft = (w - tankW) * 0.5;
+        const tankRight = tankLeft + tankW;
+        const tankTop = h * 0.11;
+        const tankBottom = tankTop + tankH;
+
+        // Submarine tank background
+        ctx.fillStyle = 'rgba(225, 245, 254, 0.38)';
+        ctx.beginPath();
+        ctx.roundRect(tankLeft, tankTop, tankW, tankH, 14);
+        ctx.fill();
+
+        // Rising water level (1/6th per wrong guess)
+        const waterFillFrac = isPreview ? 0.25 : Math.min(1, Math.max(0.06, (6 - smoothL) / 6));
+        const waterH = tankH * waterFillFrac;
+        const waterTopY = tankBottom - waterH;
+
+        ctx.fillStyle = 'rgba(41, 182, 246, 0.52)';
+        ctx.beginPath();
+        ctx.moveTo(tankLeft + 3, tankBottom - 3);
+        ctx.lineTo(tankLeft + 3, waterTopY);
+        for (let x = tankLeft + 3; x <= tankRight - 3; x += 10) {
+          ctx.lineTo(x, waterTopY + Math.sin(t * 4 + x * 0.08) * 3);
+        }
+        ctx.lineTo(tankRight - 3, tankBottom - 3);
+        ctx.closePath();
+        ctx.fill();
+
+        // Stickman inside glass tank (treads water with puffed cheeks when lives <= 2!)
+        const stickY = (!isPreview && livesCount <= 0)
+          ? tankTop + 26 + Math.sin(t * 4) * 5
+          : (!isPreview && livesCount <= 2)
+            ? Math.max(tankTop + 18, waterTopY - 16) + bob * 0.5
+            : tankBottom - 70;
+        drawStickman(ctx, cx, stickY, 0.82, !isPreview && livesCount <= 2, !isPreview && livesCount <= 2, t);
+        if (!isPreview && livesCount <= 2) {
+          // Puffed cheeks holding breath!
+          const headY = stickY + 20 * 0.82 - 16 * 0.82;
+          ctx.fillStyle = '#B3E5FC';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(cx - 9, headY + 2, 4.2, 0, Math.PI * 2);
+          ctx.arc(cx + 9, headY + 2, 4.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Tank frame & 6 bolts
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(tankLeft, tankTop, tankW, tankH, 14);
+        ctx.stroke();
+
+        for (let b = 0; b < 6; b++) {
+          const isLeft = b % 2 === 0;
+          const bx = isLeft ? tankLeft : tankRight;
+          const by = tankBottom - tankH * ((b + 0.6) / 6.3);
+          const intact = b < livesCount;
+          if (intact) {
+            ctx.fillStyle = '#B0BEC5';
+            ctx.strokeStyle = '#1E1E1E';
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.arc(bx, by, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          } else if (!isPreview) {
+            // High-pressure water jet spraying inward from popped bolt!
+            const dir = isLeft ? 1 : -1;
+            ctx.strokeStyle = '#0288D1';
+            ctx.lineWidth = 2.6;
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.quadraticCurveTo(bx + dir * 16, by - 4, bx + dir * 28, by + 6 + Math.sin(t * 14 + b) * 4);
+            ctx.stroke();
+          }
+        }
       }
 
       // Render active damage particles & floating "-1 ❤️" indicators

@@ -32,6 +32,9 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -53,6 +56,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -139,6 +144,17 @@ object DoodleColors {
     val DinoGreen = Color(0xFF689F38)
     val DinoLightGreen = Color(0xFF9CCC65)
 
+    val FlytrapGreen = Color(0xFF43A047)
+    val FlytrapMouthPink = Color(0xFFEC407A)
+    val VineLeafGreen = Color(0xFF2E7D32)
+
+    val SubmarineSteel = Color(0xFF78909C)
+    val SubmarineYellow = Color(0xFFFFCA28)
+
+    val IceCubeCyan = Color(0xFF81D4FA)
+    val IceCubeBorder = Color(0xFF0288D1)
+    val LockedSlate = Color(0xFF90A4AE)
+
     val BalloonPalette = listOf(
         Color(0xFFFF595E), // Coral Red
         Color(0xFFFFCA3A), // Sunny Yellow
@@ -166,14 +182,17 @@ enum class PaperTheme(
 // ============================================================================
 
 /**
- * Rotates automatically based on the level number (`level % 4`):
- * - Levels 1, 5, 9...  -> SHARK_BALLOONS
- * - Levels 2, 6, 10... -> UFO_ABDUCTION
- * - Levels 3, 7, 11... -> VOLCANO_BLOCKS
- * - Levels 4, 8, 12... -> DINO_STEALTH
+ * 6 Dynamic Peril Scenarios across the 100-Level Progression System:
+ * 1. SHARK_BALLOONS (Levels 1–16)
+ * 2. UFO_ABDUCTION (Levels 17–33)
+ * 3. VOLCANO_BLOCKS / VOLCANO_LAVA (Levels 34–50)
+ * 4. GIANT_VENUS_FLYTRAP (Levels 51–66)
+ * 5. DINO_STEALTH / SLEEPING_TREX (Levels 67–83)
+ * 6. LEAKY_SUBMARINE (Levels 84–100)
  */
 enum class PerilType(
     val displayName: String,
+    val worldRangeLabel: String,
     val panicBubbleText: String,
     val gameOverTitle: String,
     val gameOverDescription: String,
@@ -182,6 +201,7 @@ enum class PerilType(
 ) {
     SHARK_BALLOONS(
         displayName = "Shark & Balloons",
+        worldRangeLabel = "Levels 1–16",
         panicBubbleText = "Come on, you can do that!",
         gameOverTitle = "SPLASH! SHARK SNACK",
         gameOverDescription = "All 6 balloons popped! The shark caught up.",
@@ -190,47 +210,86 @@ enum class PerilType(
     ),
     UFO_ABDUCTION(
         displayName = "UFO Abduction",
-        panicBubbleText = "Not the alien probe!",
+        worldRangeLabel = "Levels 17–33",
+        panicBubbleText = "Beam me up... wait, no!",
         gameOverTitle = "ZAP! ABDUCTED!",
         gameOverDescription = "The UFO tractor beam pulled the stickman aboard!",
         extraLifeLabel = "+1 Gravity Anchor!",
         hitEffectLabel = "ZAP!"
     ),
     VOLCANO_BLOCKS(
-        displayName = "Volcano Crates",
+        displayName = "Volcano Lava",
+        worldRangeLabel = "Levels 34–50",
         panicBubbleText = "My shoes are melting!",
         gameOverTitle = "SIZZLE! MELTDOWN!",
         gameOverDescription = "All 6 stone crates crumbled into the bubbling lava!",
         extraLifeLabel = "+1 Stone Crate stacked!",
         hitEffectLabel = "CRUMBLE!"
     ),
+    GIANT_VENUS_FLYTRAP(
+        displayName = "Venus Flytrap",
+        worldRangeLabel = "Levels 51–66",
+        panicBubbleText = "Vegetarian option!",
+        gameOverTitle = "CHOMP! PLANT FOOD!",
+        gameOverDescription = "The caterpillars chewed through all 6 vine nodes!",
+        extraLifeLabel = "+1 Vine Node regrown!",
+        hitEffectLabel = "SNAP!"
+    ),
     DINO_STEALTH(
         displayName = "Sleeping T-Rex",
+        worldRangeLabel = "Levels 67–83",
         panicBubbleText = "Shhh! Don't wake Rex!",
         gameOverTitle = "ROOOAR! REX AWOKE!",
         gameOverDescription = "The Noise Meter maxed out and woke the giant T-Rex!",
         extraLifeLabel = "-1 Noise Bar hushed!",
         hitEffectLabel = "CLANG!"
+    ),
+    LEAKY_SUBMARINE(
+        displayName = "Leaky Submarine",
+        worldRangeLabel = "Levels 84–100",
+        panicBubbleText = "Glub glub! Holding my breath!",
+        gameOverTitle = "GLUB! TANK FLOODED!",
+        gameOverDescription = "All 6 bolts popped and the glass tank filled with water!",
+        extraLifeLabel = "+1 Tank Bolt sealed!",
+        hitEffectLabel = "BURST!"
     );
 
     companion object {
+        val VOLCANO_LAVA: PerilType get() = VOLCANO_BLOCKS
+        val SLEEPING_TREX: PerilType get() = DINO_STEALTH
+
         fun forLevel(levelNumber: Int): PerilType {
-            val normalized = if (levelNumber <= 0) 1 else levelNumber
-            return when (normalized % 4) {
-                1 -> SHARK_BALLOONS
-                2 -> UFO_ABDUCTION
-                3 -> VOLCANO_BLOCKS
-                else -> DINO_STEALTH
+            val norm = (((if (levelNumber <= 0) 1 else levelNumber) - 1) % 100) + 1
+            return when (norm) {
+                in 1..16 -> SHARK_BALLOONS
+                in 17..33 -> UFO_ABDUCTION
+                in 34..50 -> VOLCANO_BLOCKS
+                in 51..66 -> GIANT_VENUS_FLYTRAP
+                in 67..83 -> DINO_STEALTH
+                else -> LEAKY_SUBMARINE
             }
         }
     }
+
+    val representativeLevel: Int
+        get() = when (this) {
+            SHARK_BALLOONS -> 1
+            UFO_ABDUCTION -> 17
+            VOLCANO_BLOCKS -> 34
+            GIANT_VENUS_FLYTRAP -> 51
+            DINO_STEALTH -> 67
+            LEAKY_SUBMARINE -> 84
+        }
 }
+
+typealias PerilScenario = PerilType
 
 data class WordLevel(
     val number: Int,
     val word: String,
     val clue: String,
-    val isAdventure: Boolean = false
+    val isAdventure: Boolean = false,
+    val category: String = "Doodle Challenge"
 ) {
     val perilType: PerilType
         get() = PerilType.forLevel(if (number <= 0) 1 else number)
@@ -238,10 +297,15 @@ data class WordLevel(
     /** Every 5th level is a Boss Level with 3 bomb letters on the keyboard! */
     val isBossLevel: Boolean
         get() = isAdventure || (number > 0 && number % 5 == 0)
+
+    /** Levels 50+ start with Frozen Vowels (A, E, I, O, U) locked until 3 consonants are guessed! */
+    val hasFrozenVowels: Boolean
+        get() = number >= 50
 }
 
 enum class ScreenState {
     MAIN_MENU,
+    WORLD_MAP,
     GAMEPLAY,
     TWO_PLAYER_SETUP
 }
@@ -469,27 +533,118 @@ object ProceduralSoundEngine {
     }
 }
 
-val CAMPAIGN_LEVELS = listOf(
-    WordLevel(1, "DIAMOND", "Guess a precious gemstone"),
-    WordLevel(2, "CHINA", "What country was paper invented in?"),
-    WordLevel(3, "PRANK", "April Fool's Day tradition"),
-    WordLevel(4, "CAKE", "Sweet baked treat with birthday candles"),
-    WordLevel(5, "GIRAFFE", "Boss Level: Tallest mammal with a long neck"),
-    WordLevel(6, "COMPASS", "Navigation tool that always points north"),
-    WordLevel(7, "VOLCANO", "Mountain that erupts with glowing lava"),
-    WordLevel(8, "PENGUIN", "Tuxedo-wearing bird that cannot fly"),
-    WordLevel(9, "RAINBOW", "Colorful arc seen in the sky after rain"),
-    WordLevel(10, "PIRATE", "Boss Level: High-seas sailor seeking treasure"),
-    WordLevel(11, "CACTUS", "Spiky desert plant that stores water"),
-    WordLevel(12, "GUITAR", "Six-stringed musical instrument"),
-    WordLevel(13, "OCTOPUS", "Clever sea creature with eight tentacles"),
-    WordLevel(14, "POPCORN", "Buttery snack eaten at the movie theater"),
-    WordLevel(15, "ASTRONAUT", "Boss Level: Explorer who travels into outer space"),
-    WordLevel(16, "IGLOO", "Dome-shaped shelter built from snow blocks"),
-    WordLevel(17, "TORNADO", "Violently rotating column of wind"),
-    WordLevel(18, "PANCAKE", "Flat breakfast cake served with maple syrup"),
-    WordLevel(19, "DINOSAUR", "Prehistoric reptile that ruled the Earth"),
-    WordLevel(20, "TREASURE", "Boss Level: Chest overflowing with gold and jewels")
+val CAMPAIGN_LEVELS: List<WordLevel> = listOf(
+    // ================= WORLD 1: SHARK & BALLOONS (Levels 1–16) =================
+    WordLevel(1, "DIAMOND", "Hard Science: Guess a precious gemstone", category = "Hard Science / Tech"),
+    WordLevel(2, "CHINA", "World History: What country was paper invented in?", category = "World History & Geography"),
+    WordLevel(3, "PRANK", "Pop Culture: April Fools' Day tradition", category = "Pop Culture & Idioms"),
+    WordLevel(4, "CAKE", "Food & Desserts: Sweet baked treat with birthday candles", category = "Food & Desserts"),
+    WordLevel(5, "GIRAFFE", "Boss Level: Tallest African mammal with a long neck", category = "Animals & Nature"),
+    WordLevel(6, "COMPASS", "Hard Science: Magnetic tool that always points north", category = "Hard Science / Tech"),
+    WordLevel(7, "VOLCANO", "World Geography: Mountain that erupts with glowing lava", category = "World History & Geography"),
+    WordLevel(8, "PENGUIN", "Animals & Nature: Tuxedo-wearing bird of Antarctica", category = "Animals & Nature"),
+    WordLevel(9, "RAINBOW", "Hard Science: Colorful optical arc seen after rain", category = "Hard Science / Tech"),
+    WordLevel(10, "PIRATE", "Boss Level: High-seas buccaneer seeking buried gold", category = "Pop Culture & Idioms"),
+    WordLevel(11, "CACTUS", "Animals & Nature: Spiky desert plant that stores water", category = "Animals & Nature"),
+    WordLevel(12, "GUITAR", "Pop Culture: Six-stringed musical instrument", category = "Pop Culture & Idioms"),
+    WordLevel(13, "OCTOPUS", "Animals & Nature: Clever sea creature with eight tentacles", category = "Animals & Nature"),
+    WordLevel(14, "POPCORN", "Food & Desserts: Buttery snack eaten at the movie theater", category = "Food & Desserts"),
+    WordLevel(15, "ASTRONAUT", "Boss Level: Explorer who travels into outer space", category = "Hard Science / Tech"),
+    WordLevel(16, "IGLOO", "World Geography: Dome-shaped shelter built from snow", category = "World History & Geography"),
+
+    // ================= WORLD 2: UFO ABDUCTION (Levels 17–33) =================
+    WordLevel(17, "TORNADO", "Animals & Nature: Violently rotating column of wind", category = "Animals & Nature"),
+    WordLevel(18, "PANCAKE", "Food & Desserts: Flat breakfast cake served with syrup", category = "Food & Desserts"),
+    WordLevel(19, "DINOSAUR", "Animals & Nature: Prehistoric reptile that ruled Earth", category = "Animals & Nature"),
+    WordLevel(20, "TREASURE", "Boss Level: Chest overflowing with gold and jewels", category = "Pop Culture & Idioms"),
+    WordLevel(21, "ELEPHANT", "Animals & Nature: Largest land mammal with a trunk", category = "Animals & Nature"),
+    WordLevel(22, "BURRITO", "Food & Desserts: Flour tortilla wrapped around savory fillings", category = "Food & Desserts"),
+    WordLevel(23, "PYRAMIDS", "World History: Ancient monumental tombs built in Giza", category = "World History & Geography"),
+    WordLevel(24, "MOONWALK", "Pop Culture: Iconic backward gliding dance move", category = "Pop Culture & Idioms"),
+    WordLevel(25, "ALGORITHM", "Boss Level: Step-by-step recipe used by computers", category = "Hard Science / Tech"),
+    WordLevel(26, "EGYPT", "World Geography: Land of the Nile River and Pharaohs", category = "World History & Geography"),
+    WordLevel(27, "SPACESHIP", "Pop Culture: Futuristic vessel built for star travel", category = "Pop Culture & Idioms"),
+    WordLevel(28, "TELESCOPE", "Hard Science: Optical instrument for viewing distant galaxies", category = "Hard Science / Tech"),
+    WordLevel(29, "CHAMELEON", "Animals & Nature: Lizard famous for shifting its colors", category = "Animals & Nature"),
+    WordLevel(30, "CROISSANT", "Boss Level: Flaky crescent-shaped French pastry", category = "Food & Desserts"),
+    WordLevel(31, "AMAZON", "World Geography: Vast South American tropical rainforest", category = "World History & Geography"),
+    WordLevel(32, "CARNIVAL", "Pop Culture: Festive traveling fair with rides and games", category = "Pop Culture & Idioms"),
+    WordLevel(33, "GRAVITY", "Hard Science: Invisible force keeping planets in orbit", category = "Hard Science / Tech"),
+
+    // ================= WORLD 3: VOLCANO LAVA (Levels 34–50) =================
+    WordLevel(34, "DOLPHIN", "Animals & Nature: Playful intelligent marine mammal", category = "Animals & Nature"),
+    WordLevel(35, "SPAGHETTI", "Boss Level: Long thin Italian pasta served with sauce", category = "Food & Desserts"),
+    WordLevel(36, "ATLANTIS", "World History: Legendary island city lost beneath the sea", category = "World History & Geography"),
+    WordLevel(37, "FIREWORKS", "Pop Culture: Dazzling sky explosions on New Year's Eve", category = "Pop Culture & Idioms"),
+    WordLevel(38, "MOLECULE", "Hard Science: Group of atoms bonded together chemically", category = "Hard Science / Tech"),
+    WordLevel(39, "KANGAROO", "Animals & Nature: Australian marsupial that hops", category = "Animals & Nature"),
+    WordLevel(40, "PINEAPPLE", "Boss Level: Tropical fruit with a spiky crown", category = "Food & Desserts"),
+    WordLevel(41, "GLACIER", "World Geography: Massive slow-moving river of ice", category = "World History & Geography"),
+    WordLevel(42, "SUPERHERO", "Pop Culture: Masked comic book defender of justice", category = "Pop Culture & Idioms"),
+    WordLevel(43, "SATELLITE", "Hard Science: Orbital craft relaying signals around Earth", category = "Hard Science / Tech"),
+    WordLevel(44, "BUTTERFLY", "Animals & Nature: Winged insect emerging from a chrysalis", category = "Animals & Nature"),
+    WordLevel(45, "CHOCOLATE", "Boss Level: Sweet treat made from roasted cacao beans", category = "Food & Desserts"),
+    WordLevel(46, "COLOSSEUM", "World History: Famous oval amphitheater in Rome", category = "World History & Geography"),
+    WordLevel(47, "DETECTIVE", "Pop Culture: Investigator who solves tricky mysteries", category = "Pop Culture & Idioms"),
+    WordLevel(48, "MAGNETISM", "Hard Science: Force of attraction between iron poles", category = "Hard Science / Tech"),
+    WordLevel(49, "FLAMINGO", "Animals & Nature: Pink wading bird that stands on one leg", category = "Animals & Nature"),
+    WordLevel(50, "AVOCADO", "Boss + Frozen Vowels: Creamy green fruit in guacamole", category = "Food & Desserts"),
+
+    // ================= WORLD 4: GIANT VENUS FLYTRAP (Levels 51–66) =================
+    WordLevel(51, "HIMALAYAS", "World Geography: Mountain range home to Mount Everest", category = "World History & Geography"),
+    WordLevel(52, "MAGICIAN", "Pop Culture: Illusionist who pulls rabbits from a hat", category = "Pop Culture & Idioms"),
+    WordLevel(53, "ELECTRON", "Hard Science: Negatively charged subatomic particle", category = "Hard Science / Tech"),
+    WordLevel(54, "CHEETAH", "Animals & Nature: Fastest spotted land cat on Earth", category = "Animals & Nature"),
+    WordLevel(55, "CINNAMON", "Boss Level: Warm aromatic spice from tree bark", category = "Food & Desserts"),
+    WordLevel(56, "PARTHENON", "World History: Marble temple on the Athenian Acropolis", category = "World History & Geography"),
+    WordLevel(57, "SKATEBOARD", "Pop Culture: Four-wheeled deck used for kickflips", category = "Pop Culture & Idioms"),
+    WordLevel(58, "SUPERNOVA", "Hard Science: Brilliant explosion of a dying star", category = "Hard Science / Tech"),
+    WordLevel(59, "CROCODILE", "Animals & Nature: Armored reptile lurking in rivers", category = "Animals & Nature"),
+    WordLevel(60, "MACARONI", "Boss Level: Curved elbow pasta baked with cheese", category = "Food & Desserts"),
+    WordLevel(61, "CLEOPATRA", "World History: Famous last ruler of ancient Egypt", category = "World History & Geography"),
+    WordLevel(62, "SAXOPHONE", "Pop Culture: Brass woodwind instrument iconic in jazz", category = "Pop Culture & Idioms"),
+    WordLevel(63, "QUANTUM", "Hard Science: Physics of the smallest discrete energy packets", category = "Hard Science / Tech"),
+    WordLevel(64, "JELLYFISH", "Animals & Nature: Translucent ocean drifter with tentacles", category = "Animals & Nature"),
+    WordLevel(65, "BLUEBERRY", "Boss Level: Small round indigo fruit in muffins", category = "Food & Desserts"),
+    WordLevel(66, "SAMURAI", "World History: Noble armored warrior of feudal Japan", category = "World History & Geography"),
+
+    // ================= WORLD 5: SLEEPING T-REX (Levels 67–83) =================
+    WordLevel(67, "MARATHON", "Pop Culture: Endurance footrace of 26.2 miles", category = "Pop Culture & Idioms"),
+    WordLevel(68, "ROBOTICS", "Hard Science: Engineering of automated machines", category = "Hard Science / Tech"),
+    WordLevel(69, "PLATYPUS", "Animals & Nature: Duck-billed mammal native to Australia", category = "Animals & Nature"),
+    WordLevel(70, "ESPRESSO", "Boss Level: Concentrated Italian brewed coffee shot", category = "Food & Desserts"),
+    WordLevel(71, "VIKINGS", "World History: Norse seafarers who sailed longships", category = "World History & Geography"),
+    WordLevel(72, "ORCHESTRA", "Pop Culture: Large ensemble of classical musicians", category = "Pop Culture & Idioms"),
+    WordLevel(73, "MICROCHIP", "Hard Science: Tiny silicon circuit inside every phone", category = "Hard Science / Tech"),
+    WordLevel(74, "PORCUPINE", "Animals & Nature: Rodent protected by sharp quills", category = "Animals & Nature"),
+    WordLevel(75, "WATERMELON", "Boss Level: Giant green picnic fruit with red flesh", category = "Food & Desserts"),
+    WordLevel(76, "STONEHENGE", "World History: Prehistoric ring of standing stones", category = "World History & Geography"),
+    WordLevel(77, "SPOTLIGHT", "Pop Culture: Bright stage beam following the star", category = "Pop Culture & Idioms"),
+    WordLevel(78, "CHROMOSOME", "Hard Science: Thread-like structure carrying DNA genes", category = "Hard Science / Tech"),
+    WordLevel(79, "CHIMPANZEE", "Animals & Nature: Clever great ape known to use tools", category = "Animals & Nature"),
+    WordLevel(80, "CHEESECAKE", "Boss Level: Rich creamy dessert on a graham crust", category = "Food & Desserts"),
+    WordLevel(81, "GALAPAGOS", "World Geography: Pacific islands that inspired Darwin", category = "World History & Geography"),
+    WordLevel(82, "BOOMERANG", "Pop Culture: Curved throwing stick that returns to you", category = "Pop Culture & Idioms"),
+    WordLevel(83, "FREQUENCY", "Hard Science: Number of wave cycles per second in Hertz", category = "Hard Science / Tech"),
+
+    // ================= WORLD 6: LEAKY SUBMARINE (Levels 84–100) =================
+    WordLevel(84, "RHINOCEROS", "Animals & Nature: Heavy herbivore with a nasal horn", category = "Animals & Nature"),
+    WordLevel(85, "PISTACHIO", "Boss Level: Green nut inside a naturally splitting shell", category = "Food & Desserts"),
+    WordLevel(86, "ANTARCTICA", "World Geography: Frozen southernmost continent", category = "World History & Geography"),
+    WordLevel(87, "JACKPOT", "Pop Culture: Biggest grand prize won in a game", category = "Pop Culture & Idioms"),
+    WordLevel(88, "ASTEROID", "Hard Science: Rocky minor planet orbiting the sun", category = "Hard Science / Tech"),
+    WordLevel(89, "WOLVERINE", "Animals & Nature: Fierce northern mammal of the weasel family", category = "Animals & Nature"),
+    WordLevel(90, "QUESADILLA", "Boss Level: Toasted tortilla filled with melted cheese", category = "Food & Desserts"),
+    WordLevel(91, "LABYRINTH", "World History: Mythological Cretan maze of the Minotaur", category = "World History & Geography"),
+    WordLevel(92, "ACROBATICS", "Pop Culture: High-flying trapeze stunts at the circus", category = "Pop Culture & Idioms"),
+    WordLevel(93, "HOLOGRAM", "Hard Science: Three-dimensional projection made with lasers", category = "Hard Science / Tech"),
+    WordLevel(94, "ALBATROSS", "Animals & Nature: Giant seabird with a massive wingspan", category = "Animals & Nature"),
+    WordLevel(95, "GUACAMOLE", "Boss Level: Zesty Mexican dip mashed with lime", category = "Food & Desserts"),
+    WordLevel(96, "MESOPOTAMIA", "World History: Cradle of civilization between two rivers", category = "World History & Geography"),
+    WordLevel(97, "CLIFFHANGER", "Pop Culture: Suspenseful ending that leaves you waiting", category = "Pop Culture & Idioms"),
+    WordLevel(98, "EXOPLANET", "Hard Science: World orbiting a star outside our solar system", category = "Hard Science / Tech"),
+    WordLevel(99, "CAPPUCCINO", "Food & Desserts: Espresso topped with steamed milk foam", category = "Food & Desserts"),
+    WordLevel(100, "CYBERSPACE", "Final Boss (100): Global digital universe of computer networks", category = "Hard Science / Tech")
 )
 
 val ADVENTURE_LEVELS = listOf(
@@ -504,14 +659,21 @@ val ADVENTURE_LEVELS = listOf(
 )
 
 // ============================================================================
-// 3. GAME VIEWMODEL (PERILS, BOSS BOMBS, COINS, STREAKS, POWER-UPS)
+// 3. GAME VIEWMODEL (100 LEVELS, 6 PERILS, FROZEN VOWELS, WORLD MAP, PERSISTENCE)
 // ============================================================================
 
 class WordGameViewModel : ViewModel() {
+    companion object {
+        private const val PREFS_NAME = "doodle_word_shark_prefs"
+        val VOWELS = setOf('A', 'E', 'I', 'O', 'U')
+    }
+
+    private var appContext: Context? = null
+
     var currentScreen by mutableStateOf(ScreenState.MAIN_MENU)
         private set
 
-    // Player economy & progression
+    // Player economy & 100-level progression
     var coins by mutableIntStateOf(1231)
         private set
     var campaignLevelIndex by mutableIntStateOf(0)
@@ -519,6 +681,10 @@ class WordGameViewModel : ViewModel() {
     var adventureLevelIndex by mutableIntStateOf(0)
         private set
     val completedCampaignLevels = mutableStateListOf<Int>()
+    val levelStarRatings = mutableStateMapOf<Int, Int>() // levelNumber -> 1..3 stars
+    val claimedMilestoneChests = mutableStateListOf<Int>() // 10, 20, ..., 100
+    var unlockAllMapLevels by mutableStateOf(false)
+        private set
 
     val totalCampaignCount: Int
         get() = CAMPAIGN_LEVELS.size
@@ -578,13 +744,125 @@ class WordGameViewModel : ViewModel() {
     var lastHitWasBomb by mutableStateOf(false)
         private set
     var statusBannerMessage by mutableStateOf<String?>(null)
-        private set
+
+    val revealedWordChars: List<Char>
+        get() = revealedChars
 
     val currentCampaignLevelNumber: Int
         get() = campaignLevelIndex + 1
 
     val activePerilType: PerilType
         get() = activeLevel.perilType
+
+    /** Required consonants to thaw Frozen Vowels on Levels 50+ (capped at unique consonants in word) */
+    val requiredConsonantsToThaw: Int
+        get() {
+            if (!activeLevel.hasFrozenVowels) return 0
+            val uniqueConsonants = activeLevel.word.uppercase().filter { it in 'A'..'Z' && it !in VOWELS }.toSet()
+            return minOf(3, uniqueConsonants.size)
+        }
+
+    /** Number of correct consonants guessed so far in the current round */
+    val guessedConsonantCount: Int
+        get() = revealedChars.count { it !in VOWELS }
+
+    /** True when Levels 50+ still have their vowels locked in doodle ice cubes */
+    val areVowelsFrozen: Boolean
+        get() = activeLevel.hasFrozenVowels && guessedConsonantCount < requiredConsonantsToThaw
+
+    fun isKeyFrozenVowel(ch: Char): Boolean {
+        val upper = ch.uppercaseChar()
+        return areVowelsFrozen && upper in VOWELS && (keyStatuses[upper] == null || keyStatuses[upper] == KeyStatus.DEFAULT)
+    }
+
+    fun initPersistence(context: Context) {
+        if (appContext != null) return
+        appContext = context.applicationContext
+        val prefs = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) ?: return
+        coins = prefs.getInt("coins", 1231)
+        campaignLevelIndex = prefs.getInt("campaignLevelIndex", 0).coerceIn(0, CAMPAIGN_LEVELS.lastIndex)
+        perfectCount = prefs.getInt("perfectCount", 3)
+        currentStreak = prefs.getInt("currentStreak", 2)
+        maxStreak = prefs.getInt("maxStreak", 5)
+        chestProgress = prefs.getInt("chestProgress", 1)
+        themeProgress = prefs.getInt("themeProgress", 1)
+        freeShieldPotions = prefs.getInt("freeShieldPotions", 2)
+
+        val completedRaw = prefs.getString("completedLevels", "") ?: ""
+        completedCampaignLevels.clear()
+        completedRaw.split(",").mapNotNull { it.trim().toIntOrNull() }.forEach { lvl ->
+            if (!completedCampaignLevels.contains(lvl)) completedCampaignLevels.add(lvl)
+        }
+
+        val starsRaw = prefs.getString("levelStars", "") ?: ""
+        levelStarRatings.clear()
+        starsRaw.split(",").forEach { pair ->
+            val parts = pair.split(":")
+            if (parts.size == 2) {
+                val lvl = parts[0].toIntOrNull()
+                val st = parts[1].toIntOrNull()
+                if (lvl != null && st != null) levelStarRatings[lvl] = st
+            }
+        }
+
+        val chestsRaw = prefs.getString("claimedChests", "") ?: ""
+        claimedMilestoneChests.clear()
+        chestsRaw.split(",").mapNotNull { it.trim().toIntOrNull() }.forEach { c ->
+            if (!claimedMilestoneChests.contains(c)) claimedMilestoneChests.add(c)
+        }
+    }
+
+    private fun saveStateToPrefs() {
+        val prefs = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) ?: return
+        prefs.edit()
+            .putInt("coins", coins)
+            .putInt("campaignLevelIndex", campaignLevelIndex)
+            .putInt("perfectCount", perfectCount)
+            .putInt("currentStreak", currentStreak)
+            .putInt("maxStreak", maxStreak)
+            .putInt("chestProgress", chestProgress)
+            .putInt("themeProgress", themeProgress)
+            .putInt("freeShieldPotions", freeShieldPotions)
+            .putString("completedLevels", completedCampaignLevels.joinToString(","))
+            .putString("levelStars", levelStarRatings.entries.joinToString(",") { "${it.key}:${it.value}" })
+            .putString("claimedChests", claimedMilestoneChests.joinToString(","))
+            .apply()
+    }
+
+    fun openWorldMap() {
+        currentScreen = ScreenState.WORLD_MAP
+    }
+
+    fun toggleUnlockAllMapLevels() {
+        unlockAllMapLevels = !unlockAllMapLevels
+        statusBannerMessage = if (unlockAllMapLevels) {
+            "🔓 All 100 Levels Unlocked for Free Play!"
+        } else {
+            "🔒 Sequential Campaign Progression Active"
+        }
+    }
+
+    fun isLevelUnlocked(levelNumber: Int): Boolean {
+        if (unlockAllMapLevels) return true
+        // Level 1, the start of each Peril World (1, 17, 34, 51, 67, 84), completed levels, or next level after highest completed
+        if (levelNumber == 1 || levelNumber in setOf(17, 34, 51, 67, 84)) return true
+        if (completedCampaignLevels.contains(levelNumber)) return true
+        if (completedCampaignLevels.contains(levelNumber - 1)) return true
+        val highestCompleted = completedCampaignLevels.maxOrNull() ?: 0
+        return levelNumber <= (highestCompleted + 1).coerceAtLeast(currentCampaignLevelNumber)
+    }
+
+    fun claimMilestoneChest(milestoneLevel: Int) {
+        if (claimedMilestoneChests.contains(milestoneLevel)) {
+            statusBannerMessage = "Level $milestoneLevel Chest already claimed!"
+            return
+        }
+        claimedMilestoneChests.add(milestoneLevel)
+        coins += 100
+        ProceduralSoundEngine.play(DoodleSoundEffect.VICTORY)
+        statusBannerMessage = "🧰 Level $milestoneLevel Milestone Chest! +100 Coins!"
+        saveStateToPrefs()
+    }
 
     fun startCampaignLevel() {
         val template = CAMPAIGN_LEVELS[campaignLevelIndex % CAMPAIGN_LEVELS.size]
@@ -624,9 +902,9 @@ class WordGameViewModel : ViewModel() {
         roundOutcome = RoundOutcome.PLAYING
     }
 
-    /** Allows jumping directly to a specific level number (great for testing perils & boss levels) */
+    /** Allows jumping directly to a specific level number (great for World Map & testing perils) */
     fun selectCampaignLevelNumber(levelNumber: Int) {
-        campaignLevelIndex = (levelNumber - 1).coerceAtLeast(0)
+        campaignLevelIndex = (levelNumber - 1).coerceIn(0, CAMPAIGN_LEVELS.lastIndex)
         startCampaignLevel()
     }
 
@@ -644,11 +922,10 @@ class WordGameViewModel : ViewModel() {
         lastHitWasBomb = false
         statusBannerMessage = null
 
-        // If Boss Level (every 5th level or Adventure), mark 3 random wrong letters with a red bomb dot
+        // If Boss Level (every 5th level or Adventure), pick 3 wrong letters as bomb keys
         if (level.isBossLevel) {
             val targetSet = level.word.uppercase().toSet()
-            val wrongPool = ('A'..'Z').filter { !targetSet.contains(it) }
-            // Deterministic seeded selection per level word + number so tests & replays are consistent
+            val wrongPool = ('A'..'Z').filter { !targetSet.contains(it) && (!level.hasFrozenVowels || it !in VOWELS) }
             val step = 5
             val picked = mutableListOf<Char>()
             var idx = (level.number * 3) % wrongPool.size
@@ -668,11 +945,22 @@ class WordGameViewModel : ViewModel() {
         val upper = letter.uppercaseChar()
         if (keyStatuses[upper] != null && keyStatuses[upper] != KeyStatus.DEFAULT) return
 
+        // Frozen Vowels Check (Levels 50+): Vowels cannot be pressed until 3 consonants are guessed!
+        if (isKeyFrozenVowel(upper)) {
+            val remaining = (requiredConsonantsToThaw - guessedConsonantCount).coerceAtLeast(1)
+            statusBannerMessage = "❄️ Vowel '$upper' is FROZEN! Guess $remaining more consonant(s) to thaw!"
+            return
+        }
+
         val targetWord = activeLevel.word.uppercase()
         if (targetWord.contains(upper)) {
+            val wasFrozenBefore = areVowelsFrozen
             keyStatuses[upper] = KeyStatus.CORRECT
             if (!revealedChars.contains(upper)) {
                 revealedChars.add(upper)
+            }
+            if (wasFrozenBefore && !areVowelsFrozen) {
+                statusBannerMessage = "💧 Ice shattered! Vowels (A, E, I, O, U) are now THAWED!"
             }
             ProceduralSoundEngine.play(DoodleSoundEffect.CHIME)
             checkVictoryCondition()
@@ -695,21 +983,24 @@ class WordGameViewModel : ViewModel() {
             if (balloonsRemaining <= 0) {
                 currentStreak = 0
                 roundOutcome = RoundOutcome.GAME_OVER
-                // Play Splash on Shark Game Over, Crunch on Volcano, or hazard-specific sound
                 val gameOverSound = when (activePerilType) {
                     PerilType.SHARK_BALLOONS -> DoodleSoundEffect.SPLASH
                     PerilType.VOLCANO_BLOCKS -> DoodleSoundEffect.CRUNCH
                     PerilType.UFO_ABDUCTION -> DoodleSoundEffect.ZAP
+                    PerilType.GIANT_VENUS_FLYTRAP -> DoodleSoundEffect.CRUNCH
                     PerilType.DINO_STEALTH -> DoodleSoundEffect.CLANG
+                    PerilType.LEAKY_SUBMARINE -> DoodleSoundEffect.SPLASH
                 }
                 ProceduralSoundEngine.play(gameOverSound)
+                saveStateToPrefs()
             } else {
-                // Play procedural 'pop' for balloons, 'crunch' for volcano crates, etc.
                 val hitSound = when (activePerilType) {
                     PerilType.SHARK_BALLOONS -> DoodleSoundEffect.POP
                     PerilType.VOLCANO_BLOCKS -> DoodleSoundEffect.CRUNCH
                     PerilType.UFO_ABDUCTION -> DoodleSoundEffect.ZAP
+                    PerilType.GIANT_VENUS_FLYTRAP -> DoodleSoundEffect.POP
                     PerilType.DINO_STEALTH -> DoodleSoundEffect.CLANG
+                    PerilType.LEAKY_SUBMARINE -> DoodleSoundEffect.POP
                 }
                 ProceduralSoundEngine.play(hitSound)
             }
@@ -731,11 +1022,21 @@ class WordGameViewModel : ViewModel() {
                 if (!completedCampaignLevels.contains(normalizedLevel)) {
                     completedCampaignLevels.add(normalizedLevel)
                 }
+                val earnedStars = when {
+                    balloonsRemaining >= 5 -> 3
+                    balloonsRemaining >= 3 -> 2
+                    else -> 1
+                }
+                val prevStars = levelStarRatings[normalizedLevel] ?: 0
+                if (earnedStars > prevStars) {
+                    levelStarRatings[normalizedLevel] = earnedStars
+                }
             }
             chestProgress = (chestProgress % 4) + 1
             themeProgress = (themeProgress % 10) + 1
             roundOutcome = RoundOutcome.VICTORY
             ProceduralSoundEngine.play(DoodleSoundEffect.VICTORY)
+            saveStateToPrefs()
         }
     }
 
@@ -752,10 +1053,17 @@ class WordGameViewModel : ViewModel() {
             return
         }
         coins -= cost
-        val picked = unrevealed.random()
+        // Prefer revealing a consonant if vowels are currently frozen so it helps thaw them too!
+        val consonantCandidates = unrevealed.filter { it !in VOWELS }
+        val picked = if (areVowelsFrozen && consonantCandidates.isNotEmpty()) {
+            consonantCandidates.random()
+        } else {
+            unrevealed.random()
+        }
         keyStatuses[picked] = KeyStatus.CORRECT
         revealedChars.add(picked)
         statusBannerMessage = "Magnifier revealed '$picked'!"
+        saveStateToPrefs()
         checkVictoryCondition()
     }
 
@@ -771,10 +1079,12 @@ class WordGameViewModel : ViewModel() {
             freeShieldPotions--
             balloonsRemaining++
             statusBannerMessage = "${activePerilType.extraLifeLabel} (Free potion)"
+            saveStateToPrefs()
         } else if (coins >= cost) {
             coins -= cost
             balloonsRemaining++
             statusBannerMessage = activePerilType.extraLifeLabel
+            saveStateToPrefs()
         } else {
             statusBannerMessage = "Need $cost coins for a Life Potion!"
         }
@@ -804,6 +1114,7 @@ class WordGameViewModel : ViewModel() {
             keyStatuses[ch] = KeyStatus.WRONG
         }
         statusBannerMessage = "Safely cleared ${toEliminate.size} wrong letters!"
+        saveStateToPrefs()
     }
 
     fun proceedAfterVictory() {
@@ -815,7 +1126,8 @@ class WordGameViewModel : ViewModel() {
             adventureLevelIndex++
             startAdventureLevel()
         } else {
-            campaignLevelIndex++
+            campaignLevelIndex = (campaignLevelIndex + 1) % CAMPAIGN_LEVELS.size
+            saveStateToPrefs()
             startCampaignLevel()
         }
     }
@@ -831,6 +1143,7 @@ class WordGameViewModel : ViewModel() {
             balloonsRemaining = 3
             roundOutcome = RoundOutcome.PLAYING
             statusBannerMessage = "Rescued with 3 lives!"
+            saveStateToPrefs()
         } else {
             statusBannerMessage = "Need $rescueCost coins! Tap + at top right."
         }
@@ -839,6 +1152,7 @@ class WordGameViewModel : ViewModel() {
     fun claimFreeCoinBonus(amount: Int = 150) {
         coins += amount
         statusBannerMessage = "+$amount Doodle Coins added!"
+        saveStateToPrefs()
     }
 
     fun toggleSoundEffects() {
@@ -872,8 +1186,12 @@ class MainActivity : ComponentActivity() {
         ProceduralSoundEngine.init(applicationContext)
         enableEdgeToEdge()
         setContent {
+            val vm: WordGameViewModel = viewModel()
+            LaunchedEffect(Unit) {
+                vm.initPersistence(applicationContext)
+            }
             MaterialTheme {
-                WordSharkDoodleApp()
+                WordSharkDoodleApp(viewModel = vm)
             }
         }
     }
@@ -915,12 +1233,22 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                         totalCampaignLevels = viewModel.totalCampaignCount,
                         coins = viewModel.coins,
                         fontFamily = activeFontFamily,
-                        onPlayCampaign = { viewModel.startCampaignLevel() },
+                        onPlayCampaign = { viewModel.openWorldMap() },
                         onPlayAdventure = { viewModel.startAdventureLevel() },
                         onPlayTwoPlayer = { viewModel.openTwoPlayerSetup() },
                         onSelectPerilLevel = { lvl -> viewModel.selectCampaignLevelNumber(lvl) },
                         onOpenSettings = { viewModel.showSettingsDialog = true },
                         onOpenCoinShop = { viewModel.showCoinShopDialog = true }
+                    )
+                }
+
+                ScreenState.WORLD_MAP -> {
+                    BackHandler { viewModel.navigateToMainMenu() }
+                    WorldMapScreen(
+                        viewModel = viewModel,
+                        fontFamily = activeFontFamily,
+                        onBack = { viewModel.navigateToMainMenu() },
+                        onSelectLevel = { lvl -> viewModel.selectCampaignLevelNumber(lvl) }
                     )
                 }
 
@@ -1464,7 +1792,442 @@ fun DoodleWordTitleHeader(fontFamily: FontFamily) {
 }
 
 // ============================================================================
-// 7. SCREEN 2: GAMEPLAY SCREEN (DYNAMIC PERILS + BOSS BOMB MODIFIER)
+// 6B. SCREEN 1B: 100-LEVEL BOARD GAME WORLD MAP & LEVEL SELECT UI
+// ============================================================================
+
+private data class WorldChapterInfo(
+    val worldNumber: Int,
+    val title: String,
+    val levelRange: IntRange,
+    val perilType: PerilType,
+    val bannerColor: Color
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun WorldMapScreen(
+    viewModel: WordGameViewModel,
+    fontFamily: FontFamily,
+    onBack: () -> Unit,
+    onSelectLevel: (Int) -> Unit
+) {
+    val chapters = remember {
+        listOf(
+            WorldChapterInfo(1, "World 1: Shark Lagoon", 1..16, PerilType.SHARK_BALLOONS, Color(0xFFE1F5FE)),
+            WorldChapterInfo(2, "World 2: Alien Pasture", 17..33, PerilType.UFO_ABDUCTION, Color(0xFFE8F5E9)),
+            WorldChapterInfo(3, "World 3: Magma Ridge", 34..50, PerilType.VOLCANO_BLOCKS, Color(0xFFFFF3E0)),
+            WorldChapterInfo(4, "World 4: Flytrap Jungle", 51..66, PerilType.GIANT_VENUS_FLYTRAP, Color(0xFFF1F8E9)),
+            WorldChapterInfo(5, "World 5: Rex Canyon", 67..83, PerilType.DINO_STEALTH, Color(0xFFF9FBE7)),
+            WorldChapterInfo(6, "World 6: Abyssal Sub", 84..100, PerilType.LEAKY_SUBMARINE, Color(0xFFE0F7FA))
+        )
+    }
+
+    val totalStars = viewModel.levelStarRatings.values.sum()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .widthIn(max = 650.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Top Header Bar
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SketchyIconButton(
+                testTag = "world_map_back_button",
+                contentDescription = "Back to main menu",
+                onClick = onBack
+            ) {
+                DrawDoodleBackArrow()
+            }
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "100-Level World Map",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 22.sp,
+                    color = DoodleColors.InkBlack,
+                    modifier = Modifier.testTag("world_map_title")
+                )
+                Text(
+                    text = "⭐ $totalStars / 300 Stars • ${viewModel.completedCampaignCount}/100 Beaten",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 12.sp,
+                    color = DoodleColors.InkBlue
+                )
+            }
+
+            // Free Play Unlock Toggle so player can test any of the 100 levels or play sequentially
+            SketchyContainer(
+                fillColor = if (viewModel.unlockAllMapLevels) DoodleColors.CorrectGreen.copy(alpha = 0.25f) else Color.White,
+                cornerRadius = 14.dp,
+                strokeWidth = 1.7.dp,
+                onClick = { viewModel.toggleUnlockAllMapLevels() },
+                modifier = Modifier
+                    .height(40.dp)
+                    .testTag("toggle_free_play_map_button")
+            ) {
+                Text(
+                    text = if (viewModel.unlockAllMapLevels) "🔓 All Open" else "🔒 Campaign",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp,
+                    color = DoodleColors.InkBlack,
+                    modifier = Modifier.padding(horizontal = 10.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Primary "Play Current Level X" Banner Button
+        val currentLvl = viewModel.currentCampaignLevelNumber
+        val currentPeril = PerilType.forLevel(currentLvl)
+        SketchyContainer(
+            fillColor = DoodleColors.DoodleYellow,
+            cornerRadius = 22.dp,
+            onClick = { onSelectLevel(currentLvl) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .testTag("map_play_current_level_button")
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "▶ Play Level $currentLvl (${currentPeril.displayName})",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 17.sp,
+                    color = DoodleColors.InkBlack
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Scrollable Board Game Map of 100 Levels across 6 Peril Worlds
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .testTag("world_map_lazy_column"),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            items(chapters.size) { chapterIdx ->
+                val chapter = chapters[chapterIdx]
+                SketchyContainer(
+                    fillColor = chapter.bannerColor,
+                    cornerRadius = 22.dp,
+                    strokeWidth = 2.dp,
+                    shadowOffset = 3.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Chapter Header
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = chapter.title,
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 18.sp,
+                                    color = DoodleColors.InkBlack
+                                )
+                                Text(
+                                    text = "Levels ${chapter.levelRange.first}–${chapter.levelRange.last} • Hazard: ${chapter.perilType.displayName}" +
+                                        if (chapter.levelRange.last >= 50) " • 🧊 Frozen Vowels (50+)" else "",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = DoodleColors.InkBlue
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Winding Board-Game Level Nodes Grid
+                        val levelsInChapter = chapter.levelRange.toList()
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            levelsInChapter.forEach { lvlNum ->
+                                val isUnlocked = viewModel.isLevelUnlocked(lvlNum)
+                                val isCompleted = viewModel.completedCampaignLevels.contains(lvlNum)
+                                val isCurrent = lvlNum == viewModel.currentCampaignLevelNumber
+                                val stars = viewModel.levelStarRatings[lvlNum] ?: 0
+                                val isBoss = lvlNum % 5 == 0
+                                val isFrozenVowelLvl = lvlNum >= 50
+
+                                BoardGameLevelNode(
+                                    levelNumber = lvlNum,
+                                    isUnlocked = isUnlocked,
+                                    isCompleted = isCompleted,
+                                    isCurrent = isCurrent,
+                                    stars = stars,
+                                    isBoss = isBoss,
+                                    hasFrozenVowels = isFrozenVowelLvl,
+                                    fontFamily = fontFamily,
+                                    onClick = {
+                                        if (isUnlocked) {
+                                            onSelectLevel(lvlNum)
+                                        } else {
+                                            viewModel.statusBannerMessage =
+                                                "🔒 Complete Level ${lvlNum - 1} first (or tap '🔒 Campaign' at top-right)!"
+                                        }
+                                    }
+                                )
+
+                                // Milestone Chest Icon every 10 levels (10, 20, 30, ..., 100)
+                                if (lvlNum % 10 == 0) {
+                                    val canClaim = isCompleted || viewModel.completedCampaignCount >= lvlNum / 2
+                                    val alreadyClaimed = viewModel.claimedMilestoneChests.contains(lvlNum)
+                                    MilestoneChestNode(
+                                        milestoneLevel = lvlNum,
+                                        isUnlocked = canClaim,
+                                        isClaimed = alreadyClaimed,
+                                        fontFamily = fontFamily,
+                                        onClick = {
+                                            if (alreadyClaimed) {
+                                                viewModel.statusBannerMessage = "Level $lvlNum Chest already opened!"
+                                            } else if (canClaim || viewModel.unlockAllMapLevels) {
+                                                viewModel.claimMilestoneChest(lvlNum)
+                                            } else {
+                                                viewModel.statusBannerMessage = "Beat Level $lvlNum to open this +100 Coin Chest!"
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoardGameLevelNode(
+    levelNumber: Int,
+    isUnlocked: Boolean,
+    isCompleted: Boolean,
+    isCurrent: Boolean,
+    stars: Int,
+    isBoss: Boolean,
+    hasFrozenVowels: Boolean,
+    fontFamily: FontFamily,
+    onClick: () -> Unit
+) {
+    val nodeFill = when {
+        isCurrent -> DoodleColors.DoodleYellow
+        isCompleted -> Color(0xFFC8E6C9)
+        isUnlocked -> Color.White
+        else -> Color(0xFFE0E0E0)
+    }
+    val nodeBorder = when {
+        isBoss && isUnlocked -> DoodleColors.WrongRed
+        isCurrent -> DoodleColors.InkBlue
+        else -> DoodleColors.InkBlack
+    }
+
+    SketchyContainer(
+        fillColor = nodeFill,
+        borderColor = nodeBorder,
+        cornerRadius = 14.dp,
+        strokeWidth = if (isCurrent || isBoss) 2.2.dp else 1.7.dp,
+        shadowOffset = 2.dp,
+        onClick = onClick,
+        modifier = Modifier
+            .size(width = 62.dp, height = 64.dp)
+            .testTag("map_level_node_$levelNumber")
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(vertical = 4.dp, horizontal = 3.dp)
+        ) {
+            // Top badge row: Padlock icon + Boss / Ice indicator
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Canvas(modifier = Modifier.size(11.dp)) {
+                    drawDoodlePadlock(unlocked = isUnlocked)
+                }
+                if (isBoss) {
+                    Text(
+                        text = "💣",
+                        fontSize = 9.sp
+                    )
+                } else if (hasFrozenVowels) {
+                    Text(
+                        text = "🧊",
+                        fontSize = 9.sp
+                    )
+                } else {
+                    Spacer(modifier = Modifier.size(9.dp))
+                }
+            }
+
+            // Level Number
+            Text(
+                text = "$levelNumber",
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 16.sp,
+                color = if (isUnlocked) DoodleColors.InkBlack else DoodleColors.LockedSlate
+            )
+
+            // Bottom 3-Star Rating Row
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                for (s in 1..3) {
+                    val filled = s <= stars
+                    Canvas(modifier = Modifier.size(10.dp)) {
+                        drawDoodleMiniStar(filled = filled)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MilestoneChestNode(
+    milestoneLevel: Int,
+    isUnlocked: Boolean,
+    isClaimed: Boolean,
+    fontFamily: FontFamily,
+    onClick: () -> Unit
+) {
+    SketchyContainer(
+        fillColor = when {
+            isClaimed -> Color(0xFFFFECB3)
+            isUnlocked -> DoodleColors.DoodleYellow
+            else -> Color(0xFFEEEEEE)
+        },
+        borderColor = DoodleColors.HintBulbOrange,
+        cornerRadius = 14.dp,
+        strokeWidth = 2.dp,
+        onClick = onClick,
+        modifier = Modifier
+            .size(width = 66.dp, height = 64.dp)
+            .testTag("map_chest_node_$milestoneLevel")
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(2.dp)
+        ) {
+            Box(modifier = Modifier.size(26.dp)) {
+                DrawDoodleChestIcon()
+            }
+            Text(
+                text = if (isClaimed) "OPENED" else "L$milestoneLevel 🧰",
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 10.sp,
+                color = DoodleColors.InkBlack
+            )
+            Text(
+                text = "+100🪙",
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp,
+                color = DoodleColors.InkBlue
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawDoodlePadlock(unlocked: Boolean) {
+    val w = size.width
+    val h = size.height
+    // Shackle arch
+    val shacklePath = Path().apply {
+        moveTo(w * 0.25f, h * 0.48f)
+        lineTo(w * 0.25f, h * 0.26f)
+        quadraticTo(w * 0.5f, h * 0.04f, w * 0.75f, h * 0.26f)
+        if (!unlocked) {
+            lineTo(w * 0.75f, h * 0.48f)
+        }
+    }
+    drawPath(
+        path = shacklePath,
+        color = if (unlocked) DoodleColors.CorrectGreen else DoodleColors.LockedSlate,
+        style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round)
+    )
+    // Lock body
+    drawRoundRect(
+        color = if (unlocked) DoodleColors.DoodleYellow else DoodleColors.LockedSlate,
+        topLeft = Offset(w * 0.16f, h * 0.46f),
+        size = Size(w * 0.68f, h * 0.48f),
+        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+    )
+    drawRoundRect(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(w * 0.16f, h * 0.46f),
+        size = Size(w * 0.68f, h * 0.48f),
+        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
+        style = Stroke(width = 1.2.dp.toPx())
+    )
+}
+
+private fun DrawScope.drawDoodleMiniStar(filled: Boolean) {
+    val cx = size.width * 0.5f
+    val cy = size.height * 0.5f
+    val outerR = size.minDimension * 0.46f
+    val innerR = outerR * 0.45f
+    val starPath = Path().apply {
+        for (i in 0 until 10) {
+            val r = if (i % 2 == 0) outerR else innerR
+            val angle = (i * 36.0 - 90.0) * (PI / 180.0)
+            val px = cx + (r * cos(angle)).toFloat()
+            val py = cy + (r * sin(angle)).toFloat()
+            if (i == 0) moveTo(px, py) else lineTo(px, py)
+        }
+        close()
+    }
+    drawPath(
+        path = starPath,
+        color = if (filled) DoodleColors.DoodleYellow else Color.White.copy(alpha = 0.6f)
+    )
+    drawPath(
+        path = starPath,
+        color = DoodleColors.InkBlack,
+        style = Stroke(width = 1.dp.toPx(), join = StrokeJoin.Round)
+    )
+}
+
+// ============================================================================
+// 7. SCREEN 2: GAMEPLAY SCREEN (6 DYNAMIC PERILS + BOSS BOMBS + FROZEN VOWELS)
 // ============================================================================
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1513,14 +2276,14 @@ fun GameplayScreen(
                     modifier = Modifier.testTag("level_header_text")
                 )
                 Text(
-                    text = if (level.isBossLevel) {
-                        "${perilType.displayName} • 💣 BOSS (-2 ❤️)"
-                    } else {
-                        perilType.displayName
+                    text = buildString {
+                        append(perilType.displayName)
+                        if (level.isBossLevel) append(" • 💣 BOSS (-2 ❤️)")
+                        if (level.hasFrozenVowels) append(" • 🧊 ICE VOWELS")
                     },
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = if (level.isBossLevel) DoodleColors.WrongRed else DoodleColors.InkBlue,
                     modifier = Modifier.testTag("peril_subtitle_text")
                 )
@@ -1537,8 +2300,8 @@ fun GameplayScreen(
         Spacer(modifier = Modifier.height(4.dp))
 
         // 2. Upper Split Scene:
-        // Left Half: Custom Compose Canvas rendering the active PerilType (Shark, UFO, Volcano, or Dino)
-        // Right Half: The Clue/Category prompt + Boss warning badge centered vertically
+        // Left Half: Custom Compose Canvas rendering the active PerilType (all 6 perils)
+        // Right Half: Category pill + Clue/Category prompt + Boss & Frozen Vowel badges
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1568,7 +2331,7 @@ fun GameplayScreen(
                 )
             }
 
-            // Right Half: Clue / Category prompt + Lives + Boss Bomb indicator
+            // Right Half: Clue / Category prompt + Lives + Boss Bomb + Frozen Vowels indicator
             Box(
                 modifier = Modifier
                     .weight(0.47f)
@@ -1585,7 +2348,7 @@ fun GameplayScreen(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = 6.dp)
                     ) {
                         repeat(6) { idx ->
                             val alive = idx < viewModel.balloonsRemaining
@@ -1607,6 +2370,26 @@ fun GameplayScreen(
                         }
                     }
 
+                    // Category Badge
+                    SketchyContainer(
+                        fillColor = Color(0xFFFFF9C4),
+                        cornerRadius = 10.dp,
+                        strokeWidth = 1.4.dp,
+                        shadowOffset = 1.5.dp,
+                        modifier = Modifier
+                            .padding(bottom = 5.dp)
+                            .testTag("category_badge")
+                    ) {
+                        Text(
+                            text = "📂 ${level.category}",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 10.sp,
+                            color = DoodleColors.InkBlack,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+
                     if (level.isBossLevel) {
                         SketchyContainer(
                             fillColor = Color(0xFFFFEBEE),
@@ -1615,16 +2398,43 @@ fun GameplayScreen(
                             strokeWidth = 1.6.dp,
                             shadowOffset = 1.5.dp,
                             modifier = Modifier
-                                .padding(bottom = 8.dp)
+                                .padding(bottom = 5.dp)
                                 .testTag("boss_warning_badge")
                         ) {
                             Text(
-                                text = "💣 BOSS: Hidden Bomb Keys = -2 ❤️",
+                                text = "💣 BOSS: 3 Bomb Keys = -2 ❤️",
                                 fontFamily = fontFamily,
                                 fontWeight = FontWeight.Black,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 color = DoodleColors.WrongRed,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    if (level.hasFrozenVowels) {
+                        val isFrozen = viewModel.areVowelsFrozen
+                        SketchyContainer(
+                            fillColor = if (isFrozen) DoodleColors.IceCubeCyan.copy(alpha = 0.45f) else Color(0xFFE8F5E9),
+                            borderColor = if (isFrozen) DoodleColors.IceCubeBorder else DoodleColors.CorrectGreen,
+                            cornerRadius = 12.dp,
+                            strokeWidth = 1.6.dp,
+                            shadowOffset = 1.5.dp,
+                            modifier = Modifier
+                                .padding(bottom = 5.dp)
+                                .testTag("frozen_vowels_badge")
+                        ) {
+                            Text(
+                                text = if (isFrozen) {
+                                    "🧊 Vowels Frozen (${viewModel.guessedConsonantCount}/${viewModel.requiredConsonantsToThaw} Consonants)"
+                                } else {
+                                    "🔥 Vowels Thawed!"
+                                },
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 10.sp,
+                                color = DoodleColors.InkBlack,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
                     }
@@ -1633,8 +2443,8 @@ fun GameplayScreen(
                         text = level.clue,
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        lineHeight = 25.sp,
+                        fontSize = 18.sp,
+                        lineHeight = 23.sp,
                         color = DoodleColors.InkBlack,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.testTag("clue_text")
@@ -1647,7 +2457,7 @@ fun GameplayScreen(
         FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 10.dp),
+                .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.Center,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -1662,10 +2472,11 @@ fun GameplayScreen(
             }
         }
 
-        // 4. Keyboard Area: Custom 4-row alphabetical grid (with red bomb dots on Boss Levels!)
+        // 4. Keyboard Area: Custom 4-row alphabetical grid (with Boss Bomb Keys & Frozen Vowels Ice Cubes!)
         DoodleAlphabetKeyboard(
             keyStatuses = viewModel.keyStatuses,
             bombLetters = viewModel.bombLetters.toSet(),
+            areVowelsFrozen = viewModel.areVowelsFrozen,
             fontFamily = fontFamily,
             onKeyPress = { ch -> viewModel.onLetterTapped(ch) }
         )
@@ -1746,13 +2557,14 @@ fun WordLetterSlot(
 }
 
 // ============================================================================
-// 8. CUSTOM 4-ROW ALPHABETICAL KEYBOARD (WITH BOSS LEVEL BOMB DOTS)
+// 8. CUSTOM 4-ROW ALPHABETICAL KEYBOARD (WITH BOSS BOMBS & FROZEN VOWEL ICE CUBES)
 // ============================================================================
 
 @Composable
 fun DoodleAlphabetKeyboard(
     keyStatuses: Map<Char, KeyStatus>,
     bombLetters: Set<Char>,
+    areVowelsFrozen: Boolean = false,
     fontFamily: FontFamily,
     onKeyPress: (Char) -> Unit
 ) {
@@ -1762,6 +2574,7 @@ fun DoodleAlphabetKeyboard(
         listOf('O', 'P', 'Q', 'R', 'S', 'T', 'U'),
         listOf('V', 'W', 'X', 'Y', 'Z')
     )
+    val vowels = setOf('A', 'E', 'I', 'O', 'U')
 
     BoxWithConstraints(
         modifier = Modifier
@@ -1787,10 +2600,12 @@ fun DoodleAlphabetKeyboard(
                     rowChars.forEach { ch ->
                         val status = keyStatuses[ch] ?: KeyStatus.DEFAULT
                         val isBomb = bombLetters.contains(ch)
+                        val isFrozenVowel = areVowelsFrozen && (ch in vowels) && status == KeyStatus.DEFAULT
                         DoodleLetterKey(
                             letter = ch,
                             status = status,
                             hasBombDot = isBomb,
+                            isFrozen = isFrozenVowel,
                             keySize = computedKeySize,
                             fontFamily = fontFamily,
                             onClick = { onKeyPress(ch) }
@@ -1807,6 +2622,7 @@ fun DoodleLetterKey(
     letter: Char,
     status: KeyStatus,
     hasBombDot: Boolean,
+    isFrozen: Boolean = false,
     keySize: Dp = 48.dp,
     fontFamily: FontFamily,
     onClick: () -> Unit,
@@ -1832,7 +2648,11 @@ fun DoodleLetterKey(
             )
             .testTag("key_$letter")
             .semantics {
-                contentDescription = if (hasBombDot) "Letter $letter Bomb Key" else "Letter $letter"
+                contentDescription = when {
+                    isFrozen -> "Letter $letter Frozen Vowel"
+                    hasBombDot -> "Letter $letter Bomb Key"
+                    else -> "Letter $letter"
+                }
             }
     ) {
         // Letter Text
@@ -1841,14 +2661,16 @@ fun DoodleLetterKey(
             fontFamily = fontFamily,
             fontWeight = FontWeight.Black,
             fontSize = 25.sp,
-            color = when (status) {
-                KeyStatus.CORRECT -> DoodleColors.CorrectGreen
-                KeyStatus.WRONG -> DoodleColors.InkBlack.copy(alpha = 0.55f)
-                KeyStatus.DEFAULT -> DoodleColors.InkBlack
+            color = when {
+                status == KeyStatus.CORRECT -> DoodleColors.CorrectGreen
+                status == KeyStatus.WRONG -> DoodleColors.InkBlack.copy(alpha = 0.55f)
+                isFrozen -> DoodleColors.IceCubeBorder
+                else -> DoodleColors.InkBlack
             }
         )
 
-        // Boss Level: Bomb dot is intentionally invisible so bomb letters remain hidden traps
+        // Boss Level: Bomb dot is intentionally invisible on unguessed keys per user preference,
+        // while keeping the testTag for automated tests
         if (hasBombDot) {
             Box(
                 modifier = Modifier
@@ -1856,6 +2678,18 @@ fun DoodleLetterKey(
                     .align(Alignment.TopEnd)
                     .testTag("bomb_dot_$letter")
             )
+        }
+
+        // Frozen Vowel Doodle Ice Cube Overlay (Levels 50+ until 3 consonants are guessed)
+        if (isFrozen) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(3.dp)
+                    .testTag("frozen_ice_$letter")
+            ) {
+                drawDoodleIceCubeOverlay()
+            }
         }
 
         // Hand-drawn Green Circle or Red Cross overlay
@@ -1874,6 +2708,42 @@ fun DoodleLetterKey(
             }
         }
     }
+}
+
+private fun DrawScope.drawDoodleIceCubeOverlay() {
+    val w = size.width
+    val h = size.height
+    val r = 8.dp.toPx()
+    // Translucent cyan ice block
+    drawRoundRect(
+        color = DoodleColors.IceCubeCyan.copy(alpha = 0.52f),
+        topLeft = Offset(w * 0.06f, h * 0.06f),
+        size = Size(w * 0.88f, h * 0.88f),
+        cornerRadius = CornerRadius(r, r)
+    )
+    // Sketchy frost border
+    drawRoundRect(
+        color = DoodleColors.IceCubeBorder,
+        topLeft = Offset(w * 0.06f, h * 0.06f),
+        size = Size(w * 0.88f, h * 0.88f),
+        cornerRadius = CornerRadius(r, r),
+        style = Stroke(width = 2.dp.toPx())
+    )
+    // Glossy white ice shine lines & frost crack
+    drawLine(
+        color = Color.White.copy(alpha = 0.85f),
+        start = Offset(w * 0.20f, h * 0.26f),
+        end = Offset(w * 0.42f, h * 0.16f),
+        strokeWidth = 2.2.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = Color.White.copy(alpha = 0.75f),
+        start = Offset(w * 0.65f, h * 0.78f),
+        end = Offset(w * 0.80f, h * 0.62f),
+        strokeWidth = 1.8.dp.toPx(),
+        cap = StrokeCap.Round
+    )
 }
 
 private fun DrawScope.drawHandDrawnGreenCircle() {
@@ -2184,7 +3054,27 @@ fun DynamicPerilSceneCanvas(
                     isGameOver = isGameOver
                 )
 
+                PerilType.GIANT_VENUS_FLYTRAP -> drawVenusFlytrapPeril(
+                    livesRemaining = livesRemaining,
+                    animatedLives = animatedLives,
+                    popTrigger = popTrigger,
+                    popProgress = popProgress.value,
+                    bobOffset = bobOffset,
+                    wavePhase = wavePhase,
+                    isGameOver = isGameOver
+                )
+
                 PerilType.DINO_STEALTH -> drawDinoStealthPeril(
+                    livesRemaining = livesRemaining,
+                    animatedLives = animatedLives,
+                    popTrigger = popTrigger,
+                    popProgress = popProgress.value,
+                    bobOffset = bobOffset,
+                    wavePhase = wavePhase,
+                    isGameOver = isGameOver
+                )
+
+                PerilType.LEAKY_SUBMARINE -> drawLeakySubmarinePeril(
                     livesRemaining = livesRemaining,
                     animatedLives = animatedLives,
                     popTrigger = popTrigger,
@@ -2196,7 +3086,7 @@ fun DynamicPerilSceneCanvas(
             }
         }
 
-        // Floating "-1 ❤️" or "-2 ❤️ 💥" + Peril Hit Effect (POP! / ZAP! / CRUMBLE! / CLANG!)
+        // Floating "-1 ❤️" or "-2 ❤️ 💥" + Peril Hit Effect (POP! / ZAP! / CRUMBLE! / SNAP! / CLANG! / PING!)
         if (popTrigger > 0 && popProgress.value < 0.95f) {
             val p = popProgress.value
             Column(
@@ -2230,7 +3120,10 @@ fun DynamicPerilSceneCanvas(
             exit = fadeOut() + scaleOut(),
             modifier = Modifier
                 .align(
-                    if (perilType == PerilType.UFO_ABDUCTION) Alignment.BottomCenter else Alignment.TopCenter
+                    if (perilType == PerilType.UFO_ABDUCTION || perilType == PerilType.LEAKY_SUBMARINE)
+                        Alignment.BottomCenter
+                    else
+                        Alignment.TopCenter
                 )
                 .padding(vertical = 4.dp, horizontal = 4.dp)
                 .testTag("panic_speech_bubble")
@@ -2273,7 +3166,7 @@ fun SketchySpeechBubble(
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 1: SHARK_BALLOONS (Levels 1, 5, 9...)
+// PERIL 1: SHARK_BALLOONS (Levels 1–16)
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawSharkBalloonsPeril(
     livesRemaining: Int,
@@ -2413,8 +3306,9 @@ private fun DrawScope.drawSharkBalloonsPeril(
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 2: UFO_ABDUCTION (Levels 2, 6, 10...)
-// Stickman on ground pulled upward step-by-step into UFO tractor beam at top
+// PERIL 2: UFO_ABDUCTION (Levels 17–33)
+// Stickman on grass pulled upward step-by-step into UFO tractor beam at top;
+// when lives <= 2, he floats mid-air by his untied shoelaces!
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawUfoAbductionPeril(
     livesRemaining: Int,
@@ -2496,6 +3390,7 @@ private fun DrawScope.drawUfoAbductionPeril(
     val startHandY = groundY - 76.dp.toPx()
     val abductedHandY = ufoY + 12.dp.toPx()
     val currentHandY = startHandY + (abductedHandY - startHandY) * dangerProgress + bobOffset
+    val stickmanScale = ((w / 420f) * (1f - dangerProgress * 0.25f)).coerceIn(0.55f, 1.1f)
 
     if (isGameOver || livesRemaining <= 0) {
         // 0-LIVES DEATH ANIMATION: Stickman tumbling 360° in zero-gravity at top of UFO beam!
@@ -2515,12 +3410,34 @@ private fun DrawScope.drawUfoAbductionPeril(
     } else {
         drawDoodleStickman(
             handAnchor = Offset(centerX, currentHandY),
-            scale = ((w / 420f) * (1f - dangerProgress * 0.25f)).coerceIn(0.55f, 1.1f),
+            scale = stickmanScale,
             isPanicking = livesRemaining <= 2,
             isSplashed = false,
             wavePhase = wavePhase,
             handsUp = dangerProgress > 0.1f
         )
+
+        // When lives <= 2, draw untied shoelaces dangling & being tugged upward by the tractor beam!
+        if (livesRemaining in 1..2) {
+            val footY = currentHandY + 72.dp.toPx() * stickmanScale
+            for (side in listOf(-1f, 1f)) {
+                val fx = centerX + side * 13.dp.toPx() * stickmanScale
+                val lacePath = Path().apply {
+                    moveTo(fx, footY)
+                    quadraticTo(
+                        fx + side * 10.dp.toPx(),
+                        footY - 14.dp.toPx() + sin(wavePhase * 4f + side) * 5.dp.toPx(),
+                        fx + side * 4.dp.toPx(),
+                        footY - 24.dp.toPx()
+                    )
+                }
+                drawPath(
+                    path = lacePath,
+                    color = DoodleColors.WrongRed,
+                    style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
+        }
     }
 
     // 4. Draw Doodle UFO Flying Saucer at top
@@ -2585,8 +3502,9 @@ private fun DrawScope.drawUfoAbductionPeril(
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 3: VOLCANO_BLOCKS (Levels 3, 7, 11...)
-// Stickman standing on a stack of 6 sketched stone crates over bubbling lava
+// PERIL 3: VOLCANO_BLOCKS / VOLCANO_LAVA (Levels 34–50)
+// Stickman standing on a stack of 6 sketched stone crates over bubbling lava;
+// when lives <= 2, his feet start smoking and he hops around!
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawVolcanoBlocksPeril(
     livesRemaining: Int,
@@ -2666,10 +3584,15 @@ private fun DrawScope.drawVolcanoBlocksPeril(
     val platformTopY = lavaY - animatedLives * crateH
     val stickmanScale = (w / 440f).coerceIn(0.65f, 1.05f)
     val feetHeight = 72.dp.toPx() * stickmanScale
+    val hotFootHop = if (livesRemaining in 1..2 && !isGameOver) {
+        -kotlin.math.abs(sin(wavePhase * 5f)) * 9.dp.toPx()
+    } else {
+        bobOffset * 0.4f
+    }
     val handY = if (isGameOver || livesRemaining <= 0) {
         lavaY - 18.dp.toPx()
     } else {
-        platformTopY - feetHeight + bobOffset * 0.4f
+        platformTopY - feetHeight + hotFootHop
     }
 
     drawDoodleStickman(
@@ -2680,6 +3603,21 @@ private fun DrawScope.drawVolcanoBlocksPeril(
         wavePhase = wavePhase,
         handsUp = false
     )
+
+    // Rising smoke puffs from Stickman's melting shoes when lives <= 2
+    if (livesRemaining in 1..2 && !isGameOver) {
+        for (puff in 0..3) {
+            val puffPhase = (wavePhase * 2f + puff * 1.3f) % (2f * PI.toFloat())
+            val progress = puffPhase / (2f * PI.toFloat())
+            val sx = centerX + (if (puff % 2 == 0) -12.dp.toPx() else 12.dp.toPx()) + sin(wavePhase * 3f + puff) * 4.dp.toPx()
+            val sy = platformTopY - 4.dp.toPx() - progress * 24.dp.toPx()
+            drawCircle(
+                color = Color.DarkGray.copy(alpha = (1f - progress) * 0.55f),
+                radius = (3.5f + progress * 4.5f).dp.toPx(),
+                center = Offset(sx, sy)
+            )
+        }
+    }
 
     // 3. Draw Bubbling Red/Orange Lava at bottom
     val lavaPath = Path().apply {
@@ -2727,7 +3665,312 @@ private fun DrawScope.drawVolcanoBlocksPeril(
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 4: DINO_STEALTH (Levels 4, 8, 12...)
+// PERIL 4: GIANT_VENUS_FLYTRAP (Levels 51–66)
+// Stickman suspended on a twisting vine being chewed by caterpillars;
+// each wrong guess snaps a vine node. When lives <= 2, the plant wears a bib
+// with a fork & knife and says: "Vegetarian option!"
+// ----------------------------------------------------------------------------
+private fun DrawScope.drawVenusFlytrapPeril(
+    livesRemaining: Int,
+    animatedLives: Float,
+    popTrigger: Int,
+    popProgress: Float,
+    bobOffset: Float,
+    wavePhase: Float,
+    isGameOver: Boolean
+) {
+    val w = size.width
+    val h = size.height
+    val centerX = w * 0.5f
+    val groundY = h * 0.88f
+    val trapCenterY = h * 0.75f
+
+    // 1. Twisting Jungle Vine from top canopy holding the stickman
+    val topCanopyY = h * 0.06f
+    val safeHandY = h * 0.25f
+    val perilHandY = h * 0.54f
+    val dropFraction = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
+    val currentHandY = if (isGameOver || livesRemaining <= 0) {
+        trapCenterY - 12.dp.toPx()
+    } else {
+        safeHandY + (perilHandY - safeHandY) * dropFraction + bobOffset * 0.6f
+    }
+
+    // Draw twisting vine segments with 6 leaf nodes (intact nodes = livesRemaining)
+    val vinePath = Path().apply {
+        moveTo(centerX, topCanopyY)
+        val segments = 6
+        val segH = (currentHandY - topCanopyY) / segments
+        for (i in 0 until segments) {
+            val sy = topCanopyY + i * segH
+            val ey = sy + segH
+            val curveDir = if (i % 2 == 0) 1f else -1f
+            quadraticTo(
+                centerX + curveDir * 12.dp.toPx(),
+                (sy + ey) * 0.5f,
+                centerX,
+                ey
+            )
+        }
+    }
+    drawPath(
+        path = vinePath,
+        color = DoodleColors.VineLeafGreen,
+        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+    )
+    drawPath(
+        path = vinePath,
+        color = DoodleColors.InkBlack,
+        style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+    )
+
+    // 6 Vine Nodes + Chewing Caterpillars
+    for (nodeIdx in 0 until 6) {
+        val nodeFrac = (nodeIdx + 0.5f) / 6f
+        val ny = topCanopyY + (currentHandY - topCanopyY) * nodeFrac
+        val side = if (nodeIdx % 2 == 0) 1f else -1f
+        val nx = centerX + side * 5.dp.toPx()
+        val isIntact = nodeIdx < livesRemaining
+
+        if (isIntact) {
+            // Leaf node
+            drawOval(
+                color = DoodleColors.FlytrapGreen,
+                topLeft = Offset(nx + side * 2.dp.toPx() - 6.dp.toPx(), ny - 4.dp.toPx()),
+                size = Size(12.dp.toPx(), 8.dp.toPx())
+            )
+            drawOval(
+                color = DoodleColors.InkBlack,
+                topLeft = Offset(nx + side * 2.dp.toPx() - 6.dp.toPx(), ny - 4.dp.toPx()),
+                size = Size(12.dp.toPx(), 8.dp.toPx()),
+                style = Stroke(width = 1.3.dp.toPx())
+            )
+            // Chewing caterpillar on the lowest intact vine node
+            if (nodeIdx == livesRemaining - 1) {
+                for (seg in 0..2) {
+                    val cx = nx + side * (10 + seg * 6).dp.toPx() + sin(wavePhase * 4f + seg) * 1.5.dp.toPx()
+                    val cy = ny + cos(wavePhase * 3f + seg) * 1.5.dp.toPx()
+                    drawCircle(
+                        color = if (seg % 2 == 0) DoodleColors.DoodleYellow else DoodleColors.CorrectGreen,
+                        radius = 4.dp.toPx(),
+                        center = Offset(cx, cy)
+                    )
+                    drawCircle(
+                        color = DoodleColors.InkBlack,
+                        radius = 4.dp.toPx(),
+                        center = Offset(cx, cy),
+                        style = Stroke(width = 1.2.dp.toPx())
+                    )
+                }
+            }
+        }
+    }
+
+    // Snapping vine leaf burst on wrong guess
+    if (popTrigger > 0 && popProgress < 0.9f) {
+        for (leaf in 0 until 6) {
+            val ang = (leaf * PI / 3.0).toFloat()
+            val lx = centerX + cos(ang) * (10.dp.toPx() + popProgress * 28.dp.toPx())
+            val ly = currentHandY - 18.dp.toPx() + sin(ang) * (8.dp.toPx() + popProgress * 22.dp.toPx())
+            drawCircle(
+                color = DoodleColors.CorrectGreen.copy(alpha = (1f - popProgress).coerceIn(0f, 1f)),
+                radius = 3.5.dp.toPx(),
+                center = Offset(lx, ly)
+            )
+        }
+    }
+
+    // 2. Draw Stickman hanging from the vine (or feet sticking out of Flytrap when Game Over)
+    val stickmanScale = (w / 430f).coerceIn(0.64f, 1.04f)
+    if (!isGameOver && livesRemaining > 0) {
+        drawDoodleStickman(
+            handAnchor = Offset(centerX, currentHandY),
+            scale = stickmanScale,
+            isPanicking = livesRemaining <= 2,
+            isSplashed = false,
+            wavePhase = wavePhase,
+            handsUp = true
+        )
+    }
+
+    // 3. Draw Giant Venus Flytrap at Bottom
+    val plantScale = (w / 360f).coerceIn(0.72f, 1.15f)
+    val jawSpread = when {
+        isGameOver || livesRemaining <= 0 -> 6.dp.toPx() // snapped shut!
+        livesRemaining <= 2 -> (28.dp.toPx() + sin(wavePhase * 3f) * 4.dp.toPx()) * plantScale
+        else -> 18.dp.toPx() * plantScale
+    }
+
+    // Thick stalk from ground up to trap head
+    drawLine(
+        color = DoodleColors.VineLeafGreen,
+        start = Offset(centerX, groundY),
+        end = Offset(centerX, trapCenterY),
+        strokeWidth = 9.dp.toPx() * plantScale,
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = DoodleColors.InkBlack,
+        start = Offset(centerX, groundY),
+        end = Offset(centerX, trapCenterY),
+        strokeWidth = 2.4.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+
+    // When lives <= 2: Plant wears a white dinner bib + holds a Fork & Knife!
+    if (livesRemaining <= 2) {
+        val bibW = 36.dp.toPx() * plantScale
+        val bibH = 26.dp.toPx() * plantScale
+        val bibPath = Path().apply {
+            moveTo(centerX - bibW * 0.5f, trapCenterY + 6.dp.toPx())
+            lineTo(centerX + bibW * 0.5f, trapCenterY + 6.dp.toPx())
+            quadraticTo(
+                centerX + bibW * 0.45f,
+                trapCenterY + 6.dp.toPx() + bibH,
+                centerX,
+                trapCenterY + 6.dp.toPx() + bibH
+            )
+            quadraticTo(
+                centerX - bibW * 0.45f,
+                trapCenterY + 6.dp.toPx() + bibH,
+                centerX - bibW * 0.5f,
+                trapCenterY + 6.dp.toPx()
+            )
+            close()
+        }
+        drawPath(path = bibPath, color = Color.White)
+        drawPath(
+            path = bibPath,
+            color = DoodleColors.InkBlack,
+            style = Stroke(width = 1.8.dp.toPx(), join = StrokeJoin.Round)
+        )
+        // Red heart/stripe on bib
+        drawCircle(
+            color = DoodleColors.WrongRed,
+            radius = 4.5.dp.toPx() * plantScale,
+            center = Offset(centerX, trapCenterY + 18.dp.toPx())
+        )
+
+        // Left vine-leaf holding a silver Fork
+        val forkX = centerX - 46.dp.toPx() * plantScale
+        val forkY = trapCenterY + sin(wavePhase * 4f) * 4.dp.toPx()
+        drawLine(
+            color = DoodleColors.VineLeafGreen,
+            start = Offset(centerX - 6.dp.toPx(), trapCenterY + 14.dp.toPx()),
+            end = Offset(forkX, forkY + 10.dp.toPx()),
+            strokeWidth = 4.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        // Fork handle & 3 tines
+        drawLine(
+            color = DoodleColors.SubmarineSteel,
+            start = Offset(forkX, forkY + 16.dp.toPx()),
+            end = Offset(forkX, forkY - 8.dp.toPx()),
+            strokeWidth = 3.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        for (tine in -1..1) {
+            val tx = forkX + tine * 3.5.dp.toPx()
+            drawLine(
+                color = DoodleColors.InkBlack,
+                start = Offset(tx, forkY - 4.dp.toPx()),
+                end = Offset(tx, forkY - 13.dp.toPx()),
+                strokeWidth = 1.6.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        }
+
+        // Right vine-leaf holding a silver Knife
+        val knifeX = centerX + 46.dp.toPx() * plantScale
+        val knifeY = trapCenterY - sin(wavePhase * 4f) * 4.dp.toPx()
+        drawLine(
+            color = DoodleColors.VineLeafGreen,
+            start = Offset(centerX + 6.dp.toPx(), trapCenterY + 14.dp.toPx()),
+            end = Offset(knifeX, knifeY + 10.dp.toPx()),
+            strokeWidth = 4.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        val bladePath = Path().apply {
+            moveTo(knifeX - 2.dp.toPx(), knifeY + 6.dp.toPx())
+            lineTo(knifeX - 2.dp.toPx(), knifeY - 14.dp.toPx())
+            quadraticTo(
+                knifeX + 6.dp.toPx(),
+                knifeY - 6.dp.toPx(),
+                knifeX + 3.dp.toPx(),
+                knifeY + 6.dp.toPx()
+            )
+            close()
+        }
+        drawPath(path = bladePath, color = DoodleColors.UfoSilver)
+        drawPath(path = bladePath, color = DoodleColors.InkBlack, style = Stroke(width = 1.5.dp.toPx()))
+    }
+
+    // Flytrap Jaws (Left & Right Lobe with red inner mouth and interlocking spikes)
+    val lobeW = 48.dp.toPx() * plantScale
+    // Red inner cavity
+    drawOval(
+        color = DoodleColors.FlytrapMouthPink,
+        topLeft = Offset(centerX - lobeW, trapCenterY - jawSpread),
+        size = Size(lobeW * 2f, jawSpread * 1.6f)
+    )
+    // Outer green lobes
+    drawArc(
+        color = DoodleColors.FlytrapGreen,
+        startAngle = 0f,
+        sweepAngle = 180f,
+        useCenter = true,
+        topLeft = Offset(centerX - lobeW, trapCenterY - jawSpread * 0.7f),
+        size = Size(lobeW * 2f, jawSpread * 1.7f)
+    )
+    drawOval(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(centerX - lobeW, trapCenterY - jawSpread),
+        size = Size(lobeW * 2f, jawSpread * 1.6f),
+        style = Stroke(width = 2.4.dp.toPx())
+    )
+    // Spiky interlocking flytrap cilia teeth along top rim
+    for (t in -4..4) {
+        val tx = centerX + t * (lobeW * 0.2f)
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(tx, trapCenterY - jawSpread * 0.85f),
+            end = Offset(tx, trapCenterY - jawSpread * 0.25f),
+            strokeWidth = 1.8.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
+
+    // If Game Over: Stickman's kicking legs sticking out of the closed Venus Flytrap!
+    if (isGameOver || livesRemaining <= 0) {
+        val kick = sin(wavePhase * 5f) * 8.dp.toPx()
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(centerX - 6.dp.toPx(), trapCenterY - 4.dp.toPx()),
+            end = Offset(centerX - 18.dp.toPx(), trapCenterY - 26.dp.toPx() + kick),
+            strokeWidth = 3.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(centerX + 6.dp.toPx(), trapCenterY - 4.dp.toPx()),
+            end = Offset(centerX + 18.dp.toPx(), trapCenterY - 26.dp.toPx() - kick),
+            strokeWidth = 3.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
+
+    // Ground line
+    drawLine(
+        color = DoodleColors.InkBlack,
+        start = Offset(w * 0.08f, groundY),
+        end = Offset(w * 0.92f, groundY),
+        strokeWidth = 2.4.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+}
+
+// ----------------------------------------------------------------------------
+// PERIL 5: DINO_STEALTH / SLEEPING_TREX (Levels 67–83)
 // Stickman tiptoeing next to a giant sculpted sleeping/roaring T-Rex + Noise Meter
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawDinoStealthPeril(
@@ -2791,7 +4034,7 @@ private fun DrawScope.drawDinoStealthPeril(
     val jawPivotY = groundY - 42.dp.toPx() * dinoScale
     val breathe = sin(wavePhase) * 2.5.dp.toPx()
 
-    // Smoothly interpolated jaw opening angle in degrees (0° sleeping -> 12° grumbling -> 28° roaring -> 38° snap!)
+    // Smoothly interpolated jaw opening angle in degrees
     val wakeProgress = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
     val upperJawTiltDeg = when {
         isGameOver || livesRemaining <= 0 -> 22f
@@ -2946,7 +4189,7 @@ private fun DrawScope.drawDinoStealthPeril(
         )
     }
 
-    // 3D. Articulated Upper Skull, Snout, Brow Ridge, Spikes & Eye (rotates upward around jawPivot)
+    // 3D. Articulated Upper Skull, Snout, Brow Ridge, Spikes & Eye
     withTransform({
         rotate(degrees = upperJawTiltDeg, pivot = Offset(jawPivotX, jawPivotY))
     }) {
@@ -2988,10 +4231,8 @@ private fun DrawScope.drawDinoStealthPeril(
 
         // Organic Bezier T-Rex Upper Snout + Raised Brow Ridge
         val skullPath = Path().apply {
-            // Start at back of skull
             moveTo(jawPivotX + 10.dp.toPx() * dinoScale, jawPivotY + breathY)
             lineTo(jawPivotX + 10.dp.toPx() * dinoScale, jawPivotY - skullH * 0.85f + breathY)
-            // Raised muscular brow bump over the eye
             cubicTo(
                 jawPivotX - 8.dp.toPx() * dinoScale,
                 jawPivotY - skullH * 1.18f + breathY,
@@ -3000,7 +4241,6 @@ private fun DrawScope.drawDinoStealthPeril(
                 jawPivotX - 44.dp.toPx() * dinoScale,
                 jawPivotY - skullH * 0.78f + breathY
             )
-            // Bridge of nose curving down to bulbous snout tip
             cubicTo(
                 jawPivotX - 68.dp.toPx() * dinoScale,
                 jawPivotY - skullH * 0.76f + breathY,
@@ -3009,7 +4249,6 @@ private fun DrawScope.drawDinoStealthPeril(
                 jawPivotX - snoutLen,
                 jawPivotY - 3.dp.toPx() * dinoScale + breathY
             )
-            // Wavy upper lip line back to jaw pivot
             quadraticTo(
                 jawPivotX - snoutLen * 0.5f,
                 jawPivotY + 3.dp.toPx() * dinoScale + breathY,
@@ -3025,7 +4264,7 @@ private fun DrawScope.drawDinoStealthPeril(
             style = Stroke(width = 2.6.dp.toPx(), join = StrokeJoin.Round)
         )
 
-        // Nostril & snorting steam puffs when waking up
+        // Nostril
         val nostrilCenter = Offset(
             jawPivotX - snoutLen * 0.82f,
             jawPivotY - skullH * 0.44f + breathY
@@ -3048,13 +4287,12 @@ private fun DrawScope.drawDinoStealthPeril(
             center = Offset(jawPivotX - snoutLen * 0.46f, jawPivotY - skullH * 0.25f + breathY)
         )
 
-        // Expressive T-Rex Eye under the brow ridge
+        // Expressive T-Rex Eye under the brow ridge (opens one giant angry eye when lives <= 2!)
         val eyeCenter = Offset(
             jawPivotX - 24.dp.toPx() * dinoScale,
             jawPivotY - skullH * 0.62f + breathY
         )
         if (livesRemaining >= 5) {
-            // Peaceful sleeping curved eyelid + eyelashes
             val sleepEyePath = Path().apply {
                 moveTo(eyeCenter.x - 8.dp.toPx() * dinoScale, eyeCenter.y)
                 quadraticTo(
@@ -3086,8 +4324,7 @@ private fun DrawScope.drawDinoStealthPeril(
                 )
             }
         } else {
-            val eyeR = (if (livesRemaining <= 2) 9.5f else 7.5f).dp.toPx() * dinoScale
-            // Sclera (yellow predator eye when angry, white when groggy)
+            val eyeR = (if (livesRemaining <= 2) 10.5f else 7.5f).dp.toPx() * dinoScale
             drawCircle(
                 color = if (livesRemaining <= 2) DoodleColors.DoodleYellow else Color.White,
                 radius = eyeR,
@@ -3099,13 +4336,11 @@ private fun DrawScope.drawDinoStealthPeril(
                 center = eyeCenter,
                 style = Stroke(width = 2.2.dp.toPx())
             )
-            // Vertical reptile slit pupil looking directly at the stickman!
             drawOval(
                 color = if (livesRemaining <= 2) DoodleColors.WrongRed else DoodleColors.InkBlack,
                 topLeft = Offset(eyeCenter.x - eyeR * 0.45f, eyeCenter.y - eyeR * 0.65f),
                 size = Size(eyeR * 0.42f, eyeR * 1.3f)
             )
-            // Angry furrowed brow line
             val browLine = Path().apply {
                 moveTo(eyeCenter.x - eyeR * 1.15f, eyeCenter.y - eyeR * 0.35f)
                 lineTo(eyeCenter.x + eyeR * 1.05f, eyeCenter.y - eyeR * 1.05f)
@@ -3141,6 +4376,195 @@ private fun DrawScope.drawDinoStealthPeril(
                 radius = (ring * 12.dp.toPx()) + popProgress * 24.dp.toPx(),
                 center = clangCenter,
                 style = Stroke(width = 2.4.dp.toPx())
+            )
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// PERIL 6: LEAKY_SUBMARINE (Levels 84–100)
+// Stickman trapped inside a glass submarine tank with 6 water levels & 6 bolts.
+// Each wrong guess pops a bolt and fills water by 1/6th. When lives <= 2, he is
+// treading water at the top with puffed cheeks!
+// ----------------------------------------------------------------------------
+private fun DrawScope.drawLeakySubmarinePeril(
+    livesRemaining: Int,
+    animatedLives: Float,
+    popTrigger: Int,
+    popProgress: Float,
+    bobOffset: Float,
+    wavePhase: Float,
+    isGameOver: Boolean
+) {
+    val w = size.width
+    val h = size.height
+    val centerX = w * 0.5f
+
+    val tankW = (w * 0.62f).coerceIn(100.dp.toPx(), 180.dp.toPx())
+    val tankH = (h * 0.72f).coerceIn(130.dp.toPx(), 230.dp.toPx())
+    val tankLeft = centerX - tankW * 0.5f
+    val tankTop = h * 0.14f
+    val tankBottom = tankTop + tankH
+    val cornerR = 20.dp.toPx()
+
+    // 1. Submarine Periscope at top of tank
+    val periPath = Path().apply {
+        moveTo(centerX, tankTop)
+        lineTo(centerX, tankTop - 16.dp.toPx())
+        lineTo(centerX + 18.dp.toPx(), tankTop - 16.dp.toPx())
+    }
+    drawPath(
+        path = periPath,
+        color = DoodleColors.SubmarineYellow,
+        style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+    drawPath(
+        path = periPath,
+        color = DoodleColors.InkBlack,
+        style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+
+    // 2. Glass Tank Interior Background
+    drawRoundRect(
+        color = Color(0xFFE0F7FA).copy(alpha = 0.55f),
+        topLeft = Offset(tankLeft, tankTop),
+        size = Size(tankW, tankH),
+        cornerRadius = CornerRadius(cornerR, cornerR)
+    )
+
+    // 3. Rising Water Level (fills 1/6th per wrong guess)
+    val waterFillFraction = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
+    val waterHeight = tankH * waterFillFraction
+    val waterSurfaceY = tankBottom - waterHeight
+
+    // Stickman inside the tank (rises to tread water at the top as water fills; puffed cheeks when lives <= 2!)
+    val stickmanScale = (w / 440f).coerceIn(0.62f, 0.98f)
+    val baseStandHandY = tankBottom - 76.dp.toPx() * stickmanScale
+    val treadHandY = (waterSurfaceY - 22.dp.toPx() * stickmanScale).coerceAtLeast(tankTop + 8.dp.toPx())
+    val stickmanHandY = if (waterFillFraction > 0.35f) {
+        treadHandY + sin(wavePhase * 3f) * 3.dp.toPx()
+    } else {
+        baseStandHandY + bobOffset * 0.3f
+    }
+
+    drawDoodleStickman(
+        handAnchor = Offset(centerX, stickmanHandY),
+        scale = stickmanScale,
+        isPanicking = livesRemaining <= 2,
+        isSplashed = isGameOver || livesRemaining <= 0,
+        wavePhase = wavePhase,
+        handsUp = waterFillFraction > 0.5f,
+        puffedCheeks = livesRemaining <= 2
+    )
+
+    // Draw Rising Water Body inside the Tank
+    if (waterFillFraction > 0.01f) {
+        val waterPath = Path().apply {
+            moveTo(tankLeft + 3.dp.toPx(), tankBottom - 3.dp.toPx())
+            lineTo(tankLeft + 3.dp.toPx(), waterSurfaceY)
+            var wx = tankLeft + 3.dp.toPx()
+            val step = 12.dp.toPx()
+            while (wx <= tankLeft + tankW - 3.dp.toPx()) {
+                val wy = waterSurfaceY + sin(wavePhase * 2f + wx * 0.08f) * 3.5.dp.toPx()
+                lineTo(wx, wy)
+                wx += step
+            }
+            lineTo(tankLeft + tankW - 3.dp.toPx(), tankBottom - 3.dp.toPx())
+            close()
+        }
+        drawPath(
+            path = waterPath,
+            color = DoodleColors.WaterBlue.copy(alpha = 0.55f)
+        )
+        drawLine(
+            color = DoodleColors.InkBlue,
+            start = Offset(tankLeft + 4.dp.toPx(), waterSurfaceY),
+            end = Offset(tankLeft + tankW - 4.dp.toPx(), waterSurfaceY),
+            strokeWidth = 2.dp.toPx()
+        )
+
+        // Rising underwater air bubbles
+        for (b in 0..4) {
+            val bx = tankLeft + tankW * (0.2f + b * 0.15f) + sin(wavePhase * 2f + b) * 4.dp.toPx()
+            val by = tankBottom - ((wavePhase * 22f + b * 19f) % (waterHeight.coerceAtLeast(12f)))
+            if (by > waterSurfaceY + 4.dp.toPx()) {
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.8f),
+                    radius = 3.dp.toPx(),
+                    center = Offset(bx, by)
+                )
+                drawCircle(
+                    color = DoodleColors.InkBlue,
+                    radius = 3.dp.toPx(),
+                    center = Offset(bx, by),
+                    style = Stroke(width = 1.dp.toPx())
+                )
+            }
+        }
+    }
+
+    // 4. 6 Water Level Gauge Tick Marks & 6 Submarine Frame Bolts
+    for (lvl in 1..5) {
+        val markY = tankBottom - (tankH * (lvl / 6f))
+        drawLine(
+            color = DoodleColors.InkBlack.copy(alpha = 0.35f),
+            start = Offset(tankLeft + 6.dp.toPx(), markY),
+            end = Offset(tankLeft + 18.dp.toPx(), markY),
+            strokeWidth = 1.5.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
+
+    //Outer Steel Tank Frame
+    drawRoundRect(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(tankLeft, tankTop),
+        size = Size(tankW, tankH),
+        cornerRadius = CornerRadius(cornerR, cornerR),
+        style = Stroke(width = 3.5.dp.toPx())
+    )
+
+    // 6 Brass Bolts along the sides of the tank (each wrong guess pops a bolt & leaks water!)
+    for (boltIdx in 0 until 6) {
+        val isLeft = boltIdx % 2 == 0
+        val row = boltIdx / 2
+        val boltX = if (isLeft) tankLeft else tankLeft + tankW
+        val boltY = tankBottom - tankH * (0.20f + row * 0.28f)
+        val isBoltIntact = boltIdx < livesRemaining
+
+        if (isBoltIntact) {
+            drawCircle(
+                color = DoodleColors.SubmarineYellow,
+                radius = 5.5.dp.toPx(),
+                center = Offset(boltX, boltY)
+            )
+            drawCircle(
+                color = DoodleColors.InkBlack,
+                radius = 5.5.dp.toPx(),
+                center = Offset(boltX, boltY),
+                style = Stroke(width = 1.8.dp.toPx())
+            )
+        } else {
+            // Popped bolt hole spraying a high-pressure water jet into the tank!
+            val jetDir = if (isLeft) 1f else -1f
+            drawCircle(
+                color = DoodleColors.InkBlack,
+                radius = 3.5.dp.toPx(),
+                center = Offset(boltX, boltY)
+            )
+            val jetPath = Path().apply {
+                moveTo(boltX, boltY)
+                quadraticTo(
+                    boltX + jetDir * 18.dp.toPx(),
+                    boltY - 6.dp.toPx() + sin(wavePhase * 5f + boltIdx) * 3.dp.toPx(),
+                    boltX + jetDir * 28.dp.toPx(),
+                    boltY + 10.dp.toPx()
+                )
+            }
+            drawPath(
+                path = jetPath,
+                color = DoodleColors.WaterBlue,
+                style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round)
             )
         }
     }
@@ -3214,7 +4638,8 @@ private fun DrawScope.drawDoodleStickman(
     isPanicking: Boolean,
     isSplashed: Boolean,
     wavePhase: Float,
-    handsUp: Boolean = true
+    handsUp: Boolean = true,
+    puffedCheeks: Boolean = false
 ) {
     val strokeW = (3.2.dp.toPx() * scale).coerceAtLeast(2.5.dp.toPx())
     val headRadius = 13.dp.toPx() * scale
@@ -3332,7 +4757,23 @@ private fun DrawScope.drawDoodleStickman(
         center = Offset(headCenter.x + eyeOffsetX, eyeY)
     )
 
-    if (isPanicking || isSplashed) {
+    if (puffedCheeks) {
+        // Puffed out cheeks holding breath in Leaky Submarine!
+        val cheekR = 4.2.dp.toPx() * scale
+        val leftCheek = Offset(headCenter.x - headRadius * 0.62f, headCenter.y + headRadius * 0.25f)
+        val rightCheek = Offset(headCenter.x + headRadius * 0.62f, headCenter.y + headRadius * 0.25f)
+        drawCircle(color = Color(0xFFB3E5FC), radius = cheekR, center = leftCheek)
+        drawCircle(color = DoodleColors.InkBlack, radius = cheekR, center = leftCheek, style = Stroke(width = 1.4.dp.toPx()))
+        drawCircle(color = Color(0xFFB3E5FC), radius = cheekR, center = rightCheek)
+        drawCircle(color = DoodleColors.InkBlack, radius = cheekR, center = rightCheek, style = Stroke(width = 1.4.dp.toPx()))
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(leftCheek.x + cheekR * 0.7f, leftCheek.y),
+            end = Offset(rightCheek.x - cheekR * 0.7f, rightCheek.y),
+            strokeWidth = 1.6.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    } else if (isPanicking || isSplashed) {
         drawCircle(
             color = DoodleColors.InkBlack,
             radius = 3.2.dp.toPx() * scale,
@@ -4182,6 +5623,7 @@ fun GameOverOverlay(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TwoPlayerSetupScreen(
     fontFamily: FontFamily,
@@ -4289,12 +5731,13 @@ fun TwoPlayerSetupScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    PerilType.entries.forEachIndexed { idx, p ->
-                        val lvlNum = idx + 1
+                    PerilType.entries.forEach { p ->
+                        val lvlNum = p.representativeLevel
                         val selected = selectedPerilNum == lvlNum
                         SketchyContainer(
                             fillColor = if (selected) DoodleColors.DoodleYellow else DoodleColors.PaperOffWhite,
@@ -4304,10 +5747,10 @@ fun TwoPlayerSetupScreen(
                             modifier = Modifier.height(34.dp)
                         ) {
                             Text(
-                                text = p.displayName.substringBefore(" "),
+                                text = p.displayName,
                                 fontFamily = fontFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 color = DoodleColors.InkBlack,
                                 modifier = Modifier.padding(horizontal = 8.dp)
                             )

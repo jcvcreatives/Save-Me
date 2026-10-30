@@ -21,15 +21,19 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `perilType rotates every level mod 4 and contextual panic lines match`() {
+    fun `perilType maps across 6 worlds for 100 levels and contextual panic lines match`() {
         assertEquals(PerilType.SHARK_BALLOONS, PerilType.forLevel(1))
-        assertEquals(PerilType.UFO_ABDUCTION, PerilType.forLevel(2))
-        assertEquals(PerilType.VOLCANO_BLOCKS, PerilType.forLevel(3))
-        assertEquals(PerilType.DINO_STEALTH, PerilType.forLevel(4))
-        assertEquals(PerilType.SHARK_BALLOONS, PerilType.forLevel(5))
+        assertEquals(PerilType.SHARK_BALLOONS, PerilType.forLevel(16))
+        assertEquals(PerilType.UFO_ABDUCTION, PerilType.forLevel(17))
+        assertEquals(PerilType.VOLCANO_BLOCKS, PerilType.forLevel(34))
+        assertEquals(PerilType.GIANT_VENUS_FLYTRAP, PerilType.forLevel(51))
+        assertEquals(PerilType.DINO_STEALTH, PerilType.forLevel(67))
+        assertEquals(PerilType.LEAKY_SUBMARINE, PerilType.forLevel(84))
+        assertEquals(PerilType.LEAKY_SUBMARINE, PerilType.forLevel(100))
 
-        assertEquals("Not the alien probe!", PerilType.UFO_ABDUCTION.panicBubbleText)
+        assertEquals("Beam me up... wait, no!", PerilType.UFO_ABDUCTION.panicBubbleText)
         assertEquals("My shoes are melting!", PerilType.VOLCANO_BLOCKS.panicBubbleText)
+        assertEquals("Vegetarian option!", PerilType.GIANT_VENUS_FLYTRAP.panicBubbleText)
         assertEquals("Shhh! Don't wake Rex!", PerilType.DINO_STEALTH.panicBubbleText)
     }
 
@@ -48,17 +52,17 @@ class ExampleRobolectricTest {
         assertEquals(RoundOutcome.GAME_OVER, vm.roundOutcome)
         assertEquals(DoodleSoundEffect.SPLASH, ProceduralSoundEngine.lastPlayedEffect)
 
-        // Level 3: VOLCANO_BLOCKS -> Wrong guess plays CRUNCH
-        vm.selectCampaignLevelNumber(3)
+        // Level 34: VOLCANO_BLOCKS -> Wrong guess plays CRUNCH
+        vm.selectCampaignLevelNumber(34)
         vm.onLetterTapped('Z')
         assertEquals(DoodleSoundEffect.CRUNCH, ProceduralSoundEngine.lastPlayedEffect)
     }
 
     @Test
-    fun `campaign completion counter increments when campaign levels are solved`() {
+    fun `campaign completion counter increments across 100 campaign levels and frozen vowels thaw after 3 consonants`() {
         val vm = WordGameViewModel()
         assertEquals(0, vm.completedCampaignCount)
-        assertEquals(20, vm.totalCampaignCount)
+        assertEquals(100, vm.totalCampaignCount)
 
         // Solve Level 1 (DIAMOND)
         vm.selectCampaignLevelNumber(1)
@@ -66,10 +70,17 @@ class ExampleRobolectricTest {
         assertEquals(RoundOutcome.VICTORY, vm.roundOutcome)
         assertEquals(1, vm.completedCampaignCount)
 
-        // Proceed to Level 2 (CHINA) and solve it
-        vm.proceedAfterVictory()
-        "CHINA".toSet().forEach { vm.onLetterTapped(it) }
-        assertEquals(2, vm.completedCampaignCount)
+        // Level 51 (HIMALAYAS) has Frozen Vowels until 3 consonants are guessed
+        vm.selectCampaignLevelNumber(51)
+        assertTrue(vm.areVowelsFrozen)
+        vm.onLetterTapped('A') // Frozen vowel cannot be guessed yet
+        assertTrue('A' !in vm.revealedWordChars)
+
+        // Guess 3 consonants: H, M, L -> Vowels thaw!
+        listOf('H', 'M', 'L').forEach { vm.onLetterTapped(it) }
+        assertEquals(false, vm.areVowelsFrozen)
+        vm.onLetterTapped('A')
+        assertTrue('A' in vm.revealedWordChars)
     }
 
     @Test
