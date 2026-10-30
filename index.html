@@ -71,13 +71,29 @@
     .app-shell {
       position: relative;
       width: 100%;
-      max-width: 520px;
+      max-width: 540px;
       height: 100dvh;
-      max-height: 920px;
+      max-height: 940px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 12px 16px 14px;
+      padding: clamp(6px, 1.5vh, 14px) clamp(10px, 3vw, 18px);
+      margin: 0 auto;
+    }
+
+    @media (min-width: 768px) and (min-height: 640px) {
+      .app-shell {
+        max-width: 600px;
+      }
+    }
+
+    @media (max-height: 670px) {
+      .upper-split { min-height: 145px !important; max-height: 205px !important; }
+      .kb-key { width: 38px !important; height: 38px !important; font-size: 18px !important; }
+      .powerup-wrap { height: 56px !important; }
+      .powerup-circle { width: 46px !important; height: 46px !important; font-size: 20px !important; }
+      .menu-btn { height: 46px !important; font-size: 18px !important; }
+      .word-letter-col { font-size: 30px !important; }
     }
 
     /* Hand-sketched box style */
@@ -632,6 +648,16 @@
       </div>
 
       <div class="menu-buttons">
+        <div class="sketch-box" style="padding:8px 14px;border-radius:16px;width:100%;">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;margin-bottom:5px;">
+            <span>⭐ Campaign Progress</span>
+            <span id="menuCampaignProgressText" style="color:var(--ink-blue);">0 / 20 Completed</span>
+          </div>
+          <div class="progress-track" style="height:14px;">
+            <div id="menuCampaignProgressFill" class="progress-fill" style="background:var(--correct-green);width:0%;"></div>
+          </div>
+        </div>
+
         <button class="sketch-box sketch-btn sketch-yellow menu-btn" onclick="startCampaign()">
           <span id="menuLevelBtnText">Level 1</span>
           <small id="menuPerilSubText">Shark &amp; Balloons</small>
@@ -1020,6 +1046,7 @@
     let coins = 1231;
     let campaignIdx = 0;
     let adventureIdx = 0;
+    let completedCampaignSet = new Set();
     let freePotions = 2;
     let perfectCount = 3;
     let streak = 2;
@@ -1030,11 +1057,46 @@
 
     let activeLevel = CAMPAIGN_LEVELS[0];
     let lives = 6;
+    let smoothLives = 6.0;
     let mistakes = 0;
     let keyStatuses = {};
     let revealed = new Set();
     let bombLetters = new Set();
     let popBurstTimer = 0;
+    let shakeTimer = 0;
+    let particles = [];
+    let floatingHits = [];
+    let lastFrameMs = performance.now();
+
+    function spawnDamageParticles(perilId, isBomb) {
+      const count = isBomb ? 20 : 12;
+      const colors = perilId === 'SHARK_BALLOONS'
+        ? BALLOON_COLORS
+        : perilId === 'UFO_ABDUCTION'
+          ? ['#76FF03', '#80DEEA', '#FFD166']
+          : perilId === 'VOLCANO_BLOCKS'
+            ? ['#A1887F', '#FF5722', '#FFD166', '#D7CCC8']
+            : ['#E74C3C', '#FFD166', '#9CCC65'];
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+        const speed = 45 + Math.random() * 95;
+        particles.push({
+          rx: 0.48 + (Math.random() - 0.5) * 0.16,
+          ry: 0.42 + (Math.random() - 0.5) * 0.16,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 30,
+          size: 3.5 + Math.random() * 4.5,
+          color: colors[i % colors.length],
+          life: 1.0
+        });
+      }
+      floatingHits.push({
+        text: isBomb ? '-2 ❤️ 💥' : '-1 ❤️',
+        rx: 0.52,
+        ry: 0.36,
+        life: 1.0
+      });
+    }
 
     function showToast(msg) {
       const el = document.getElementById('toastBanner');
@@ -1047,8 +1109,13 @@
     function updateMenuUI() {
       const lvlNum = campaignIdx + 1;
       const peril = getPerilForLevel(lvlNum);
+      const totalLevels = CAMPAIGN_LEVELS.length;
+      const doneCount = completedCampaignSet.size;
+
       document.getElementById('menuCoinText').textContent = coins;
       document.getElementById('gameCoinText').textContent = coins;
+      document.getElementById('menuCampaignProgressText').textContent = `${doneCount} / ${totalLevels} Completed`;
+      document.getElementById('menuCampaignProgressFill').style.width = `${(doneCount / totalLevels) * 100}%`;
       document.getElementById('menuLevelBtnText').textContent =
         (lvlNum % 5 === 0) ? `Level ${lvlNum} (BOSS 💣)` : `Level ${lvlNum}`;
       document.getElementById('menuPerilSubText').textContent = peril.name;
@@ -1071,10 +1138,14 @@
     function loadLevel(level) {
       activeLevel = level;
       lives = 6;
+      smoothLives = 6.0;
       mistakes = 0;
       keyStatuses = {};
       revealed = new Set();
       bombLetters = new Set();
+      particles = [];
+      floatingHits = [];
+      shakeTimer = 0;
 
       if (isBoss(level)) {
         const targetSet = new Set(level.word.toUpperCase().split(''));
@@ -1228,6 +1299,8 @@
         const dmg = isBomb ? 2 : 1;
         lives = Math.max(0, lives - dmg);
         popBurstTimer = 1.0;
+        shakeTimer = isBomb ? 0.48 : 0.32;
+        spawnDamageParticles(peril.id, isBomb);
 
         if (isBomb) {
           showToast(`💥 BOMB LETTER '${ch}'! -2 ❤️`);
@@ -1247,6 +1320,10 @@
     function checkVictory() {
       const uniqueChars = Array.from(new Set(activeLevel.word.toUpperCase().split('')));
       if (uniqueChars.every(c => revealed.has(c))) {
+        if (!activeLevel.isAdventure && activeLevel.number > 0) {
+          const normLvl = ((activeLevel.number - 1) % CAMPAIGN_LEVELS.length) + 1;
+          completedCampaignSet.add(normLvl);
+        }
         if (mistakes === 0) perfectCount++;
         streak++;
         if (streak > maxStreak) maxStreak = streak;
@@ -1396,24 +1473,49 @@
     }
 
     // =========================================================================
-    // 3. PROCEDURAL CANVAS RENDERER (SHARK, UFO, VOLCANO CRATES, SLEEPING T-REX)
+    // 3. HD HIGH-DPI PROCEDURAL CANVAS RENDERER (60FPS + SCULPTED T-REX)
     // =========================================================================
+    function syncCanvasHD(canvas, fallbackW, fallbackH) {
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const rect = canvas.getBoundingClientRect();
+      const cssW = rect.width > 20 ? rect.width : fallbackW;
+      const cssH = rect.height > 20 ? rect.height : fallbackH;
+      const targetW = Math.round(cssW * dpr);
+      const targetH = Math.round(cssH * dpr);
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { ctx, w: cssW, h: cssH };
+    }
+
     function drawStickman(ctx, x, handY, scale, panicking, handsUp, t) {
       ctx.save();
       ctx.strokeStyle = '#1E1E1E';
       ctx.lineWidth = 3 * scale;
       ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
       const shoulderY = handY + 20 * scale;
       const headY = shoulderY - 16 * scale;
       const hipY = shoulderY + 26 * scale;
 
+      // Ground/floating shadow
+      ctx.fillStyle = 'rgba(30, 30, 30, 0.08)';
+      ctx.beginPath();
+      ctx.ellipse(x, hipY + 25 * scale, 14 * scale, 3.5 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+
       // Left arm
       ctx.beginPath();
       ctx.moveTo(x, shoulderY);
       if (handsUp) {
-        ctx.lineTo(x - 7 * scale, handY + 8 * scale);
+        ctx.lineTo(x - 8 * scale, handY + 9 * scale);
         ctx.lineTo(x, handY);
+      } else if (panicking) {
+        ctx.lineTo(x - 19 * scale, shoulderY - 9 * scale + Math.cos(t * 9) * 7 * scale);
       } else {
         ctx.lineTo(x - 15 * scale, shoulderY + 12 * scale + Math.sin(t * 3) * 5 * scale);
       }
@@ -1423,17 +1525,17 @@
       ctx.beginPath();
       ctx.moveTo(x, shoulderY);
       if (panicking) {
-        ctx.lineTo(x + 20 * scale, shoulderY - 10 * scale + Math.sin(t * 6) * 8 * scale);
+        ctx.lineTo(x + 20 * scale, shoulderY - 10 * scale + Math.sin(t * 9) * 8 * scale);
       } else if (handsUp) {
-        ctx.lineTo(x + 7 * scale, handY + 8 * scale);
+        ctx.lineTo(x + 8 * scale, handY + 9 * scale);
         ctx.lineTo(x, handY);
       } else {
         ctx.lineTo(x + 15 * scale, shoulderY + 12 * scale + Math.cos(t * 3) * 5 * scale);
       }
       ctx.stroke();
 
-      // Torso & Legs
-      const kick = panicking ? Math.sin(t * 8) * 7 * scale : Math.sin(t * 2.5) * 3 * scale;
+      // Torso & Animated Legs
+      const kick = panicking ? Math.sin(t * 10) * 7.5 * scale : Math.sin(t * 2.6) * 3.2 * scale;
       ctx.beginPath();
       ctx.moveTo(x, shoulderY);
       ctx.lineTo(x, hipY);
@@ -1443,105 +1545,487 @@
       ctx.lineTo(x + 12 * scale, hipY + 20 * scale - kick);
       ctx.stroke();
 
-      // Head
+      // Head with subtle sketchy rim
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.arc(x, headY, 12 * scale, 0, Math.PI * 2);
+      ctx.arc(x, headY, 12.5 * scale, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
-      // Eyes & Mouth
+      // Eyes & Expressive Mouth
       ctx.fillStyle = '#1E1E1E';
-      ctx.beginPath();
-      ctx.arc(x - 4 * scale, headY - 2 * scale, 1.8 * scale, 0, Math.PI * 2);
-      ctx.arc(x + 4 * scale, headY - 2 * scale, 1.8 * scale, 0, Math.PI * 2);
-      ctx.fill();
+      if (panicking) {
+        ctx.beginPath();
+        ctx.arc(x - 4.2 * scale, headY - 2 * scale, 2.3 * scale, 0, Math.PI * 2);
+        ctx.arc(x + 4.2 * scale, headY - 2 * scale, 2.3 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        // Sweat drop
+        ctx.fillStyle = '#4FC3F7';
+        ctx.beginPath();
+        ctx.ellipse(x + 11 * scale, headY - 6 * scale + ((t * 18) % 8), 2 * scale, 3.2 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(x - 4 * scale, headY - 2 * scale, 1.8 * scale, 0, Math.PI * 2);
+        ctx.arc(x + 4 * scale, headY - 2 * scale, 1.8 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       ctx.beginPath();
       if (panicking) {
-        ctx.arc(x, headY + 4 * scale, 3 * scale, 0, Math.PI * 2);
+        ctx.arc(x, headY + 4.2 * scale, 3.3 * scale, 0, Math.PI * 2);
       } else {
-        ctx.arc(x, headY + 2 * scale, 4.5 * scale, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.arc(x, headY + 1.8 * scale, 4.8 * scale, 0.15 * Math.PI, 0.85 * Math.PI);
       }
       ctx.stroke();
       ctx.restore();
     }
 
-    function renderPerilScene(canvas, peril, livesCount, isPreview, t) {
-      const ctx = canvas.getContext('2d');
-      const w = canvas.width;
-      const h = canvas.height;
+    function drawSculptedDinoPeril(ctx, w, h, livesCount, smoothL, isPreview, t) {
+      const groundY = h * 0.85;
+      const noise = 6 - livesCount;
+      const smoothDanger = Math.min(1, Math.max(0, (6 - smoothL) / 6));
+      const DinoGreen = '#689F38';
+      const DinoLightGreen = '#9CCC65';
+      const DinoDarkScale = '#33691E';
+
+      // Ground sketch line & pebbles
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 2.6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, groundY);
+      ctx.lineTo(w, groundY);
+      ctx.stroke();
+
+      for (let i = 0; i < 6; i++) {
+        const px = w * (0.08 + i * 0.16);
+        ctx.strokeStyle = 'rgba(30,30,30,0.35)';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(px, groundY + 6 + (i % 2) * 4);
+        ctx.lineTo(px + 12, groundY + 6 + (i % 2) * 4);
+        ctx.stroke();
+      }
+
+      // 6-Bar Noise Meter at Top Left
+      const meterX = 12;
+      const meterY = 12;
+      ctx.font = '700 10px var(--font-main)';
+      ctx.fillStyle = '#1E1E1E';
+      ctx.fillText('NOISE METER', meterX, meterY + 8);
+      for (let i = 0; i < 6; i++) {
+        const active = i < noise;
+        const bh = 9 + i * 2.6;
+        const bx = meterX + i * 16;
+        const by = meterY + 30 - bh;
+        ctx.fillStyle = active ? (i < 2 ? '#4CAF50' : i < 4 ? '#FFD166' : '#E74C3C') : '#FFFFFF';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, 12.5, bh, 2.5);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Stickman tiptoeing on left
+      const stickX = w * 0.23;
+      const stickFootY = groundY - 4;
+      const stickScale = Math.min(0.86, w / 290);
+      const handY = stickFootY - 64 * stickScale + Math.sin(t * 2.2) * 3;
+      drawStickman(ctx, stickX, handY, stickScale, !isPreview && livesCount <= 2, false, t);
+
+      // Clumsy noise rings when noise > 0
+      if (!isPreview && noise > 0) {
+        const pulse = (t * 2.2) % 1;
+        ctx.strokeStyle = `rgba(231, 76, 60, ${(1 - pulse) * 0.55})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(stickX + 8, stickFootY - 6, 10 + pulse * 26, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // =========================================================
+      // ORGANIC BEZIER-SCULPTED T-REX (Right Half)
+      // =========================================================
+      const isAwake = !isPreview && livesCount <= 2;
+      const isStirring = !isPreview && livesCount <= 4;
+      const breath = Math.sin(t * (isAwake ? 6 : 2)) * (isAwake ? 4.5 : 2.5);
+      const jawAngleDeg = isAwake
+        ? 22 + Math.sin(t * 9) * 5
+        : isStirring
+          ? 5 + Math.sin(t * 3) * 2
+          : 0;
+
+      const s = Math.min(1.05, Math.max(0.72, w / 265));
+      const headPivotX = w * 0.67;
+      const headPivotY = groundY - 56 * s + breath * 0.5;
+
+      // 1. Curved Muscular Neck & Back Torso
+      ctx.fillStyle = DinoGreen;
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(w * 1.03, groundY);
+      ctx.bezierCurveTo(w * 0.98, groundY - 52 * s, headPivotX + 42 * s, headPivotY - 26 * s, headPivotX + 8 * s, headPivotY - 12 * s);
+      ctx.lineTo(headPivotX - 8 * s, headPivotY + 18 * s);
+      ctx.bezierCurveTo(headPivotX + 6 * s, groundY - 18 * s, w * 0.60, groundY - 6 * s, w * 0.58, groundY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 2. Ribbed Light-Green Underbelly Patch
+      ctx.fillStyle = DinoLightGreen;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(headPivotX - 6 * s, headPivotY + 15 * s);
+      ctx.bezierCurveTo(headPivotX + 12 * s, headPivotY + 26 * s, w * 0.72, groundY - 10 * s, w * 0.70, groundY);
+      ctx.lineTo(w * 0.58, groundY);
+      ctx.bezierCurveTo(w * 0.60, groundY - 12 * s, headPivotX - 8 * s, headPivotY + 24 * s, headPivotX - 6 * s, headPivotY + 15 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      for (let r = 1; r <= 3; r++) {
+        const ry = headPivotY + (18 + r * 10) * s;
+        if (ry < groundY - 4) {
+          ctx.beginPath();
+          ctx.moveTo(headPivotX - (4 - r * 2) * s, ry);
+          ctx.lineTo(headPivotX + (12 + r * 3) * s, ry + 3 * s);
+          ctx.stroke();
+        }
+      }
+
+      // 3. Cute Tiny T-Rex Forearm & Claws
+      const armX = headPivotX - 2 * s;
+      const armY = headPivotY + 24 * s;
+      if (armY < groundY - 8) {
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 4.5 * s;
+        ctx.beginPath();
+        ctx.moveTo(armX + 6 * s, armY);
+        ctx.lineTo(armX - 11 * s, armY + 7 * s);
+        ctx.lineTo(armX - 16 * s, armY + 2 * s);
+        ctx.stroke();
+
+        ctx.strokeStyle = DinoGreen;
+        ctx.lineWidth = 2.6 * s;
+        ctx.beginPath();
+        ctx.moveTo(armX + 6 * s, armY);
+        ctx.lineTo(armX - 11 * s, armY + 7 * s);
+        ctx.lineTo(armX - 16 * s, armY + 2 * s);
+        ctx.stroke();
+      }
+
+      // 4. Dorsal Spikes along Back of Neck
+      const spikes = [
+        [headPivotX + 20 * s, headPivotY - 22 * s],
+        [headPivotX + 35 * s, headPivotY - 14 * s],
+        [headPivotX + 48 * s, headPivotY - 2 * s]
+      ];
+      ctx.fillStyle = DinoDarkScale;
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 2;
+      spikes.forEach(([sx, sy]) => {
+        ctx.beginPath();
+        ctx.moveTo(sx - 6 * s, sy + 6 * s);
+        ctx.lineTo(sx + 4 * s, sy - 9 * s);
+        ctx.lineTo(sx + 10 * s, sy + 8 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+
+      // 5. Lower Hinged Jaw (Rotates Downward When Roaring)
+      ctx.save();
+      ctx.translate(headPivotX, headPivotY + 6 * s);
+      ctx.rotate((-jawAngleDeg * 0.65 * Math.PI) / 180);
+
+      // Pink roaring tongue inside mouth
+      if (jawAngleDeg > 6) {
+        ctx.fillStyle = '#E74C3C';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(-10 * s, 2 * s);
+        ctx.bezierCurveTo(-28 * s, -8 * s, -44 * s, -2 * s, -52 * s, 6 * s);
+        ctx.lineTo(-16 * s, 8 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Lower teeth
+      const lowerTeethCount = isAwake ? 5 : 3;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 1.6;
+      for (let i = 0; i < lowerTeethCount; i++) {
+        const tx = (-16 - i * 11.5) * s;
+        const ty = 3 * s;
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - 4.5 * s, ty - 10 * s);
+        ctx.lineTo(tx - 9 * s, ty + 1 * s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Sculpted lower mandible
+      ctx.fillStyle = DinoLightGreen;
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(8 * s, 0);
+      ctx.lineTo(-64 * s, 2 * s);
+      ctx.bezierCurveTo(-72 * s, 3 * s, -74 * s, 14 * s, -62 * s, 18 * s);
+      ctx.bezierCurveTo(-38 * s, 23 * s, -12 * s, 19 * s, 10 * s, 12 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // 6. Upper Sculpted Skull & Snout (Rotates Upward When Roaring)
+      ctx.save();
+      ctx.translate(headPivotX, headPivotY);
+      ctx.rotate((jawAngleDeg * 0.85 * Math.PI) / 180);
+
+      // Upper serrated teeth along gumline
+      const upperTeethCount = isAwake ? 6 : 4;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 1.7;
+      for (let i = 0; i < upperTeethCount; i++) {
+        const tx = (-14 - i * 10.5) * s;
+        const ty = 4 * s;
+        const toothLen = (i === 0 || i === 2 ? 12.5 : 9.5) * s;
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - 4.5 * s, ty + toothLen);
+        ctx.lineTo(tx - 9 * s, ty);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Main Sculpted Upper T-Rex Skull (Brow ridge + rounded nasal boss)
+      ctx.fillStyle = DinoGreen;
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(22 * s, 6 * s);
+      ctx.bezierCurveTo(26 * s, -18 * s, 14 * s, -34 * s, -4 * s, -32 * s);
+      ctx.bezierCurveTo(-12 * s, -40 * s, -26 * s, -38 * s, -32 * s, -28 * s);
+      ctx.bezierCurveTo(-48 * s, -27 * s, -68 * s, -24 * s, -75 * s, -12 * s);
+      ctx.bezierCurveTo(-80 * s, -2 * s, -75 * s, 6 * s, -65 * s, 6 * s);
+      ctx.bezierCurveTo(-42 * s, 8 * s, -18 * s, 4 * s, 22 * s, 6 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Decorative scales on cheek & snout
+      ctx.fillStyle = DinoDarkScale;
+      [[-2, -16, 4.5], [8, -10, 3.8], [4, -22, 3.2], [-42, -16, 3.2]].forEach(([cx, cy, cr]) => {
+        ctx.beginPath();
+        ctx.arc(cx * s, cy * s, cr * s, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Nostril oval with snorting steam when stirring/awake
+      ctx.fillStyle = '#1E1E1E';
+      ctx.beginPath();
+      ctx.ellipse(-62 * s, -12 * s, 3.5 * s, 2.3 * s, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Eye socket (Sleeping curved lash vs Fierce Yellow Reptile Slit Eye)
+      const eyeX = -20 * s;
+      const eyeY = -20 * s;
+      if (isAwake) {
+        ctx.fillStyle = '#FFD166';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeY, 8 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Red outer iris ring
+        ctx.strokeStyle = '#E74C3C';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeY, 5.5 * s, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Vertical reptile slit pupil
+        ctx.fillStyle = '#1E1E1E';
+        ctx.beginPath();
+        ctx.ellipse(eyeX - 1 * s, eyeY, 1.8 * s, 5.5 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Angry brow line
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 3.2 * s;
+        ctx.beginPath();
+        ctx.moveTo(eyeX + 9 * s, eyeY - 9 * s);
+        ctx.lineTo(eyeX - 10 * s, eyeY - 3 * s);
+        ctx.stroke();
+      } else if (isStirring) {
+        ctx.fillStyle = '#FFD166';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.ellipse(eyeX, eyeY, 6.5 * s, 3.6 * s, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#1E1E1E';
+        ctx.beginPath();
+        ctx.arc(eyeX - 1 * s, eyeY, 2.2 * s, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Peaceful sleeping curved eyelid + lashes
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.6 * s;
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeY - 2 * s, 6.5 * s, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+        ctx.lineWidth = 1.8 * s;
+        ctx.beginPath();
+        ctx.moveTo(eyeX - 5 * s, eyeY + 3 * s);
+        ctx.lineTo(eyeX - 7 * s, eyeY + 6 * s);
+        ctx.moveTo(eyeX, eyeY + 4.5 * s);
+        ctx.lineTo(eyeX, eyeY + 8 * s);
+        ctx.moveTo(eyeX + 5 * s, eyeY + 3 * s);
+        ctx.lineTo(eyeX + 7 * s, eyeY + 6 * s);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // 7. Floating 'Zzz' Bubbles When Asleep OR Roar Shockwaves When Awake
+      if (!isAwake) {
+        const zProgress = (t * 0.75) % 1;
+        ctx.save();
+        ctx.font = `700 ${Math.round(13 * s)}px var(--font-main)`;
+        ctx.fillStyle = `rgba(27, 79, 114, ${0.85 - zProgress * 0.5})`;
+        ctx.fillText('Z', headPivotX - 30 * s, headPivotY - (38 + zProgress * 18) * s);
+        ctx.font = `700 ${Math.round(16 * s)}px var(--font-main)`;
+        ctx.fillText('z', headPivotX - 15 * s, headPivotY - (50 + zProgress * 22) * s);
+        ctx.font = `700 ${Math.round(19 * s)}px var(--font-main)`;
+        ctx.fillText('Z', headPivotX + 2 * s, headPivotY - (64 + zProgress * 26) * s);
+        ctx.restore();
+      } else {
+        ctx.strokeStyle = '#E74C3C';
+        ctx.lineWidth = 2.4;
+        for (let r = 1; r <= 2; r++) {
+          const rad = (16 + r * 12 + ((t * 40) % 12)) * s;
+          ctx.beginPath();
+          ctx.arc(headPivotX - 54 * s, headPivotY - 4 * s, rad, 0.75 * Math.PI, 1.25 * Math.PI);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function renderPerilScene(canvas, peril, livesCount, smoothL, isPreview, t, dt) {
+      const { ctx, w, h } = syncCanvasHD(canvas, isPreview ? 420 : 260, 270);
       ctx.clearRect(0, 0, w, h);
 
+      ctx.save();
+      if (!isPreview && shakeTimer > 0) {
+        const mag = shakeTimer * 10;
+        ctx.translate(Math.sin(t * 55) * mag, Math.cos(t * 48) * mag * 0.7);
+      }
+
       const cx = w * 0.5;
-      const bob = Math.sin(t * 2.2) * 5;
-      const danger = Math.min(1, Math.max(0, (6 - livesCount) / 6));
+      const bob = Math.sin(t * 2.3) * 4.5;
+      const danger = Math.min(1, Math.max(0, (6 - smoothL) / 6));
 
       if (peril.id === 'SHARK_BALLOONS') {
         const waterY = h * 0.80;
-        const harnessY = (h * 0.34 + (h * 0.62 - h * 0.34) * danger) + bob;
-        const offsets = [[-58,-48],[-34,-64],[-10,-72],[14,-70],[38,-60],[58,-44]];
+        const harnessY = (h * 0.33 + (h * 0.62 - h * 0.33) * danger) + bob;
+        const s = Math.min(1.0, w / 250);
+        const offsets = [[-56,-46],[-33,-62],[-10,-70],[14,-68],[37,-58],[56,-42]];
 
         for (let i = 0; i < 6; i++) {
           if (i >= livesCount) continue;
-          const bx = cx + offsets[i][0] + Math.sin(t * 2 + i) * 3;
-          const by = harnessY + offsets[i][1] + Math.cos(t * 2 + i) * 2;
+          const bx = cx + offsets[i][0] * s + Math.sin(t * 2 + i) * 3;
+          const by = harnessY + offsets[i][1] * s + Math.cos(t * 2.1 + i) * 2.2;
           ctx.strokeStyle = '#1E1E1E';
           ctx.lineWidth = 1.8;
           ctx.beginPath();
           ctx.moveTo(cx, harnessY);
-          ctx.quadraticCurveTo((cx + bx) * 0.5, (harnessY + by) * 0.5 + 8, bx, by + 20);
+          ctx.quadraticCurveTo((cx + bx) * 0.5, (harnessY + by) * 0.5 + 8 * s, bx, by + 19 * s);
           ctx.stroke();
 
           ctx.fillStyle = BALLOON_COLORS[i];
           ctx.beginPath();
-          ctx.ellipse(bx, by, 16, 19, 0, 0, Math.PI * 2);
+          ctx.ellipse(bx, by, 15.5 * s, 18.5 * s, 0, 0, Math.PI * 2);
           ctx.fill();
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 2.1;
           ctx.stroke();
+
+          // Glossy balloon highlight
+          ctx.fillStyle = 'rgba(255,255,255,0.55)';
+          ctx.beginPath();
+          ctx.ellipse(bx - 5 * s, by - 6 * s, 3.2 * s, 5.5 * s, -0.3, 0, Math.PI * 2);
+          ctx.fill();
         }
 
-        drawStickman(ctx, cx, harnessY, 0.9, livesCount <= 2, true, t);
+        drawStickman(ctx, cx, harnessY, 0.88 * s, !isPreview && livesCount <= 2, true, t);
 
-        // Shark Fin or Open Jaws
+        // Shark Fin or Open Jaws with Serrated Teeth
         if (!isPreview && livesCount <= 2) {
+          const jBob = Math.sin(t * 5) * 3;
           ctx.fillStyle = '#546E7A';
           ctx.strokeStyle = '#1E1E1E';
-          ctx.lineWidth = 2.4;
+          ctx.lineWidth = 2.5;
           ctx.beginPath();
-          ctx.moveTo(cx - 38, waterY + 6);
-          ctx.quadraticCurveTo(cx, waterY - 48, cx + 38, waterY + 6);
+          ctx.moveTo(cx - 38 * s, waterY + 6);
+          ctx.quadraticCurveTo(cx, waterY - 52 * s + jBob, cx + 38 * s, waterY + 6);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
 
           ctx.fillStyle = '#E74C3C';
           ctx.beginPath();
-          ctx.moveTo(cx - 26, waterY + 4);
-          ctx.quadraticCurveTo(cx, waterY - 34, cx + 26, waterY + 4);
+          ctx.moveTo(cx - 26 * s, waterY + 4);
+          ctx.quadraticCurveTo(cx, waterY - 36 * s + jBob, cx + 26 * s, waterY + 4);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
+
+          // Shark Teeth
+          ctx.fillStyle = '#FFFFFF';
+          for (let k = -3; k <= 3; k++) {
+            const tx = cx + k * 6.5 * s;
+            const ty = waterY - (18 - Math.abs(k) * 3.2) * s + jBob * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(tx - 3 * s, ty);
+            ctx.lineTo(tx, ty + 7 * s);
+            ctx.lineTo(tx + 3 * s, ty);
+            ctx.closePath();
+            ctx.fill();
+          }
         } else {
-          const sx = cx + Math.sin(t * 1.4) * (w * 0.22);
+          const sx = cx + Math.sin(t * 1.45) * (w * 0.23);
+          const dir = Math.cos(t * 1.45) >= 0 ? 1 : -1;
           ctx.fillStyle = '#546E7A';
           ctx.strokeStyle = '#1E1E1E';
           ctx.lineWidth = 2.4;
           ctx.beginPath();
-          ctx.moveTo(sx - 14, waterY + 4);
-          ctx.quadraticCurveTo(sx - 2, waterY - 24, sx + 16, waterY - 32);
-          ctx.quadraticCurveTo(sx + 8, waterY - 12, sx + 14, waterY + 4);
+          ctx.moveTo(sx - 15 * dir, waterY + 4);
+          ctx.quadraticCurveTo(sx + 4 * dir, waterY - 26, sx - 16 * dir, waterY - 32);
+          ctx.quadraticCurveTo(sx - 8 * dir, waterY - 12, sx + 14 * dir, waterY + 4);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
         }
 
-        // Water waves
-        ctx.fillStyle = 'rgba(79, 195, 247, 0.35)';
+        // Layered HD Water Waves
+        ctx.fillStyle = 'rgba(79, 195, 247, 0.38)';
         ctx.beginPath();
         ctx.moveTo(0, h);
-        for (let x = 0; x <= w; x += 14) {
-          ctx.lineTo(x, waterY + Math.sin(t * 3 + x * 0.05) * 4.5);
+        for (let x = 0; x <= w; x += 10) {
+          ctx.lineTo(x, waterY + Math.sin(t * 3.2 + x * 0.05) * 4.5);
         }
         ctx.lineTo(w, h);
         ctx.closePath();
@@ -1550,97 +2034,195 @@
         ctx.strokeStyle = '#0288D1';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        for (let x = 0; x <= w; x += 14) {
-          const wy = waterY + Math.sin(t * 3 + x * 0.05) * 4.5;
+        for (let x = 0; x <= w; x += 10) {
+          const wy = waterY + Math.sin(t * 3.2 + x * 0.05) * 4.5;
           if (x === 0) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
         }
         ctx.stroke();
 
       } else if (peril.id === 'UFO_ABDUCTION') {
-        const ufoY = h * 0.18;
+        const ufoY = h * 0.19;
         const groundY = h * 0.88;
-        const ufoX = cx + Math.sin(t * 1.5) * 10;
+        const ufoX = cx + Math.sin(t * 1.6) * 10;
 
-        // Beam cone
+        // Tractor Beam Cone + Pulsing Rings
         ctx.fillStyle = 'rgba(118, 255, 3, 0.22)';
         ctx.beginPath();
-        ctx.moveTo(ufoX - 34, ufoY + 10);
-        ctx.lineTo(ufoX + 34, ufoY + 10);
-        ctx.lineTo(ufoX + 90, groundY);
-        ctx.lineTo(ufoX - 90, groundY);
+        ctx.moveTo(ufoX - 32, ufoY + 8);
+        ctx.lineTo(ufoX + 32, ufoY + 8);
+        ctx.lineTo(ufoX + 86, groundY);
+        ctx.lineTo(ufoX - 86, groundY);
         ctx.closePath();
         ctx.fill();
 
-        const handY = (groundY - 72) + ((ufoY + 14) - (groundY - 72)) * danger + bob;
-        drawStickman(ctx, ufoX, handY, 0.85 * (1 - danger * 0.2), livesCount <= 2, danger > 0.1, t);
+        ctx.strokeStyle = 'rgba(118, 255, 3, 0.65)';
+        ctx.lineWidth = 2;
+        for (let r = 0; r < 4; r++) {
+          const prog = (1 - ((t * 0.8 + r * 0.25) % 1));
+          const ry = ufoY + 22 + prog * (groundY - ufoY - 32);
+          const rw = 26 + prog * 48;
+          ctx.beginPath();
+          ctx.ellipse(ufoX, ry, rw, 5.5, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
-        // UFO Saucer
+        const handY = (groundY - 72) + ((ufoY + 14) - (groundY - 72)) * danger + bob;
+        drawStickman(ctx, ufoX, handY, 0.85 * (1 - danger * 0.2), !isPreview && livesCount <= 2, danger > 0.08, t);
+
+        // UFO Glass Dome + Little Alien Head
         ctx.fillStyle = '#80DEEA';
         ctx.strokeStyle = '#1E1E1E';
-        ctx.lineWidth = 2.2;
+        ctx.lineWidth = 2.3;
         ctx.beginPath();
-        ctx.ellipse(ufoX, ufoY - 12, 30, 16, 0, 0, Math.PI * 2);
+        ctx.ellipse(ufoX, ufoY - 11, 30, 16, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
+        ctx.fillStyle = '#76FF03';
+        ctx.beginPath();
+        ctx.arc(ufoX, ufoY - 13, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Metallic Saucer Body + Blinking Lights
         ctx.fillStyle = '#B0BEC5';
         ctx.beginPath();
         ctx.ellipse(ufoX, ufoY, 54, 13, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
+        for (let l = -2; l <= 2; l++) {
+          ctx.fillStyle = ((Math.floor(t * 6) + l) % 2 === 0) ? '#FFD166' : '#FF595E';
+          ctx.beginPath();
+          ctx.arc(ufoX + l * 17, ufoY, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(10, groundY);
+        ctx.lineTo(w - 10, groundY);
+        ctx.stroke();
+
       } else if (peril.id === 'VOLCANO_BLOCKS') {
         const lavaY = h * 0.82;
-        const crateW = 64;
+        const crateW = Math.min(68, w * 0.32);
         const crateH = 18;
+
+        // Rising Lava Embers
+        for (let e = 0; e < 7; e++) {
+          const prog = (t * (0.45 + e * 0.07) + e * 0.3) % 1;
+          const ex = w * (0.14 + e * 0.12) + Math.sin(t * 3 + e) * 6;
+          const ey = lavaY - prog * (h * 0.45);
+          ctx.fillStyle = `rgba(255, 152, 0, ${(1 - prog) * 0.75})`;
+          ctx.beginPath();
+          ctx.arc(ex, ey, 2.5 + (1 - prog) * 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
         for (let i = 0; i < livesCount; i++) {
           const topY = lavaY - (i + 1) * crateH;
+          const wobble = (!isPreview && livesCount <= 2) ? Math.sin(t * 14 + i) * 2.2 : 0;
+          const cxBox = cx - crateW * 0.5 + wobble;
           ctx.fillStyle = (i % 2 === 0) ? '#D7CCC8' : '#A1887F';
           ctx.strokeStyle = '#1E1E1E';
           ctx.lineWidth = 2;
-          ctx.fillRect(cx - crateW * 0.5, topY, crateW, crateH - 1);
-          ctx.strokeRect(cx - crateW * 0.5, topY, crateW, crateH - 1);
-        }
-        const platformY = lavaY - livesCount * crateH;
-        drawStickman(ctx, cx, platformY - 64 + bob * 0.4, 0.85, livesCount <= 2, false, t);
+          ctx.beginPath();
+          ctx.roundRect(cxBox, topY, crateW, crateH - 1, 3);
+          ctx.fill();
+          ctx.stroke();
 
+          // Cross brace detail
+          ctx.strokeStyle = 'rgba(30,30,30,0.32)';
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.moveTo(cxBox + 5, topY + 3);
+          ctx.lineTo(cxBox + crateW - 5, topY + crateH - 4);
+          ctx.stroke();
+        }
+
+        const platformY = lavaY - smoothL * crateH;
+        drawStickman(ctx, cx, platformY - 64 + bob * 0.35, 0.85, !isPreview && livesCount <= 2, false, t);
+
+        // Bubbling Molten Lava
         ctx.fillStyle = '#FF5722';
-        ctx.fillRect(0, lavaY, w, h - lavaY);
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += 12) {
+          ctx.lineTo(x, lavaY + Math.sin(t * 4 + x * 0.06) * 3.5);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = '#FFD166';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 12) {
+          const ly = lavaY + Math.sin(t * 4 + x * 0.06) * 3.5;
+          if (x === 0) ctx.moveTo(x, ly); else ctx.lineTo(x, ly);
+        }
+        ctx.stroke();
 
       } else if (peril.id === 'DINO_STEALTH') {
-        const groundY = h * 0.84;
-        const noise = 6 - livesCount;
-        for (let i = 0; i < 6; i++) {
-          ctx.fillStyle = (i < noise) ? (i < 3 ? '#FFD166' : '#E74C3C') : '#FFFFFF';
-          ctx.strokeStyle = '#1E1E1E';
-          ctx.lineWidth = 1.6;
-          const bh = 10 + i * 3;
-          ctx.fillRect(18 + i * 20, 38 - bh, 15, bh);
-          ctx.strokeRect(18 + i * 20, 38 - bh, 15, bh);
-        }
-        drawStickman(ctx, w * 0.26, groundY - 66 + bob * 0.4, 0.85, livesCount <= 2, false, t);
-
-        // T-Rex Head
-        const jawOpen = livesCount <= 2 ? 14 : 0;
-        ctx.fillStyle = '#689F38';
-        ctx.strokeStyle = '#1E1E1E';
-        ctx.lineWidth = 2.4;
-        ctx.fillRect(w * 0.48, groundY - 76 - jawOpen, 88, 36);
-        ctx.strokeRect(w * 0.48, groundY - 76 - jawOpen, 88, 36);
-        ctx.fillStyle = '#9CCC65';
-        ctx.fillRect(w * 0.50, groundY - 38 + jawOpen * 0.4, 78, 18);
-        ctx.strokeRect(w * 0.50, groundY - 38 + jawOpen * 0.4, 78, 18);
+        drawSculptedDinoPeril(ctx, w, h, livesCount, smoothL, isPreview, t);
       }
+
+      // Render active damage particles & floating "-1 ❤️" indicators
+      if (!isPreview) {
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.rx += (p.vx * dt) / w;
+          p.ry += (p.vy * dt) / h;
+          p.vy += 220 * dt;
+          p.life -= dt * 1.45;
+          if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+          }
+          ctx.globalAlpha = Math.max(0, p.life);
+          ctx.fillStyle = p.color;
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(p.rx * w, p.ry * h, p.size * p.life, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+
+        for (let i = floatingHits.length - 1; i >= 0; i--) {
+          const fh = floatingHits[i];
+          fh.ry -= dt * 0.18;
+          fh.life -= dt * 0.95;
+          if (fh.life <= 0) {
+            floatingHits.splice(i, 1);
+            continue;
+          }
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, fh.life);
+          ctx.font = '700 16px var(--font-main)';
+          ctx.fillStyle = '#E74C3C';
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 3.5;
+          ctx.strokeText(fh.text, fh.rx * w - 22, fh.ry * h);
+          ctx.fillText(fh.text, fh.rx * w - 22, fh.ry * h);
+          ctx.restore();
+        }
+      }
+
+      ctx.restore();
     }
 
     function drawCelebratingChalkStickman() {
       const c = document.getElementById('victoryCanvas');
-      const ctx = c.getContext('2d');
-      ctx.clearRect(0, 0, c.width, c.height);
+      const { ctx, w, h } = syncCanvasHD(c, 140, 140);
+      ctx.clearRect(0, 0, w, h);
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 3.2;
       ctx.lineCap = 'round';
-      const cx = 70, cy = 78;
+      const cx = w * 0.5, cy = h * 0.56;
       ctx.beginPath();
       ctx.arc(cx, cy - 28, 15, 0, Math.PI * 2);
       ctx.moveTo(cx, cy - 13);
@@ -1656,16 +2238,40 @@
       ctx.stroke();
     }
 
-    // Main 60fps animation loop
+    // Physical keyboard support for desktop, Chromebooks, & tablets
+    window.addEventListener('keydown', (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+      const victoryOpen = document.getElementById('victoryModal').classList.contains('active');
+      if (victoryOpen && e.key === 'Enter') {
+        nextLevelAfterVictory();
+        return;
+      }
+      const anyModalOpen = Array.from(document.querySelectorAll('.modal-backdrop')).some(m => m.classList.contains('active'));
+      if (anyModalOpen) return;
+      const onGame = document.getElementById('gameScreen').classList.contains('active');
+      if (onGame && /^[a-zA-Z]$/.test(e.key)) {
+        onLetterTapped(e.key.toUpperCase());
+      }
+    });
+
+    // Main 60fps delta-time animation loop
     function animate(nowMs) {
-      const t = (nowMs || 0) / 1000;
+      const now = nowMs || performance.now();
+      const dt = Math.min(0.05, Math.max(0.001, (now - lastFrameMs) / 1000));
+      lastFrameMs = now;
+      const t = now / 1000;
+
+      // Smooth spring interpolation toward target lives
+      smoothLives += (lives - smoothLives) * Math.min(1, dt * 10);
+      if (shakeTimer > 0) shakeTimer = Math.max(0, shakeTimer - dt);
+
       const menuCanvas = document.getElementById('menuCanvas');
-      if (menuCanvas) {
-        renderPerilScene(menuCanvas, getPerilForLevel(campaignIdx + 1), 6, true, t);
+      if (menuCanvas && document.getElementById('menuScreen').classList.contains('active')) {
+        renderPerilScene(menuCanvas, getPerilForLevel(campaignIdx + 1), 6, 6, true, t, dt);
       }
       const gameCanvas = document.getElementById('gameCanvas');
-      if (gameCanvas) {
-        renderPerilScene(gameCanvas, getPerilForLevel(activeLevel.number), lives, false, t);
+      if (gameCanvas && document.getElementById('gameScreen').classList.contains('active')) {
+        renderPerilScene(gameCanvas, getPerilForLevel(activeLevel.number), lives, smoothLives, false, t, dt);
       }
       requestAnimationFrame(animate);
     }

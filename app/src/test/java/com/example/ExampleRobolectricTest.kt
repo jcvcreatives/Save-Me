@@ -55,6 +55,24 @@ class ExampleRobolectricTest {
     }
 
     @Test
+    fun `campaign completion counter increments when campaign levels are solved`() {
+        val vm = WordGameViewModel()
+        assertEquals(0, vm.completedCampaignCount)
+        assertEquals(20, vm.totalCampaignCount)
+
+        // Solve Level 1 (DIAMOND)
+        vm.selectCampaignLevelNumber(1)
+        "DIAMOND".toSet().forEach { vm.onLetterTapped(it) }
+        assertEquals(RoundOutcome.VICTORY, vm.roundOutcome)
+        assertEquals(1, vm.completedCampaignCount)
+
+        // Proceed to Level 2 (CHINA) and solve it
+        vm.proceedAfterVictory()
+        "CHINA".toSet().forEach { vm.onLetterTapped(it) }
+        assertEquals(2, vm.completedCampaignCount)
+    }
+
+    @Test
     fun `boss level 5 generates 3 bomb letters that cost 2 lives`() {
         val vm = WordGameViewModel()
         vm.selectCampaignLevelNumber(5) // Level 5 is GIRAFFE (Boss Level)

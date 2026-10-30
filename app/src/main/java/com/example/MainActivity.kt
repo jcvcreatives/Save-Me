@@ -35,6 +35,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -81,6 +82,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -516,6 +518,13 @@ class WordGameViewModel : ViewModel() {
         private set
     var adventureLevelIndex by mutableIntStateOf(0)
         private set
+    val completedCampaignLevels = mutableStateListOf<Int>()
+
+    val totalCampaignCount: Int
+        get() = CAMPAIGN_LEVELS.size
+
+    val completedCampaignCount: Int
+        get() = completedCampaignLevels.size
 
     // Victory / Progression stats
     var perfectCount by mutableIntStateOf(3)
@@ -717,6 +726,12 @@ class WordGameViewModel : ViewModel() {
             if (currentStreak > maxStreak) {
                 maxStreak = currentStreak
             }
+            if (!activeLevel.isAdventure && activeLevel.number > 0) {
+                val normalizedLevel = ((activeLevel.number - 1) % CAMPAIGN_LEVELS.size) + 1
+                if (!completedCampaignLevels.contains(normalizedLevel)) {
+                    completedCampaignLevels.add(normalizedLevel)
+                }
+            }
             chestProgress = (chestProgress % 4) + 1
             themeProgress = (themeProgress % 10) + 1
             roundOutcome = RoundOutcome.VICTORY
@@ -896,6 +911,8 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                 ScreenState.MAIN_MENU -> {
                     MainMenuScreen(
                         levelNumber = viewModel.currentCampaignLevelNumber,
+                        completedLevels = viewModel.completedCampaignCount,
+                        totalCampaignLevels = viewModel.totalCampaignCount,
                         coins = viewModel.coins,
                         fontFamily = activeFontFamily,
                         onPlayCampaign = { viewModel.startCampaignLevel() },
@@ -1143,6 +1160,8 @@ fun SketchyContainer(
 @Composable
 fun MainMenuScreen(
     levelNumber: Int,
+    completedLevels: Int,
+    totalCampaignLevels: Int,
     coins: Int,
     fontFamily: FontFamily,
     onPlayCampaign: () -> Unit,
@@ -1255,7 +1274,18 @@ fun MainMenuScreen(
             DoodleWordTitleHeader(fontFamily = fontFamily)
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Visual Indicator showing completed levels out of total campaign count
+        CampaignProgressIndicatorCard(
+            completedLevels = completedLevels,
+            totalLevels = totalCampaignLevels,
+            fontFamily = fontFamily,
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 360.dp)
+                .padding(bottom = 8.dp)
+        )
 
         // Bottom Stacked Buttons
         Column(
@@ -1263,7 +1293,7 @@ fun MainMenuScreen(
                 .fillMaxWidth()
                 .widthIn(max = 360.dp)
                 .padding(bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // 1. Level X (Yellow fill, primary action)
@@ -1346,6 +1376,106 @@ fun MainMenuScreen(
                     fontSize = 21.sp,
                     color = DoodleColors.InkBlack
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun CampaignProgressIndicatorCard(
+    completedLevels: Int,
+    totalLevels: Int,
+    fontFamily: FontFamily,
+    modifier: Modifier = Modifier
+) {
+    val safeTotal = totalLevels.coerceAtLeast(1)
+    val clampedCompleted = completedLevels.coerceIn(0, safeTotal)
+    val animatedFraction by animateFloatAsState(
+        targetValue = clampedCompleted.toFloat() / safeTotal.toFloat(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "campaignProgressFraction"
+    )
+
+    SketchyContainer(
+        fillColor = Color.White,
+        cornerRadius = 18.dp,
+        strokeWidth = 2.dp,
+        shadowOffset = 2.5.dp,
+        modifier = modifier
+            .testTag("campaign_progress_indicator")
+            .semantics {
+                contentDescription = "Campaign progress: $clampedCompleted of $safeTotal levels completed"
+            }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Canvas(modifier = Modifier.size(18.dp)) {
+                        drawDoodleStarCoin()
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Campaign Progress",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 13.sp,
+                        color = DoodleColors.InkBlack
+                    )
+                }
+
+                Text(
+                    text = "$clampedCompleted / $safeTotal Completed",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 13.sp,
+                    color = DoodleColors.InkBlue,
+                    modifier = Modifier.testTag("campaign_progress_text")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Hand-sketched progress bar track & fill
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(14.dp)
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val r = size.height * 0.5f
+                    // Track background
+                    drawRoundRect(
+                        color = DoodleColors.PaperOffWhite,
+                        cornerRadius = CornerRadius(r, r)
+                    )
+                    // Completed progress fill
+                    if (animatedFraction > 0f) {
+                        val fillW = (size.width * animatedFraction).coerceAtLeast(size.height)
+                        drawRoundRect(
+                            color = DoodleColors.CorrectGreen,
+                            size = Size(fillW.coerceAtMost(size.width), size.height),
+                            cornerRadius = CornerRadius(r, r)
+                        )
+                    }
+                    // Sketchy black border
+                    drawRoundRect(
+                        color = DoodleColors.InkBlack,
+                        cornerRadius = CornerRadius(r, r),
+                        style = Stroke(width = 1.8.dp.toPx())
+                    )
+                }
             }
         }
     }
@@ -1705,30 +1835,39 @@ fun DoodleAlphabetKeyboard(
         listOf('V', 'W', 'X', 'Y', 'Z')
     )
 
-    Column(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        contentAlignment = Alignment.Center
     ) {
-        rows.forEach { rowChars ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                rowChars.forEach { ch ->
-                    val status = keyStatuses[ch] ?: KeyStatus.DEFAULT
-                    val isBomb = bombLetters.contains(ch)
-                    DoodleLetterKey(
-                        letter = ch,
-                        status = status,
-                        hasBombDot = isBomb,
-                        fontFamily = fontFamily,
-                        onClick = { onKeyPress(ch) },
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
+        // Dynamically adapt key size to fit all screen widths (from 320dp compact phones to tablets)
+        val computedKeySize = ((maxWidth - 42.dp) / 7f).coerceIn(38.dp, 50.dp)
+        val rowSpacing = if (computedKeySize < 44.dp) 3.dp else 5.dp
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(rowSpacing),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            rows.forEach { rowChars ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    rowChars.forEach { ch ->
+                        val status = keyStatuses[ch] ?: KeyStatus.DEFAULT
+                        val isBomb = bombLetters.contains(ch)
+                        DoodleLetterKey(
+                            letter = ch,
+                            status = status,
+                            hasBombDot = isBomb,
+                            keySize = computedKeySize,
+                            fontFamily = fontFamily,
+                            onClick = { onKeyPress(ch) }
+                        )
+                    }
                 }
             }
         }
@@ -1740,6 +1879,7 @@ fun DoodleLetterKey(
     letter: Char,
     status: KeyStatus,
     hasBombDot: Boolean,
+    keySize: Dp = 48.dp,
     fontFamily: FontFamily,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -1756,7 +1896,7 @@ fun DoodleLetterKey(
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .size(48.dp)
+            .size(keySize)
             .clip(CircleShape)
             .clickable(
                 enabled = status == KeyStatus.DEFAULT,
@@ -2080,6 +2220,16 @@ fun DynamicPerilSceneCanvas(
         label = "dangerProgress"
     )
 
+    // Smooth spring-interpolated float lives (6f..0f) for buttery 60fps Volcano crate drops & T-Rex jaw opening
+    val animatedLives by animateFloatAsState(
+        targetValue = if (isGameOver) 0f else livesRemaining.coerceIn(0, 6).toFloat(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "animatedLives"
+    )
+
     val popProgress = remember { Animatable(1f) }
     LaunchedEffect(popTrigger) {
         if (popTrigger > 0) {
@@ -2091,7 +2241,15 @@ fun DynamicPerilSceneCanvas(
         }
     }
 
-    Box(modifier = modifier) {
+    // Subtle impact screen-shake offset when taking damage
+    val shakeOffset = if (popTrigger > 0 && popProgress.value < 0.38f) {
+        val intensity = (1f - popProgress.value / 0.38f) * 5f
+        sin(popProgress.value * 55f) * intensity
+    } else {
+        0f
+    }
+
+    Box(modifier = modifier.offset(x = shakeOffset.dp)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             when (perilType) {
                 PerilType.SHARK_BALLOONS -> drawSharkBalloonsPeril(
@@ -2120,6 +2278,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.VOLCANO_BLOCKS -> drawVolcanoBlocksPeril(
                     livesRemaining = livesRemaining,
+                    animatedLives = animatedLives,
                     popTrigger = popTrigger,
                     popProgress = popProgress.value,
                     bobOffset = bobOffset,
@@ -2129,6 +2288,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.DINO_STEALTH -> drawDinoStealthPeril(
                     livesRemaining = livesRemaining,
+                    animatedLives = animatedLives,
                     popTrigger = popTrigger,
                     popProgress = popProgress.value,
                     bobOffset = bobOffset,
@@ -2486,6 +2646,7 @@ private fun DrawScope.drawUfoAbductionPeril(
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawVolcanoBlocksPeril(
     livesRemaining: Int,
+    animatedLives: Float,
     popTrigger: Int,
     popProgress: Float,
     bobOffset: Float,
@@ -2500,10 +2661,12 @@ private fun DrawScope.drawVolcanoBlocksPeril(
     val crateW = (w * 0.34f).coerceIn(46.dp.toPx(), 78.dp.toPx())
     val crateH = ((h * 0.44f) / 6f).coerceIn(14.dp.toPx(), 24.dp.toPx())
 
-    // 1. Draw Stack of Remaining Stone Crates above lavaY
+    // 1. Draw Stack of Remaining Stone Crates above lavaY with smooth spring drop
     val cratesCount = livesRemaining.coerceIn(0, 6)
+    val settleOffset = ((animatedLives - cratesCount).coerceAtLeast(0f)) * crateH
+
     for (i in 0 until cratesCount) {
-        val topY = lavaY - (i + 1) * crateH
+        val topY = lavaY - (i + 1) * crateH - settleOffset
         val wobbleX = if (livesRemaining <= 2) sin(wavePhase * 3f + i) * 2.5.dp.toPx() else 0f
         val leftX = centerX - crateW * 0.5f + wobbleX
 
@@ -2522,7 +2685,7 @@ private fun DrawScope.drawVolcanoBlocksPeril(
             cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
             style = Stroke(width = 2.dp.toPx())
         )
-        // Diagonal stone brace / crack detail
+        // Stone texture cross-brace & rivets
         drawLine(
             color = DoodleColors.InkBlack.copy(alpha = 0.45f),
             start = Offset(leftX + 6.dp.toPx(), topY + 3.dp.toPx()),
@@ -2530,25 +2693,33 @@ private fun DrawScope.drawVolcanoBlocksPeril(
             strokeWidth = 1.4.dp.toPx(),
             cap = StrokeCap.Round
         )
+        drawLine(
+            color = DoodleColors.InkBlack.copy(alpha = 0.3f),
+            start = Offset(leftX + crateW - 6.dp.toPx(), topY + 3.dp.toPx()),
+            end = Offset(leftX + 6.dp.toPx(), topY + crateH - 5.dp.toPx()),
+            strokeWidth = 1.2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
     }
 
     // Crumbling rock debris when a crate breaks
     if (popTrigger > 0 && popProgress < 0.9f) {
         val crumbleY = lavaY - cratesCount * crateH
-        for (r in 0 until 6) {
-            val angle = (r * PI / 3.0).toFloat()
-            val rx = centerX + cos(angle) * (16.dp.toPx() + popProgress * 28.dp.toPx())
-            val ry = crumbleY + sin(angle) * 12.dp.toPx() + popProgress * 26.dp.toPx()
-            drawCircle(
+        for (r in 0 until 8) {
+            val angle = (r * PI / 4.0).toFloat()
+            val rx = centerX + cos(angle) * (14.dp.toPx() + popProgress * 32.dp.toPx())
+            val ry = crumbleY + sin(angle) * 10.dp.toPx() + popProgress * 30.dp.toPx()
+            drawRoundRect(
                 color = DoodleColors.CrateStoneDark.copy(alpha = (1f - popProgress).coerceIn(0f, 1f)),
-                radius = 4.dp.toPx(),
-                center = Offset(rx, ry)
+                topLeft = Offset(rx - 4.dp.toPx(), ry - 4.dp.toPx()),
+                size = Size(8.dp.toPx(), 7.dp.toPx()),
+                cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
             )
         }
     }
 
-    // 2. Draw Stickman standing on top of the highest crate
-    val platformTopY = lavaY - cratesCount * crateH
+    // 2. Draw Stickman standing on top of the highest crate (smoothly following animatedLives)
+    val platformTopY = lavaY - animatedLives * crateH
     val stickmanScale = (w / 440f).coerceIn(0.65f, 1.05f)
     val feetHeight = 72.dp.toPx() * stickmanScale
     val handY = if (isGameOver || livesRemaining <= 0) {
@@ -2571,20 +2742,20 @@ private fun DrawScope.drawVolcanoBlocksPeril(
         moveTo(0f, h)
         lineTo(0f, lavaY)
         var x = 0f
-        val step = 16.dp.toPx()
+        val step = 14.dp.toPx()
         while (x <= w + step) {
-            val ly = lavaY + sin(wavePhase * 1.4f + x * 0.05f) * 5.dp.toPx()
+            val ly = lavaY + sin(wavePhase * 1.6f + x * 0.05f) * 5.dp.toPx()
             lineTo(x, ly)
             x += step
         }
         lineTo(w, h)
         close()
     }
-    drawPath(path = lavaPath, color = DoodleColors.LavaOrange.copy(alpha = 0.85f))
+    drawPath(path = lavaPath, color = DoodleColors.LavaOrange.copy(alpha = 0.88f))
 
-    // Lava bubbles
-    for (b in 1..4) {
-        val bx = w * (0.18f * b) + sin(wavePhase + b) * 6.dp.toPx()
+    // Rising glowing lava embers & bubbles
+    for (b in 1..5) {
+        val bx = w * (0.16f * b) + sin(wavePhase + b) * 6.dp.toPx()
         val by = lavaY + 8.dp.toPx() + cos(wavePhase * 2f + b) * 4.dp.toPx()
         drawCircle(color = DoodleColors.LavaYellow, radius = 5.dp.toPx(), center = Offset(bx, by))
         drawCircle(
@@ -2592,6 +2763,13 @@ private fun DrawScope.drawVolcanoBlocksPeril(
             radius = 5.dp.toPx(),
             center = Offset(bx, by),
             style = Stroke(width = 1.4.dp.toPx())
+        )
+        // Floating ember spark above lava
+        val emberY = lavaY - ((wavePhase * 18f + b * 17f) % 36f).dp.toPx()
+        drawCircle(
+            color = DoodleColors.LavaYellow.copy(alpha = 0.75f),
+            radius = 2.2.dp.toPx(),
+            center = Offset(bx + cos(wavePhase + b) * 8.dp.toPx(), emberY)
         )
     }
 
@@ -2606,10 +2784,11 @@ private fun DrawScope.drawVolcanoBlocksPeril(
 
 // ----------------------------------------------------------------------------
 // PERIL 4: DINO_STEALTH (Levels 4, 8, 12...)
-// Stickman tiptoeing next to a giant sleeping T-Rex head + 6-bar Noise Meter
+// Stickman tiptoeing next to a giant sculpted sleeping/roaring T-Rex + Noise Meter
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawDinoStealthPeril(
     livesRemaining: Int,
+    animatedLives: Float,
     popTrigger: Int,
     popProgress: Float,
     bobOffset: Float,
@@ -2622,9 +2801,9 @@ private fun DrawScope.drawDinoStealthPeril(
     val noiseLevel = (6 - livesRemaining).coerceIn(0, 6)
 
     // 1. Draw 6-Bar "Noise Meter" at top-left of canvas
-    val meterStartX = w * 0.08f
-    val meterTopY = h * 0.12f
-    val barW = (w * 0.11f).coerceIn(14.dp.toPx(), 24.dp.toPx())
+    val meterStartX = w * 0.06f
+    val meterTopY = h * 0.10f
+    val barW = (w * 0.10f).coerceIn(12.dp.toPx(), 22.dp.toPx())
     val barGap = 4.dp.toPx()
 
     for (i in 0 until 6) {
@@ -2653,121 +2832,351 @@ private fun DrawScope.drawDinoStealthPeril(
         )
     }
 
-    // 2. Ground line
+    // 2. Sketched Ground Line with pebbles
     drawLine(
         color = DoodleColors.InkBlack,
-        start = Offset(w * 0.05f, groundY),
-        end = Offset(w * 0.95f, groundY),
+        start = Offset(w * 0.04f, groundY),
+        end = Offset(w * 0.96f, groundY),
         strokeWidth = 2.6.dp.toPx(),
         cap = StrokeCap.Round
     )
 
-    // 3. Giant Sleeping / Waking T-Rex Head on the right half of the scene
-    val dinoX = w * 0.62f
-    val dinoY = groundY - 46.dp.toPx()
-    val jawOpenAngle = when {
-        isGameOver || livesRemaining <= 0 -> 26.dp.toPx()
-        livesRemaining <= 2 -> 16.dp.toPx()
-        livesRemaining <= 4 -> 5.dp.toPx()
+    // 3. Sculpted Hand-Drawn T-Rex (Facing Left toward the tiptoeing Stickman!)
+    val dinoScale = (w / 340f).coerceIn(0.68f, 1.15f)
+    val jawPivotX = w * 0.82f
+    val jawPivotY = groundY - 42.dp.toPx() * dinoScale
+    val breathe = sin(wavePhase) * 2.5.dp.toPx()
+
+    // Smoothly interpolated jaw opening angle in degrees (0° sleeping -> 12° grumbling -> 28° roaring -> 38° snap!)
+    val wakeProgress = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
+    val upperJawTiltDeg = when {
+        isGameOver || livesRemaining <= 0 -> 22f
+        livesRemaining <= 2 -> 15f + sin(wavePhase * 4f) * 3f
+        livesRemaining <= 4 -> 5f
+        else -> 0f
+    }
+    val lowerJawTiltDeg = when {
+        isGameOver || livesRemaining <= 0 -> -20f
+        livesRemaining <= 2 -> -14f - sin(wavePhase * 4f) * 2f
+        livesRemaining <= 4 -> -4f
         else -> 0f
     }
 
-    // T-Rex Upper Snout / Head
-    val upperHeadW = w * 0.34f
-    val upperHeadH = 38.dp.toPx()
-    drawRoundRect(
-        color = DoodleColors.DinoGreen,
-        topLeft = Offset(dinoX - upperHeadW * 0.4f, dinoY - upperHeadH - jawOpenAngle * 0.5f),
-        size = Size(upperHeadW, upperHeadH),
-        cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
-    )
-    drawRoundRect(
+    // 3A. Muscular Curved T-Rex Neck & Back (extending down to ground on the right)
+    val neckPath = Path().apply {
+        moveTo(jawPivotX - 18.dp.toPx() * dinoScale, jawPivotY - 8.dp.toPx() * dinoScale)
+        quadraticTo(
+            jawPivotX - 24.dp.toPx() * dinoScale,
+            groundY - 18.dp.toPx() * dinoScale,
+            jawPivotX - 30.dp.toPx() * dinoScale,
+            groundY
+        )
+        lineTo(w * 0.96f, groundY)
+        lineTo(w * 0.96f, jawPivotY - 38.dp.toPx() * dinoScale)
+        quadraticTo(
+            jawPivotX + 18.dp.toPx() * dinoScale,
+            jawPivotY - 34.dp.toPx() * dinoScale,
+            jawPivotX - 18.dp.toPx() * dinoScale,
+            jawPivotY - 8.dp.toPx() * dinoScale
+        )
+        close()
+    }
+    drawPath(neckPath, color = DoodleColors.DinoGreen)
+    drawPath(
+        neckPath,
         color = DoodleColors.InkBlack,
-        topLeft = Offset(dinoX - upperHeadW * 0.4f, dinoY - upperHeadH - jawOpenAngle * 0.5f),
-        size = Size(upperHeadW, upperHeadH),
-        cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
-        style = Stroke(width = 2.4.dp.toPx())
+        style = Stroke(width = 2.4.dp.toPx(), join = StrokeJoin.Round)
     )
 
-    // T-Rex Lower Jaw
-    val lowerJawH = 18.dp.toPx()
-    drawRoundRect(
-        color = DoodleColors.DinoLightGreen,
-        topLeft = Offset(dinoX - upperHeadW * 0.35f, dinoY + jawOpenAngle * 0.4f),
-        size = Size(upperHeadW * 0.9f, lowerJawH),
-        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
-    )
-    drawRoundRect(
-        color = DoodleColors.InkBlack,
-        topLeft = Offset(dinoX - upperHeadW * 0.35f, dinoY + jawOpenAngle * 0.4f),
-        size = Size(upperHeadW * 0.9f, lowerJawH),
-        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
-        style = Stroke(width = 2.2.dp.toPx())
-    )
-
-    // Sharp T-Rex Teeth when mouth opens
-    if (jawOpenAngle > 2f) {
-        val startTx = dinoX - upperHeadW * 0.32f
-        val toothStep = (upperHeadW * 0.7f) / 4f
-        for (t in 0 until 4) {
-            val tx = startTx + t * toothStep
-            val ty = dinoY - jawOpenAngle * 0.5f
-            val toothPath = Path().apply {
-                moveTo(tx, ty)
-                lineTo(tx + toothStep * 0.4f, ty + 8.dp.toPx())
-                lineTo(tx + toothStep * 0.8f, ty)
-                close()
-            }
-            drawPath(toothPath, color = Color.White)
-            drawPath(toothPath, color = DoodleColors.InkBlack, style = Stroke(width = 1.4.dp.toPx()))
+    // Light-green ribbed underbelly patches on neck
+    for (rib in 0..2) {
+        val ry = jawPivotY + (8 + rib * 11).dp.toPx() * dinoScale
+        if (ry < groundY - 4.dp.toPx()) {
+            drawLine(
+                color = DoodleColors.DinoLightGreen,
+                start = Offset(jawPivotX - 22.dp.toPx() * dinoScale, ry),
+                end = Offset(jawPivotX - 6.dp.toPx() * dinoScale, ry + 2.dp.toPx()),
+                strokeWidth = 4.dp.toPx() * dinoScale,
+                cap = StrokeCap.Round
+            )
         }
     }
 
-    // T-Rex Eye (Closed sleeping arc when lives >= 5, half-open at 3..4, wide glowing eye at <= 2)
-    val eyeCenter = Offset(dinoX + upperHeadW * 0.15f, dinoY - upperHeadH * 0.55f - jawOpenAngle * 0.5f)
-    if (livesRemaining >= 5) {
-        // Sleeping closed eyelid + Zzz bubbles
-        drawLine(
-            color = DoodleColors.InkBlack,
-            start = Offset(eyeCenter.x - 7.dp.toPx(), eyeCenter.y),
-            end = Offset(eyeCenter.x + 7.dp.toPx(), eyeCenter.y),
-            strokeWidth = 2.6.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-        // Floating Zzz circles
-        drawCircle(
-            color = DoodleColors.InkBlue.copy(alpha = 0.5f),
-            radius = 4.dp.toPx(),
-            center = Offset(eyeCenter.x + 12.dp.toPx(), eyeCenter.y - 16.dp.toPx() + bobOffset)
-        )
-        drawCircle(
-            color = DoodleColors.InkBlue.copy(alpha = 0.7f),
-            radius = 6.dp.toPx(),
-            center = Offset(eyeCenter.x + 22.dp.toPx(), eyeCenter.y - 28.dp.toPx() + bobOffset)
-        )
-    } else {
-        val eyeR = if (livesRemaining <= 2) 8.dp.toPx() else 5.5.dp.toPx()
-        drawCircle(
-            color = if (livesRemaining <= 2) DoodleColors.DoodleYellow else Color.White,
-            radius = eyeR,
-            center = eyeCenter
-        )
-        drawCircle(
-            color = DoodleColors.InkBlack,
-            radius = eyeR,
-            center = eyeCenter,
-            style = Stroke(width = 2.dp.toPx())
-        )
-        drawCircle(
-            color = DoodleColors.WrongRed,
-            radius = eyeR * 0.45f,
-            center = Offset(eyeCenter.x - 2.dp.toPx(), eyeCenter.y)
+    // Tiny comical T-Rex forearm & 2 claws near chest
+    val armX = jawPivotX - 22.dp.toPx() * dinoScale
+    val armY = groundY - 22.dp.toPx() * dinoScale
+    val armPath = Path().apply {
+        moveTo(armX + 8.dp.toPx() * dinoScale, armY - 4.dp.toPx() * dinoScale)
+        lineTo(armX - 8.dp.toPx() * dinoScale, armY + 4.dp.toPx() * dinoScale)
+        lineTo(armX - 13.dp.toPx() * dinoScale, armY + 1.dp.toPx() * dinoScale)
+        moveTo(armX - 8.dp.toPx() * dinoScale, armY + 4.dp.toPx() * dinoScale)
+        lineTo(armX - 12.dp.toPx() * dinoScale, armY + 8.dp.toPx() * dinoScale)
+    }
+    drawPath(
+        armPath,
+        color = DoodleColors.InkBlack,
+        style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+
+    // 3B. Inner Red Mouth Cavity & Pink Tongue when jaws open
+    if (wakeProgress > 0.2f || livesRemaining <= 4) {
+        val mouthOpenH = (12.dp.toPx() + wakeProgress * 28.dp.toPx()) * dinoScale
+        val cavityPath = Path().apply {
+            moveTo(jawPivotX - 6.dp.toPx() * dinoScale, jawPivotY)
+            lineTo(jawPivotX - 72.dp.toPx() * dinoScale, jawPivotY - mouthOpenH * 0.55f)
+            quadraticTo(
+                jawPivotX - 46.dp.toPx() * dinoScale,
+                jawPivotY,
+                jawPivotX - 68.dp.toPx() * dinoScale,
+                jawPivotY + mouthOpenH * 0.55f
+            )
+            close()
+        }
+        drawPath(cavityPath, color = Color(0xFFB71C1C))
+
+        // Wavy roaring tongue
+        val tonguePath = Path().apply {
+            moveTo(jawPivotX - 20.dp.toPx() * dinoScale, jawPivotY + 4.dp.toPx() * dinoScale)
+            quadraticTo(
+                jawPivotX - 50.dp.toPx() * dinoScale,
+                jawPivotY - 4.dp.toPx() * dinoScale + sin(wavePhase * 3f) * 4.dp.toPx(),
+                jawPivotX - 64.dp.toPx() * dinoScale,
+                jawPivotY + 5.dp.toPx() * dinoScale
+            )
+        }
+        drawPath(
+            tonguePath,
+            color = Color(0xFFFF8A80),
+            style = Stroke(width = 5.dp.toPx() * dinoScale, cap = StrokeCap.Round)
         )
     }
 
+    // 3C. Articulated Lower Jaw (rotates downward around jawPivot)
+    withTransform({
+        rotate(degrees = lowerJawTiltDeg, pivot = Offset(jawPivotX, jawPivotY))
+    }) {
+        val lowerJawLen = 84.dp.toPx() * dinoScale
+        val lowerJawH = 20.dp.toPx() * dinoScale
+
+        // Lower teeth (pointing UP)
+        if (livesRemaining <= 4 || isGameOver) {
+            val toothCount = 5
+            val step = (lowerJawLen * 0.72f) / toothCount
+            for (t in 0 until toothCount) {
+                val tx = jawPivotX - lowerJawLen * 0.88f + t * step
+                val toothH = (7 + (t % 2) * 3).dp.toPx() * dinoScale
+                val tPath = Path().apply {
+                    moveTo(tx, jawPivotY + 2.dp.toPx())
+                    lineTo(tx + step * 0.42f, jawPivotY - toothH)
+                    lineTo(tx + step * 0.84f, jawPivotY + 2.dp.toPx())
+                    close()
+                }
+                drawPath(tPath, color = Color.White)
+                drawPath(tPath, color = DoodleColors.InkBlack, style = Stroke(width = 1.4.dp.toPx()))
+            }
+        }
+
+        // Sculpted lower mandible
+        val mandiblePath = Path().apply {
+            moveTo(jawPivotX + 4.dp.toPx() * dinoScale, jawPivotY)
+            lineTo(jawPivotX - lowerJawLen, jawPivotY + 2.dp.toPx() * dinoScale)
+            quadraticTo(
+                jawPivotX - lowerJawLen - 4.dp.toPx() * dinoScale,
+                jawPivotY + lowerJawH * 0.85f,
+                jawPivotX - lowerJawLen * 0.65f,
+                jawPivotY + lowerJawH
+            )
+            quadraticTo(
+                jawPivotX - lowerJawLen * 0.25f,
+                jawPivotY + lowerJawH * 1.05f,
+                jawPivotX + 4.dp.toPx() * dinoScale,
+                jawPivotY + lowerJawH * 0.55f
+            )
+            close()
+        }
+        drawPath(mandiblePath, color = DoodleColors.DinoLightGreen)
+        drawPath(
+            mandiblePath,
+            color = DoodleColors.InkBlack,
+            style = Stroke(width = 2.4.dp.toPx(), join = StrokeJoin.Round)
+        )
+    }
+
+    // 3D. Articulated Upper Skull, Snout, Brow Ridge, Spikes & Eye (rotates upward around jawPivot)
+    withTransform({
+        rotate(degrees = upperJawTiltDeg, pivot = Offset(jawPivotX, jawPivotY))
+    }) {
+        val snoutLen = 92.dp.toPx() * dinoScale
+        val skullH = 44.dp.toPx() * dinoScale
+        val breathY = if (livesRemaining >= 5) breathe else 0f
+
+        // Upper serrated teeth (pointing DOWN along upper jaw line)
+        if (livesRemaining <= 4 || isGameOver) {
+            val toothCount = 6
+            val step = (snoutLen * 0.76f) / toothCount
+            for (t in 0 until toothCount) {
+                val tx = jawPivotX - snoutLen * 0.90f + t * step
+                val toothH = (9 + (t % 2) * 4).dp.toPx() * dinoScale
+                val tPath = Path().apply {
+                    moveTo(tx, jawPivotY - 1.dp.toPx() + breathY)
+                    lineTo(tx + step * 0.45f, jawPivotY + toothH + breathY)
+                    lineTo(tx + step * 0.88f, jawPivotY - 1.dp.toPx() + breathY)
+                    close()
+                }
+                drawPath(tPath, color = Color.White)
+                drawPath(tPath, color = DoodleColors.InkBlack, style = Stroke(width = 1.5.dp.toPx()))
+            }
+        }
+
+        // Dorsal head spikes along back of skull
+        for (s in 0..2) {
+            val sx = jawPivotX - (10 + s * 14).dp.toPx() * dinoScale
+            val sy = jawPivotY - skullH * (0.92f - s * 0.08f) + breathY
+            val spikePath = Path().apply {
+                moveTo(sx - 6.dp.toPx() * dinoScale, sy + 6.dp.toPx() * dinoScale)
+                lineTo(sx + 2.dp.toPx() * dinoScale, sy - 9.dp.toPx() * dinoScale)
+                lineTo(sx + 8.dp.toPx() * dinoScale, sy + 6.dp.toPx() * dinoScale)
+                close()
+            }
+            drawPath(spikePath, color = DoodleColors.HintBulbOrange)
+            drawPath(spikePath, color = DoodleColors.InkBlack, style = Stroke(width = 1.6.dp.toPx()))
+        }
+
+        // Organic Bezier T-Rex Upper Snout + Raised Brow Ridge
+        val skullPath = Path().apply {
+            // Start at back of skull
+            moveTo(jawPivotX + 10.dp.toPx() * dinoScale, jawPivotY + breathY)
+            lineTo(jawPivotX + 10.dp.toPx() * dinoScale, jawPivotY - skullH * 0.85f + breathY)
+            // Raised muscular brow bump over the eye
+            cubicTo(
+                jawPivotX - 8.dp.toPx() * dinoScale,
+                jawPivotY - skullH * 1.18f + breathY,
+                jawPivotX - 32.dp.toPx() * dinoScale,
+                jawPivotY - skullH * 1.12f + breathY,
+                jawPivotX - 44.dp.toPx() * dinoScale,
+                jawPivotY - skullH * 0.78f + breathY
+            )
+            // Bridge of nose curving down to bulbous snout tip
+            cubicTo(
+                jawPivotX - 68.dp.toPx() * dinoScale,
+                jawPivotY - skullH * 0.76f + breathY,
+                jawPivotX - snoutLen - 4.dp.toPx() * dinoScale,
+                jawPivotY - skullH * 0.65f + breathY,
+                jawPivotX - snoutLen,
+                jawPivotY - 3.dp.toPx() * dinoScale + breathY
+            )
+            // Wavy upper lip line back to jaw pivot
+            quadraticTo(
+                jawPivotX - snoutLen * 0.5f,
+                jawPivotY + 3.dp.toPx() * dinoScale + breathY,
+                jawPivotX + 10.dp.toPx() * dinoScale,
+                jawPivotY + breathY
+            )
+            close()
+        }
+        drawPath(skullPath, color = DoodleColors.DinoGreen)
+        drawPath(
+            skullPath,
+            color = DoodleColors.InkBlack,
+            style = Stroke(width = 2.6.dp.toPx(), join = StrokeJoin.Round)
+        )
+
+        // Nostril & snorting steam puffs when waking up
+        val nostrilCenter = Offset(
+            jawPivotX - snoutLen * 0.82f,
+            jawPivotY - skullH * 0.44f + breathY
+        )
+        drawOval(
+            color = DoodleColors.InkBlack,
+            topLeft = Offset(nostrilCenter.x - 4.dp.toPx() * dinoScale, nostrilCenter.y - 2.5.dp.toPx() * dinoScale),
+            size = Size(7.dp.toPx() * dinoScale, 5.dp.toPx() * dinoScale)
+        )
+
+        // Scale/freckle texture dots on snout
+        drawCircle(
+            color = DoodleColors.InkBlack.copy(alpha = 0.28f),
+            radius = 2.5.dp.toPx() * dinoScale,
+            center = Offset(jawPivotX - snoutLen * 0.56f, jawPivotY - skullH * 0.36f + breathY)
+        )
+        drawCircle(
+            color = DoodleColors.InkBlack.copy(alpha = 0.28f),
+            radius = 2.dp.toPx() * dinoScale,
+            center = Offset(jawPivotX - snoutLen * 0.46f, jawPivotY - skullH * 0.25f + breathY)
+        )
+
+        // Expressive T-Rex Eye under the brow ridge
+        val eyeCenter = Offset(
+            jawPivotX - 24.dp.toPx() * dinoScale,
+            jawPivotY - skullH * 0.62f + breathY
+        )
+        if (livesRemaining >= 5) {
+            // Peaceful sleeping curved eyelid + eyelashes
+            val sleepEyePath = Path().apply {
+                moveTo(eyeCenter.x - 8.dp.toPx() * dinoScale, eyeCenter.y)
+                quadraticTo(
+                    eyeCenter.x,
+                    eyeCenter.y + 6.dp.toPx() * dinoScale,
+                    eyeCenter.x + 8.dp.toPx() * dinoScale,
+                    eyeCenter.y
+                )
+            }
+            drawPath(
+                sleepEyePath,
+                color = DoodleColors.InkBlack,
+                style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round)
+            )
+            // Floating Zzz sleep bubbles
+            for (z in 1..3) {
+                val zx = eyeCenter.x - (z * 8).dp.toPx() + sin(wavePhase + z) * 3.dp.toPx()
+                val zy = eyeCenter.y - (14 + z * 11).dp.toPx() + bobOffset * 0.6f
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.85f),
+                    radius = (2.5f + z * 1.5f).dp.toPx(),
+                    center = Offset(zx, zy)
+                )
+                drawCircle(
+                    color = DoodleColors.InkBlue,
+                    radius = (2.5f + z * 1.5f).dp.toPx(),
+                    center = Offset(zx, zy),
+                    style = Stroke(width = 1.4.dp.toPx())
+                )
+            }
+        } else {
+            val eyeR = (if (livesRemaining <= 2) 9.5f else 7.5f).dp.toPx() * dinoScale
+            // Sclera (yellow predator eye when angry, white when groggy)
+            drawCircle(
+                color = if (livesRemaining <= 2) DoodleColors.DoodleYellow else Color.White,
+                radius = eyeR,
+                center = eyeCenter
+            )
+            drawCircle(
+                color = DoodleColors.InkBlack,
+                radius = eyeR,
+                center = eyeCenter,
+                style = Stroke(width = 2.2.dp.toPx())
+            )
+            // Vertical reptile slit pupil looking directly at the stickman!
+            drawOval(
+                color = if (livesRemaining <= 2) DoodleColors.WrongRed else DoodleColors.InkBlack,
+                topLeft = Offset(eyeCenter.x - eyeR * 0.45f, eyeCenter.y - eyeR * 0.65f),
+                size = Size(eyeR * 0.42f, eyeR * 1.3f)
+            )
+            // Angry furrowed brow line
+            val browLine = Path().apply {
+                moveTo(eyeCenter.x - eyeR * 1.15f, eyeCenter.y - eyeR * 0.35f)
+                lineTo(eyeCenter.x + eyeR * 1.05f, eyeCenter.y - eyeR * 1.05f)
+            }
+            drawPath(
+                browLine,
+                color = DoodleColors.InkBlack,
+                style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+            )
+        }
+    }
+
     // 4. Stickman Tiptoeing on the left side
-    val stickmanX = w * 0.25f
-    val stickmanScale = (w / 420f).coerceIn(0.68f, 1.05f)
+    val stickmanX = w * 0.22f
+    val stickmanScale = (w / 420f).coerceIn(0.66f, 1.02f)
     val stickmanHandY = groundY - 72.dp.toPx() * stickmanScale + bobOffset * 0.5f
 
     drawDoodleStickman(
@@ -2779,15 +3188,15 @@ private fun DrawScope.drawDinoStealthPeril(
         handsUp = false
     )
 
-    // 5. Comic "CLANG!" sound burst waves on wrong guess
+    // 5. Comic "CLANG!" starburst shockwave on wrong guess
     if (popTrigger > 0 && popProgress < 0.9f) {
-        val clangCenter = Offset(stickmanX + 18.dp.toPx(), groundY - 16.dp.toPx())
+        val clangCenter = Offset(stickmanX + 16.dp.toPx(), groundY - 14.dp.toPx())
         for (ring in 1..2) {
             drawCircle(
                 color = DoodleColors.WrongRed.copy(alpha = (1f - popProgress).coerceIn(0f, 1f)),
-                radius = (ring * 12.dp.toPx()) + popProgress * 22.dp.toPx(),
+                radius = (ring * 12.dp.toPx()) + popProgress * 24.dp.toPx(),
                 center = clangCenter,
-                style = Stroke(width = 2.2.dp.toPx())
+                style = Stroke(width = 2.4.dp.toPx())
             )
         }
     }
