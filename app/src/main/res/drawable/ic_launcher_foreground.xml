@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Bold Balloon & Shark Fin silhouette inside 66dp safe zone -->
+    <path
+        android:fillColor="#1E1E1E"
+        android:pathData="M54,24 C45,24 38,31 38,40 C38,48 44,54 51,56 L50,59 L58,59 L57,56 C64,54 70,48 70,40 C70,31 63,24 54,24 Z M53,60 L53,72 L45,76 C49,70 51,64 51,64 C44,68 38,74 35,82 L73,82 C70,76 65,72 58,72 L55,72 L55,60 Z" />
+    <path
+        android:fillColor="#E74C3C"
+        android:pathData="M54,27 C47,27 41,33 41,40 C41,47 47,53 54,53 C61,53 67,47 67,40 C67,33 61,27 54,27 Z" />
+</vector>

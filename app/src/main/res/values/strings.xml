@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Word Shark</string>
+    <string name="cd_settings">Settings</string>
+    <string name="cd_add_coins">Add coins</string>
+    <string name="cd_back">Back to main menu</string>
+    <string name="cd_hint_reveal">Reveal a letter</string>
+    <string name="cd_hint_balloon">Add an extra balloon life</string>
+    <string name="cd_hint_eliminate">Eliminate 3 wrong letters</string>
+    <string name="cd_next_level">Next level</string>
+</resources>
