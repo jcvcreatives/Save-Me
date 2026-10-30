@@ -34,6 +34,27 @@ class ExampleRobolectricTest {
     }
 
     @Test
+    fun `procedural sound engine triggers pop splash and crunch for respective hazards`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        ProceduralSoundEngine.init(context)
+        val vm = WordGameViewModel()
+
+        // Level 1: SHARK_BALLOONS -> Wrong guess plays POP, losing all lives plays SPLASH
+        vm.selectCampaignLevelNumber(1)
+        vm.onLetterTapped('Z')
+        assertEquals(DoodleSoundEffect.POP, ProceduralSoundEngine.lastPlayedEffect)
+
+        listOf('Q', 'X', 'J', 'K', 'V').forEach { vm.onLetterTapped(it) }
+        assertEquals(RoundOutcome.GAME_OVER, vm.roundOutcome)
+        assertEquals(DoodleSoundEffect.SPLASH, ProceduralSoundEngine.lastPlayedEffect)
+
+        // Level 3: VOLCANO_BLOCKS -> Wrong guess plays CRUNCH
+        vm.selectCampaignLevelNumber(3)
+        vm.onLetterTapped('Z')
+        assertEquals(DoodleSoundEffect.CRUNCH, ProceduralSoundEngine.lastPlayedEffect)
+    }
+
+    @Test
     fun `boss level 5 generates 3 bomb letters that cost 2 lives`() {
         val vm = WordGameViewModel()
         vm.selectCampaignLevelNumber(5) // Level 5 is GIRAFFE (Boss Level)

@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Doodle Word Shark — Graph Paper Word Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper-bg: #FAF9F6;
+      --grid-minor: #DCE6F1;
+      --grid-major: #C4D7ED;
+      --margin-red: rgba(244, 180, 180, 0.55);
+      --ink-black: #1E1E1E;
+      --ink-blue: #1B4F72;
+      --correct-green: #2ECC71;
+      --wrong-red: #E74C3C;
+      --doodle-yellow: #FFD166;
+      --hint-green: #4CAF50;
+      --hint-blue: #2196F3;
+      --hint-orange: #FF9800;
+      --chalk-dark: #263238;
+      --font-main: 'Fredoka', 'Comic Sans MS', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--paper-bg);
+      font-family: var(--font-main);
+      color: var(--ink-black);
+    }
+
+    /* Procedural Graph Paper Background */
+    body {
+      background-color: var(--paper-bg);
+      background-image:
+        linear-gradient(to right, var(--margin-red) 2px, transparent 2px),
+        linear-gradient(to right, var(--grid-major) 1.5px, transparent 1.5px),
+        linear-gradient(to bottom, var(--grid-major) 1.5px, transparent 1.5px),
+        linear-gradient(to right, var(--grid-minor) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--grid-minor) 1px, transparent 1px);
+      background-size:
+        100% 100%,
+        110px 110px,
+        110px 110px,
+        22px 22px,
+        22px 22px;
+      background-position:
+        36px 0,
+        0 0,
+        0 0,
+        0 0,
+        0 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .app-shell {
+      position: relative;
+      width: 100%;
+      max-width: 520px;
+      height: 100dvh;
+      max-height: 920px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 12px 16px 14px;
+    }
+
+    /* Hand-sketched box style */
+    .sketch-box {
+      background: #FFFFFF;
+      border: 2.5px solid var(--ink-black);
+      border-radius: 20px 18px 22px 19px;
+      box-shadow: 3px 3.5px 0px rgba(30, 30, 30, 0.2);
+      position: relative;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    .sketch-btn {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-main);
+      font-weight: 700;
+      color: var(--ink-black);
+    }
+
+    .sketch-btn:active {
+      transform: translate(1.5px, 2px);
+      box-shadow: 1.5px 1.5px 0px rgba(30, 30, 30, 0.2);
+    }
+
+    .sketch-yellow {
+      background: var(--doodle-yellow);
+    }
+
+    /* Top Bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      z-index: 5;
+    }
+
+    .icon-btn {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      font-size: 22px;
+    }
+
+    .coin-pill {
+      height: 44px;
+      padding: 0 12px;
+      border-radius: 22px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .coin-plus {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--doodle-yellow);
+      border: 2px solid var(--ink-black);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    /* Screens */
+    .screen {
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 100%;
+      height: 100%;
+    }
+
+    .screen.active {
+      display: flex;
+    }
+
+    /* Main Menu */
+    .menu-hero {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+    }
+
+    #menuCanvas {
+      width: 100%;
+      max-height: 300px;
+      flex: 1;
+    }
+
+    .quick-peril-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: 4px 0;
+    }
+
+    .quick-chip {
+      padding: 4px 9px;
+      font-size: 12px;
+      border-radius: 12px;
+    }
+
+    .word-title-row {
+      display: flex;
+      gap: 16px;
+      margin: 6px 0 10px;
+    }
+
+    .word-letter-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 38px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .word-underline {
+      width: 38px;
+      height: 7px;
+      border-radius: 4px;
+      border: 1.5px solid var(--ink-black);
+      margin-top: 3px;
+    }
+
+    .menu-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      width: 100%;
+      max-width: 340px;
+      margin: 0 auto 4px;
+    }
+
+    .menu-btn {
+      width: 100%;
+      height: 54px;
+      border-radius: 28px;
+      font-size: 21px;
+      flex-direction: column;
+      line-height: 1.1;
+    }
+
+    .menu-btn small {
+      font-size: 11px;
+      opacity: 0.78;
+    }
+
+    .devil-badge {
+      position: absolute;
+      top: -10px;
+      left: 14px;
+      background: var(--wrong-red);
+      color: #fff;
+      border: 2px solid var(--ink-black);
+      border-radius: 12px;
+      padding: 1px 7px;
+      font-size: 12px;
+    }
+
+    /* Gameplay Upper Split */
+    .upper-split {
+      display: flex;
+      width: 100%;
+      flex: 1;
+      min-height: 190px;
+      max-height: 310px;
+      gap: 8px;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .scene-half {
+      flex: 0.53;
+      height: 100%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #gameCanvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .clue-half {
+      flex: 0.47;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6px;
+    }
+
+    .lives-dots {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+
+    .life-dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      border: 1.5px solid var(--ink-black);
+    }
+
+    .boss-badge {
+      background: #FFEBEE;
+      border: 2px solid var(--wrong-red);
+      color: var(--wrong-red);
+      border-radius: 10px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .clue-text {
+      font-size: 19px;
+      line-height: 1.28;
+      font-weight: 700;
+    }
+
+    /* Speech Bubble & Floating Hit Toast */
+    .speech-bubble {
+      position: absolute;
+      top: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #FFF;
+      border: 2px solid var(--ink-black);
+      border-radius: 14px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      box-shadow: 2px 2px 0 rgba(0,0,0,0.18);
+      pointer-events: none;
+      display: none;
+      z-index: 4;
+    }
+
+    .speech-bubble.bottom-pos {
+      top: auto;
+      bottom: 6px;
+    }
+
+    /* Word Slots */
+    .word-slots {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin: 8px 0;
+      min-height: 46px;
+    }
+
+    .slot-item {
+      width: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .slot-char {
+      height: 32px;
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 32px;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .slot-line {
+      width: 100%;
+      height: 4px;
+      background: var(--ink-black);
+      border-radius: 3px;
+    }
+
+    /* 4-Row Keyboard */
+    .keyboard {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      width: 100%;
+    }
+
+    .kb-row {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .kb-key {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 700;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      font-family: var(--font-main);
+      color: var(--ink-black);
+    }
+
+    .kb-key.correct {
+      color: var(--correct-green);
+      cursor: default;
+    }
+
+    .kb-key.wrong {
+      color: rgba(30, 30, 30, 0.5);
+      cursor: default;
+    }
+
+    .kb-key svg.key-mark {
+      position: absolute;
+      inset: 2px;
+      width: calc(100% - 4px);
+      height: calc(100% - 4px);
+      pointer-events: none;
+    }
+
+    .bomb-dot {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--wrong-red);
+      border: 1.5px solid var(--ink-black);
+      box-shadow: 0 0 0 2px var(--doodle-yellow);
+      pointer-events: none;
+    }
+
+    /* Bottom Power-Up Bar */
+    .powerup-bar {
+      display: flex;
+      justify-content: space-evenly;
+      align-items: center;
+      width: 100%;
+      margin-top: 6px;
+    }
+
+    .powerup-wrap {
+      position: relative;
+      width: 82px;
+      height: 68px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .powerup-circle {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #FFF;
+      border: 2.5px solid var(--ink-black);
+      box-shadow: 2px 3px 0 rgba(0,0,0,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 24px;
+    }
+
+    .powerup-badge {
+      position: absolute;
+      bottom: 0;
+      background: var(--doodle-yellow);
+      border: 2px solid var(--ink-black);
+      border-radius: 10px;
+      padding: 1px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* Status Toast */
+    .toast-banner {
+      position: fixed;
+      top: 64px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--doodle-yellow);
+      border: 2.5px solid var(--ink-black);
+      border-radius: 20px;
+      padding: 7px 16px;
+      font-weight: 700;
+      font-size: 14px;
+      box-shadow: 3px 3px 0 rgba(0,0,0,0.2);
+      z-index: 30;
+      display: none;
+    }
+
+    /* Modal / Overlays */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.58);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      padding: 18px;
+      z-index: 25;
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+    }
+
+    .victory-card {
+      width: 100%;
+      max-width: 430px;
+      background: var(--paper-bg);
+      border: 3px solid var(--ink-black);
+      border-radius: 26px;
+      overflow: hidden;
+      box-shadow: 5px 6px 0 rgba(0,0,0,0.3);
+    }
+
+    .chalk-header {
+      background: var(--chalk-dark);
+      color: #FFF;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 190px;
+    }
+
+    .victory-body {
+      padding: 18px;
+      text-align: center;
+    }
+
+    .stats-row {
+      display: flex;
+      justify-content: space-evenly;
+      gap: 6px;
+      margin: 12px 0 16px;
+    }
+
+    .stat-chip {
+      padding: 5px 10px;
+      font-size: 13px;
+      border-radius: 12px;
+    }
+
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+    }
+
+    .progress-track {
+      flex: 1;
+      height: 24px;
+      background: #FFF;
+      border: 2px solid var(--ink-black);
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .progress-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      z-index: 0;
+    }
+
+    .progress-track span {
+      position: relative;
+      z-index: 1;
+    }
+
+    .dialog-card {
+      width: 100%;
+      max-width: 390px;
+      background: var(--paper-bg);
+      padding: 22px;
+      text-align: center;
+    }
+
+    .input-sketch {
+      width: 100%;
+      padding: 11px 14px;
+      border: 2.5px solid var(--ink-black);
+      border-radius: 14px;
+      font-family: var(--font-main);
+      font-size: 16px;
+      margin-bottom: 10px;
+      background: #FFF;
+    }
+  </style>
+</head>
+<body>
+  <div id="toastBanner" class="toast-banner"></div>
+
+  <div class="app-shell">
+    <!-- ================= SCREEN 1: MAIN MENU ================= -->
+    <div id="menuScreen" class="screen active">
+      <div class="top-bar">
+        <button class="sketch-box sketch-btn icon-btn" onclick="openSettings()" title="Settings">⚙️</button>
+        <div class="sketch-box coin-pill" onclick="openCoinModal()">
+          <span>⭐</span>
+          <span id="menuCoinText">1231</span>
+          <span class="coin-plus">+</span>
+        </div>
+      </div>
+
+      <div class="menu-hero">
+        <canvas id="menuCanvas" width="420" height="270"></canvas>
+
+        <div class="quick-peril-row" id="quickPerilRow"></div>
+
+        <div class="word-title-row">
+          <div class="word-letter-col">W<div class="word-underline" style="background:#FF595E"></div></div>
+          <div class="word-letter-col">O<div class="word-underline" style="background:#2ECC71"></div></div>
+          <div class="word-letter-col">R<div class="word-underline" style="background:#2196F3"></div></div>
+          <div class="word-letter-col">D<div class="word-underline" style="background:#FF9800"></div></div>
+        </div>
+      </div>
+
+      <div class="menu-buttons">
+        <button class="sketch-box sketch-btn sketch-yellow menu-btn" onclick="startCampaign()">
+          <span id="menuLevelBtnText">Level 1</span>
+          <small id="menuPerilSubText">Shark &amp; Balloons</small>
+        </button>
+
+        <button class="sketch-box sketch-btn menu-btn" onclick="startAdventure()">
+          <span class="devil-badge">😈 Devil Boss</span>
+          <span>Adventure</span>
+        </button>
+
+        <button class="sketch-box sketch-btn menu-btn" onclick="openTwoPlayerModal()">
+          <span>Two Player</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= SCREEN 2: GAMEPLAY ================= -->
+    <div id="gameScreen" class="screen">
+      <div class="top-bar">
+        <button class="sketch-box sketch-btn icon-btn" onclick="goMainMenu()" title="Back">←</button>
+        <div style="text-align:center">
+          <div id="gameHeaderTitle" style="font-size:22px;font-weight:700;">Level 1</div>
+          <div id="gameHeaderSub" style="font-size:12px;color:var(--ink-blue);font-weight:700;">Shark &amp; Balloons</div>
+        </div>
+        <div class="sketch-box coin-pill" onclick="openCoinModal()">
+          <span>⭐</span>
+          <span id="gameCoinText">1231</span>
+          <span class="coin-plus">+</span>
+        </div>
+      </div>
+
+      <div class="upper-split">
+        <div class="scene-half">
+          <div id="speechBubble" class="speech-bubble">Come on, you can do that!</div>
+          <canvas id="gameCanvas" width="260" height="270"></canvas>
+        </div>
+        <div class="clue-half">
+          <div id="livesDots" class="lives-dots"></div>
+          <div id="bossBadge" class="boss-badge" style="display:none;">💣 BOSS: Red Dot Keys = -2 ❤️</div>
+          <div id="clueText" class="clue-text">Guess a precious gemstone</div>
+        </div>
+      </div>
+
+      <div id="wordSlots" class="word-slots"></div>
+
+      <div id="keyboard" class="keyboard"></div>
+
+      <div class="powerup-bar">
+        <div class="powerup-wrap" onclick="useMagnifierHint()">
+          <div class="powerup-circle" style="background:rgba(76,175,80,0.14)">🔍</div>
+          <div class="powerup-badge">⭐ 150</div>
+        </div>
+        <div class="powerup-wrap" onclick="useExtraLifeHint()">
+          <div class="powerup-circle" style="background:rgba(33,150,243,0.14)">🛡️</div>
+          <div id="potionBadge" class="powerup-badge" style="background:var(--hint-blue);color:#fff;">2</div>
+        </div>
+        <div class="powerup-wrap" onclick="useLightbulbHint()">
+          <div class="powerup-circle" style="background:rgba(255,152,0,0.14)">💡</div>
+          <div class="powerup-badge">⭐ 125</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= VICTORY OVERLAY ("WELL DONE!") ================= -->
+  <div id="victoryModal" class="modal-backdrop">
+    <div class="victory-card">
+      <div class="chalk-header">
+        <canvas id="victoryCanvas" width="140" height="150"></canvas>
+        <div style="flex:1;text-align:center;">
+          <div id="victoryWord" style="font-size:26px;font-weight:700;color:var(--doodle-yellow);letter-spacing:3px;">DIAMOND</div>
+          <div id="victoryClue" style="font-size:14px;opacity:0.9;margin-top:6px;">Guess a precious gemstone</div>
+        </div>
+      </div>
+      <div class="victory-body">
+        <div style="font-size:30px;font-weight:700;color:var(--correct-green);">WELL DONE!</div>
+        <div class="stats-row">
+          <div class="sketch-box stat-chip" id="statPerfect">Perfect: 3</div>
+          <div class="sketch-box stat-chip" id="statStreak">Streak: 2</div>
+          <div class="sketch-box stat-chip" id="statMaxStreak">Max Streak: 5</div>
+        </div>
+
+        <div class="progress-row">
+          <strong style="width:58px;text-align:left;">Chest</strong>
+          <div class="progress-track">
+            <div id="chestFill" class="progress-fill" style="background:var(--hint-orange);width:50%;"></div>
+            <span id="chestText">2/4</span>
+          </div>
+          <span style="font-size:24px;">🧰</span>
+        </div>
+
+        <div class="progress-row">
+          <strong style="width:58px;text-align:left;">Theme</strong>
+          <div class="progress-track">
+            <div id="themeFill" class="progress-fill" style="background:var(--hint-blue);width:20%;"></div>
+            <span id="themeText">2/10</span>
+          </div>
+          <span style="font-size:24px;">🎨</span>
+        </div>
+
+        <button id="nextLevelBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-top:16px;" onclick="nextLevelAfterVictory()">
+          NEXT (+25 Coins) →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= GAME OVER OVERLAY ================= -->
+  <div id="gameOverModal" class="modal-backdrop">
+    <div class="sketch-box dialog-card">
+      <div id="gameOverTitle" style="font-size:26px;font-weight:700;color:var(--wrong-red);">SPLASH! SHARK SNACK</div>
+      <p id="gameOverDesc" style="font-weight:700;margin:8px 0;">All 6 balloons popped! The shark caught up.</p>
+      <p id="gameOverClue" style="color:var(--ink-blue);font-style:italic;margin-bottom:18px;"></p>
+      <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-bottom:10px;" onclick="rescuePlayer()">
+        Rescue (+3 Lives • 250 Coins)
+      </button>
+      <button class="sketch-box sketch-btn menu-btn" style="height:48px;margin-bottom:8px;" onclick="retryLevel()">
+        Try Again
+      </button>
+      <div style="cursor:pointer;padding:6px;opacity:0.75;font-weight:700;" onclick="closeModalsAndGoMenu()">Back to Main Menu</div>
+    </div>
+  </div>
+
+  <!-- ================= TWO PLAYER MODAL ================= -->
+  <div id="twoPlayerModal" class="modal-backdrop">
+    <div class="sketch-box dialog-card">
+      <div style="font-size:24px;font-weight:700;margin-bottom:8px;">Two Player Duel</div>
+      <p style="font-size:14px;margin-top:0;">Player 1: Enter a secret word &amp; clue for Player 2!</p>
+      <input id="tpWordInput" class="input-sketch" placeholder="Secret Word (A-Z)" maxlength="12" />
+      <input id="tpClueInput" class="input-sketch" placeholder="Clue / Category Prompt" maxlength="60" />
+      <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-top:8px;" onclick="startTwoPlayerDuel()">
+        Start Duel!
+      </button>
+      <div style="cursor:pointer;padding:8px;margin-top:6px;font-weight:700;" onclick="closeAllModals()">Cancel</div>
+    </div>
+  </div>
+
+  <!-- ================= SETTINGS & SOUND TEST MODAL ================= -->
+  <div id="settingsModal" class="modal-backdrop">
+    <div class="sketch-box dialog-card">
+      <div style="font-size:24px;font-weight:700;margin-bottom:12px;">Notebook Settings</div>
+      <button id="soundToggleBtn" class="sketch-box sketch-btn menu-btn" style="height:46px;font-size:16px;margin-bottom:10px;" onclick="toggleSound()">
+        🔊 Sound Effects: ON
+      </button>
+      <div style="display:flex;gap:6px;justify-content:center;margin-bottom:14px;">
+        <button class="sketch-box sketch-btn quick-chip" onclick="playProceduralSound('pop')">🎈 Test Pop</button>
+        <button class="sketch-box sketch-btn quick-chip" onclick="playProceduralSound('splash')">🌊 Test Splash</button>
+        <button class="sketch-box sketch-btn quick-chip" onclick="playProceduralSound('crunch')">🪨 Test Crunch</button>
+      </div>
+      <button id="fontToggleBtn" class="sketch-box sketch-btn menu-btn" style="height:46px;font-size:16px;margin-bottom:12px;" onclick="toggleFont()">
+        Font: Comic Rounded
+      </button>
+      <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:46px;" onclick="closeAllModals()">Close</button>
+    </div>
+  </div>
+
+  <!-- ================= COIN BONUS MODAL ================= -->
+  <div id="coinModal" class="modal-backdrop">
+    <div class="sketch-box dialog-card">
+      <div style="font-size:24px;font-weight:700;margin-bottom:8px;">Doodle Coin Bank</div>
+      <p id="coinModalBalance" style="font-size:17px;color:var(--ink-blue);font-weight:700;">Current Balance: 1231 Coins</p>
+      <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-bottom:10px;" onclick="claimFreeCoins()">
+        Claim Free Bonus (+150 Coins)
+      </button>
+      <button class="sketch-box sketch-btn menu-btn" style="height:46px;" onclick="closeAllModals()">Maybe Later</button>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. PROCEDURAL WEB AUDIO ENGINE (POP, SPLASH, CRUNCH, ZAP, CLANG, VICTORY)
+    // =========================================================================
+    let soundEnabled = true;
+    let audioCtx = null;
+
+    function getAudioCtx() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) audioCtx = new AudioContextClass();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playProceduralSound(type) {
+      if (!soundEnabled) return;
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      if (type === 'pop') {
+        // Sharp balloon pop pitch drop + impulse burst
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(720, now);
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.11);
+        gain.gain.setValueAtTime(0.45, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } else if (type === 'splash') {
+        // Filtered white noise splash into shark water
+        const bufferSize = ctx.sampleRate * 0.45;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          const env = Math.sin((i / bufferSize) * Math.PI);
+          data[i] = (Math.random() * 2 - 1) * env;
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(900, now);
+        filter.frequency.exponentialRampToValueAtTime(280, now + 0.45);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        noise.start(now);
+      } else if (type === 'crunch') {
+        // Granular multi-impulse rock crunch for Volcano Crates
+        const bufferSize = ctx.sampleRate * 0.32;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          const t = i / ctx.sampleRate;
+          const grain = Math.sin(t * 190 * Math.PI * 2) * 0.4 + (Math.random() * 2 - 1) * 0.6;
+          const pulse = (i % 1200 < 750) ? 1.0 : 0.25;
+          data[i] = grain * pulse * Math.exp(-t * 6.5);
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.48, now);
+        src.connect(gain);
+        gain.connect(ctx.destination);
+        src.start(now);
+      } else if (type === 'zap') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(920, now);
+        osc.frequency.linearRampToValueAtTime(340, now + 0.18);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.19);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      } else if (type === 'clang') {
+        [580, 930, 1380].forEach(freq => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        });
+      } else if (type === 'chime') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, now);
+        osc.frequency.setValueAtTime(880, now + 0.06);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.19);
+      } else if (type === 'victory') {
+        [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+          gain.gain.setValueAtTime(0.25, now + idx * 0.09);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.28);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.09);
+          osc.stop(now + idx * 0.09 + 0.3);
+        });
+      }
+    }
+
+    // =========================================================================
+    // 2. GAME DATA & PERIL DEFINITIONS
+    // =========================================================================
+    const BALLOON_COLORS = ['#FF595E', '#FFCA3A', '#8AC926', '#1982C4', '#6A4C93', '#FF924C'];
+
+    const PERILS = {
+      SHARK_BALLOONS: {
+        id: 'SHARK_BALLOONS',
+        name: 'Shark & Balloons',
+        panic: 'Come on, you can do that!',
+        overTitle: 'SPLASH! SHARK SNACK',
+        overDesc: 'All 6 balloons popped! The shark caught up.',
+        sound: 'pop',
+        overSound: 'splash'
+      },
+      UFO_ABDUCTION: {
+        id: 'UFO_ABDUCTION',
+        name: 'UFO Abduction',
+        panic: 'Not the alien probe!',
+        overTitle: 'ZAP! ABDUCTED!',
+        overDesc: 'The UFO tractor beam pulled the stickman aboard!',
+        sound: 'zap',
+        overSound: 'zap'
+      },
+      VOLCANO_BLOCKS: {
+        id: 'VOLCANO_BLOCKS',
+        name: 'Volcano Crates',
+        panic: 'My shoes are melting!',
+        overTitle: 'SIZZLE! MELTDOWN!',
+        overDesc: 'All 6 stone crates crumbled into the bubbling lava!',
+        sound: 'crunch',
+        overSound: 'crunch'
+      },
+      DINO_STEALTH: {
+        id: 'DINO_STEALTH',
+        name: 'Sleeping T-Rex',
+        panic: "Shhh! Don't wake Rex!",
+        overTitle: 'ROOOAR! REX AWOKE!',
+        overDesc: 'The Noise Meter maxed out and woke the giant T-Rex!',
+        sound: 'clang',
+        overSound: 'clang'
+      }
+    };
+
+    function getPerilForLevel(lvlNum) {
+      const m = ((lvlNum <= 0 ? 1 : lvlNum) % 4);
+      if (m === 1) return PERILS.SHARK_BALLOONS;
+      if (m === 2) return PERILS.UFO_ABDUCTION;
+      if (m === 3) return PERILS.VOLCANO_BLOCKS;
+      return PERILS.DINO_STEALTH;
+    }
+
+    const CAMPAIGN_LEVELS = [
+      { number: 1, word: 'DIAMOND', clue: 'Guess a precious gemstone' },
+      { number: 2, word: 'CHINA', clue: 'What country was paper invented in?' },
+      { number: 3, word: 'PRANK', clue: "April Fool's Day tradition" },
+      { number: 4, word: 'CAKE', clue: 'Sweet baked treat with birthday candles' },
+      { number: 5, word: 'GIRAFFE', clue: 'Boss Level: Tallest mammal with a long neck' },
+      { number: 6, word: 'COMPASS', clue: 'Navigation tool that always points north' },
+      { number: 7, word: 'VOLCANO', clue: 'Mountain that erupts with glowing lava' },
+      { number: 8, word: 'PENGUIN', clue: 'Tuxedo-wearing bird that cannot fly' },
+      { number: 9, word: 'RAINBOW', clue: 'Colorful arc seen in the sky after rain' },
+      { number: 10, word: 'PIRATE', clue: 'Boss Level: High-seas sailor seeking treasure' },
+      { number: 11, word: 'CACTUS', clue: 'Spiky desert plant that stores water' },
+      { number: 12, word: 'GUITAR', clue: 'Six-stringed musical instrument' },
+      { number: 13, word: 'OCTOPUS', clue: 'Clever sea creature with eight tentacles' },
+      { number: 14, word: 'POPCORN', clue: 'Buttery snack eaten at the movie theater' },
+      { number: 15, word: 'ASTRONAUT', clue: 'Boss Level: Explorer who travels into outer space' },
+      { number: 16, word: 'IGLOO', clue: 'Dome-shaped shelter built from snow blocks' },
+      { number: 17, word: 'TORNADO', clue: 'Violently rotating column of wind' },
+      { number: 18, word: 'PANCAKE', clue: 'Flat breakfast cake served with maple syrup' },
+      { number: 19, word: 'DINOSAUR', clue: 'Prehistoric reptile that ruled the Earth' },
+      { number: 20, word: 'TREASURE', clue: 'Boss Level: Chest overflowing with gold and jewels' }
+    ];
+
+    const ADVENTURE_LEVELS = [
+      { number: 1, word: 'LABYRINTH', clue: 'Devil Boss: An intricate maze of winding passages', isAdventure: true },
+      { number: 2, word: 'CHAMELEON', clue: 'Devil Boss: Lizard famous for shifting its colors', isAdventure: true },
+      { number: 3, word: 'AVALANCHE', clue: 'Devil Boss: Sudden rapid rush of snow down a cliff', isAdventure: true },
+      { number: 4, word: 'QUICKSAND', clue: 'Devil Boss: Loose wet sand that traps the unwary', isAdventure: true },
+      { number: 5, word: 'JELLYFISH', clue: 'Devil Boss: Ocean drifter with stinging tentacles', isAdventure: true },
+      { number: 6, word: 'SAXOPHONE', clue: 'Devil Boss: Brass woodwind instrument iconic in jazz', isAdventure: true },
+      { number: 7, word: 'METEORITE', clue: 'Devil Boss: Space rock that survives falling to Earth', isAdventure: true },
+      { number: 8, word: 'KALEIDOSCOPE', clue: 'Devil Boss: Optical tube of mirrors and colorful glass', isAdventure: true }
+    ];
+
+    // State
+    let coins = 1231;
+    let campaignIdx = 0;
+    let adventureIdx = 0;
+    let freePotions = 2;
+    let perfectCount = 3;
+    let streak = 2;
+    let maxStreak = 5;
+    let chestProg = 1;
+    let themeProg = 1;
+    let useCursive = false;
+
+    let activeLevel = CAMPAIGN_LEVELS[0];
+    let lives = 6;
+    let mistakes = 0;
+    let keyStatuses = {};
+    let revealed = new Set();
+    let bombLetters = new Set();
+    let popBurstTimer = 0;
+
+    function showToast(msg) {
+      const el = document.getElementById('toastBanner');
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => { el.style.display = 'none'; }, 2100);
+    }
+
+    function updateMenuUI() {
+      const lvlNum = campaignIdx + 1;
+      const peril = getPerilForLevel(lvlNum);
+      document.getElementById('menuCoinText').textContent = coins;
+      document.getElementById('gameCoinText').textContent = coins;
+      document.getElementById('menuLevelBtnText').textContent =
+        (lvlNum % 5 === 0) ? `Level ${lvlNum} (BOSS 💣)` : `Level ${lvlNum}`;
+      document.getElementById('menuPerilSubText').textContent = peril.name;
+
+      const row = document.getElementById('quickPerilRow');
+      row.innerHTML = '';
+      [[1,'1:Shark'],[2,'2:UFO'],[3,'3:Lava'],[4,'4:Dino'],[5,'5:Boss💣']].forEach(([n, label]) => {
+        const btn = document.createElement('button');
+        btn.className = 'sketch-box sketch-btn quick-chip' + (lvlNum === n ? ' sketch-yellow' : '');
+        btn.textContent = label;
+        btn.onclick = () => { campaignIdx = n - 1; updateMenuUI(); startCampaign(); };
+        row.appendChild(btn);
+      });
+    }
+
+    function isBoss(level) {
+      return Boolean(level.isAdventure || (level.number > 0 && level.number % 5 === 0));
+    }
+
+    function loadLevel(level) {
+      activeLevel = level;
+      lives = 6;
+      mistakes = 0;
+      keyStatuses = {};
+      revealed = new Set();
+      bombLetters = new Set();
+
+      if (isBoss(level)) {
+        const targetSet = new Set(level.word.toUpperCase().split(''));
+        const wrongPool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(c => !targetSet.has(c));
+        let idx = (level.number * 3) % wrongPool.length;
+        while (bombLetters.size < 3 && bombLetters.size < wrongPool.length) {
+          bombLetters.add(wrongPool[idx % wrongPool.length]);
+          idx += 5;
+        }
+      }
+      renderGameplayUI();
+    }
+
+    function startCampaign() {
+      const template = CAMPAIGN_LEVELS[campaignIdx % CAMPAIGN_LEVELS.length];
+      loadLevel({ ...template, number: campaignIdx + 1, isAdventure: false });
+      switchScreen('gameScreen');
+    }
+
+    function startAdventure() {
+      const template = ADVENTURE_LEVELS[adventureIdx % ADVENTURE_LEVELS.length];
+      loadLevel({ ...template, number: adventureIdx + 1, isAdventure: true });
+      switchScreen('gameScreen');
+    }
+
+    function startTwoPlayerDuel() {
+      const rawWord = document.getElementById('tpWordInput').value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 12);
+      const rawClue = document.getElementById('tpClueInput').value.trim();
+      closeAllModals();
+      loadLevel({
+        number: 1,
+        word: rawWord || 'SHARK',
+        clue: rawClue || 'Two-Player Secret Word!',
+        isAdventure: false
+      });
+      switchScreen('gameScreen');
+    }
+
+    function switchScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      updateMenuUI();
+    }
+
+    function goMainMenu() {
+      closeAllModals();
+      switchScreen('menuScreen');
+    }
+
+    function renderGameplayUI() {
+      const peril = getPerilForLevel(activeLevel.number);
+      const boss = isBoss(activeLevel);
+
+      document.getElementById('gameCoinText').textContent = coins;
+      document.getElementById('gameHeaderTitle').textContent =
+        activeLevel.isAdventure ? `Adventure ${activeLevel.number}` : `Level ${activeLevel.number}`;
+      const sub = document.getElementById('gameHeaderSub');
+      sub.textContent = boss ? `${peril.name} • 💣 BOSS (-2 ❤️)` : peril.name;
+      sub.style.color = boss ? 'var(--wrong-red)' : 'var(--ink-blue)';
+
+      document.getElementById('bossBadge').style.display = boss ? 'block' : 'none';
+      document.getElementById('clueText').textContent = activeLevel.clue;
+      document.getElementById('potionBadge').textContent = freePotions > 0 ? `${freePotions}` : '⭐ 200';
+
+      // Speech bubble
+      const bubble = document.getElementById('speechBubble');
+      if (lives >= 1 && lives <= 2) {
+        bubble.textContent = peril.panic;
+        bubble.style.display = 'block';
+        bubble.classList.toggle('bottom-pos', peril.id === 'UFO_ABDUCTION');
+      } else {
+        bubble.style.display = 'none';
+      }
+
+      // 6 life dots
+      const dotsEl = document.getElementById('livesDots');
+      dotsEl.innerHTML = '';
+      for (let i = 0; i < 6; i++) {
+        const d = document.createElement('div');
+        d.className = 'life-dot';
+        d.style.background = i < lives ? BALLOON_COLORS[i] : '#E0E0E0';
+        dotsEl.appendChild(d);
+      }
+
+      // Word slots
+      const slotsEl = document.getElementById('wordSlots');
+      slotsEl.innerHTML = '';
+      activeLevel.word.toUpperCase().split('').forEach((ch, idx) => {
+        const item = document.createElement('div');
+        item.className = 'slot-item';
+        const charDiv = document.createElement('div');
+        charDiv.className = 'slot-char';
+        charDiv.style.color = (idx % 2 === 0) ? 'var(--correct-green)' : 'var(--ink-blue)';
+        charDiv.textContent = revealed.has(ch) ? ch : '';
+        const lineDiv = document.createElement('div');
+        lineDiv.className = 'slot-line';
+        item.appendChild(charDiv);
+        item.appendChild(lineDiv);
+        slotsEl.appendChild(item);
+      });
+
+      // Keyboard (A-G, H-N, O-U, V-Z)
+      const rows = ['ABCDEFG', 'HIJKLMN', 'OPQRSTU', 'VWXYZ'];
+      const kbEl = document.getElementById('keyboard');
+      kbEl.innerHTML = '';
+      rows.forEach(rStr => {
+        const rDiv = document.createElement('div');
+        rDiv.className = 'kb-row';
+        rStr.split('').forEach(ch => {
+          const st = keyStatuses[ch] || 'DEFAULT';
+          const btn = document.createElement('button');
+          btn.className = 'kb-key' + (st === 'CORRECT' ? ' correct' : st === 'WRONG' ? ' wrong' : '');
+          btn.textContent = ch;
+
+          if (bombLetters.has(ch)) {
+            const dot = document.createElement('span');
+            dot.className = 'bomb-dot';
+            btn.appendChild(dot);
+          }
+
+          if (st === 'CORRECT') {
+            btn.insertAdjacentHTML('beforeend',
+              `<svg class="key-mark" viewBox="0 0 40 40"><path d="M8,10 C18,2 36,5 36,21 C36,35 18,38 6,30 C1,23 3,8 12,6" fill="none" stroke="#2ECC71" stroke-width="3.5" stroke-linecap="round"/></svg>`);
+          } else if (st === 'WRONG') {
+            btn.insertAdjacentHTML('beforeend',
+              `<svg class="key-mark" viewBox="0 0 40 40"><path d="M7,8 L33,33 M33,7 L7,33" fill="none" stroke="#E74C3C" stroke-width="3.8" stroke-linecap="round"/></svg>`);
+          } else {
+            btn.onclick = () => onLetterTapped(ch);
+          }
+          rDiv.appendChild(btn);
+        });
+        kbEl.appendChild(rDiv);
+      });
+    }
+
+    function onLetterTapped(ch) {
+      if (keyStatuses[ch]) return;
+      const word = activeLevel.word.toUpperCase();
+      const peril = getPerilForLevel(activeLevel.number);
+
+      if (word.includes(ch)) {
+        keyStatuses[ch] = 'CORRECT';
+        revealed.add(ch);
+        playProceduralSound('chime');
+        renderGameplayUI();
+        checkVictory();
+      } else {
+        keyStatuses[ch] = 'WRONG';
+        mistakes++;
+        const isBomb = bombLetters.has(ch);
+        const dmg = isBomb ? 2 : 1;
+        lives = Math.max(0, lives - dmg);
+        popBurstTimer = 1.0;
+
+        if (isBomb) {
+          showToast(`💥 BOMB LETTER '${ch}'! -2 ❤️`);
+        }
+        renderGameplayUI();
+
+        if (lives <= 0) {
+          playProceduralSound(peril.overSound);
+          streak = 0;
+          showGameOverModal();
+        } else {
+          playProceduralSound(peril.sound);
+        }
+      }
+    }
+
+    function checkVictory() {
+      const uniqueChars = Array.from(new Set(activeLevel.word.toUpperCase().split('')));
+      if (uniqueChars.every(c => revealed.has(c))) {
+        if (mistakes === 0) perfectCount++;
+        streak++;
+        if (streak > maxStreak) maxStreak = streak;
+        chestProg = (chestProg % 4) + 1;
+        themeProg = (themeProg % 10) + 1;
+        playProceduralSound('victory');
+        showVictoryModal();
+      }
+    }
+
+    // Power-ups
+    function useMagnifierHint() {
+      const unrevealed = activeLevel.word.toUpperCase().split('').filter(c => !revealed.has(c));
+      if (!unrevealed.length) return;
+      if (coins < 150) { showToast('Need 150 coins! Tap + to get coins.'); return; }
+      coins -= 150;
+      const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+      keyStatuses[pick] = 'CORRECT';
+      revealed.add(pick);
+      playProceduralSound('chime');
+      showToast(`Magnifier revealed '${pick}'!`);
+      renderGameplayUI();
+      checkVictory();
+    }
+
+    function useExtraLifeHint() {
+      if (lives >= 6) { showToast('Already at max 6 lives!'); return; }
+      if (freePotions > 0) {
+        freePotions--;
+        lives++;
+        playProceduralSound('chime');
+        showToast('+1 Life restored! (Used free potion)');
+      } else if (coins >= 200) {
+        coins -= 200;
+        lives++;
+        playProceduralSound('chime');
+        showToast('+1 Life restored!');
+      } else {
+        showToast('Need 200 coins for a Life Potion!');
+      }
+      renderGameplayUI();
+    }
+
+    function useLightbulbHint() {
+      const targetSet = new Set(activeLevel.word.toUpperCase().split(''));
+      const candidates = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(c => !targetSet.has(c) && !keyStatuses[c]);
+      if (!candidates.length) { showToast('No wrong letters left to clear!'); return; }
+      if (coins < 125) { showToast('Need 125 coins! Tap + to get coins.'); return; }
+      coins -= 125;
+      candidates.sort((a, b) => (bombLetters.has(b) ? 1 : 0) - (bombLetters.has(a) ? 1 : 0));
+      candidates.slice(0, 3).forEach(c => { keyStatuses[c] = 'WRONG'; });
+      playProceduralSound('chime');
+      showToast('Safely cleared 3 wrong letters!');
+      renderGameplayUI();
+    }
+
+    // Modals
+    function showVictoryModal() {
+      const reward = isBoss(activeLevel) ? 50 : 25;
+      document.getElementById('victoryWord').textContent = activeLevel.word.toUpperCase();
+      document.getElementById('victoryClue').textContent = activeLevel.clue;
+      document.getElementById('statPerfect').textContent = `Perfect: ${perfectCount}`;
+      document.getElementById('statStreak').textContent = `Streak: ${streak}`;
+      document.getElementById('statMaxStreak').textContent = `Max Streak: ${maxStreak}`;
+      document.getElementById('chestFill').style.width = `${(chestProg / 4) * 100}%`;
+      document.getElementById('chestText').textContent = `${chestProg}/4`;
+      document.getElementById('themeFill').style.width = `${(themeProg / 10) * 100}%`;
+      document.getElementById('themeText').textContent = `${themeProg}/10`;
+      document.getElementById('nextLevelBtn').textContent = `NEXT (+${reward} Coins) →`;
+      document.getElementById('victoryModal').classList.add('active');
+      drawCelebratingChalkStickman();
+    }
+
+    function nextLevelAfterVictory() {
+      const reward = isBoss(activeLevel) ? 50 : 25;
+      coins += reward + (chestProg === 4 ? 100 : 0);
+      closeAllModals();
+      if (activeLevel.isAdventure) {
+        adventureIdx++;
+        startAdventure();
+      } else {
+        campaignIdx++;
+        startCampaign();
+      }
+    }
+
+    function showGameOverModal() {
+      const peril = getPerilForLevel(activeLevel.number);
+      document.getElementById('gameOverTitle').textContent = peril.overTitle;
+      document.getElementById('gameOverDesc').textContent = peril.overDesc;
+      document.getElementById('gameOverClue').textContent = `Clue: ${activeLevel.clue}`;
+      document.getElementById('gameOverModal').classList.add('active');
+    }
+
+    function rescuePlayer() {
+      if (coins < 250) { showToast('Need 250 coins! Tap + at top right.'); return; }
+      coins -= 250;
+      lives = 3;
+      closeAllModals();
+      renderGameplayUI();
+      showToast('Rescued with 3 lives!');
+    }
+
+    function retryLevel() {
+      closeAllModals();
+      loadLevel(activeLevel);
+    }
+
+    function closeModalsAndGoMenu() {
+      closeAllModals();
+      goMainMenu();
+    }
+
+    function openTwoPlayerModal() { document.getElementById('twoPlayerModal').classList.add('active'); }
+    function openSettings() { document.getElementById('settingsModal').classList.add('active'); }
+    function openCoinModal() {
+      document.getElementById('coinModalBalance').textContent = `Current Balance: ${coins} Coins`;
+      document.getElementById('coinModal').classList.add('active');
+    }
+    function closeAllModals() {
+      document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('active'));
+    }
+
+    function claimFreeCoins() {
+      coins += 150;
+      playProceduralSound('chime');
+      closeAllModals();
+      updateMenuUI();
+      showToast('+150 Doodle Coins added!');
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('soundToggleBtn').textContent =
+        soundEnabled ? '🔊 Sound Effects: ON' : '🔇 Sound Effects: OFF';
+      if (soundEnabled) playProceduralSound('pop');
+    }
+
+    function toggleFont() {
+      useCursive = !useCursive;
+      document.documentElement.style.setProperty(
+        '--font-main',
+        useCursive ? "'Patrick Hand', cursive" : "'Fredoka', sans-serif"
+      );
+      document.getElementById('fontToggleBtn').textContent =
+        useCursive ? 'Font: Hand-Drawn Cursive' : 'Font: Comic Rounded';
+    }
+
+    // =========================================================================
+    // 3. PROCEDURAL CANVAS RENDERER (SHARK, UFO, VOLCANO CRATES, SLEEPING T-REX)
+    // =========================================================================
+    function drawStickman(ctx, x, handY, scale, panicking, handsUp, t) {
+      ctx.save();
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 3 * scale;
+      ctx.lineCap = 'round';
+
+      const shoulderY = handY + 20 * scale;
+      const headY = shoulderY - 16 * scale;
+      const hipY = shoulderY + 26 * scale;
+
+      // Left arm
+      ctx.beginPath();
+      ctx.moveTo(x, shoulderY);
+      if (handsUp) {
+        ctx.lineTo(x - 7 * scale, handY + 8 * scale);
+        ctx.lineTo(x, handY);
+      } else {
+        ctx.lineTo(x - 15 * scale, shoulderY + 12 * scale + Math.sin(t * 3) * 5 * scale);
+      }
+      ctx.stroke();
+
+      // Right arm
+      ctx.beginPath();
+      ctx.moveTo(x, shoulderY);
+      if (panicking) {
+        ctx.lineTo(x + 20 * scale, shoulderY - 10 * scale + Math.sin(t * 6) * 8 * scale);
+      } else if (handsUp) {
+        ctx.lineTo(x + 7 * scale, handY + 8 * scale);
+        ctx.lineTo(x, handY);
+      } else {
+        ctx.lineTo(x + 15 * scale, shoulderY + 12 * scale + Math.cos(t * 3) * 5 * scale);
+      }
+      ctx.stroke();
+
+      // Torso & Legs
+      const kick = panicking ? Math.sin(t * 8) * 7 * scale : Math.sin(t * 2.5) * 3 * scale;
+      ctx.beginPath();
+      ctx.moveTo(x, shoulderY);
+      ctx.lineTo(x, hipY);
+      ctx.moveTo(x, hipY);
+      ctx.lineTo(x - 12 * scale, hipY + 20 * scale + kick);
+      ctx.moveTo(x, hipY);
+      ctx.lineTo(x + 12 * scale, hipY + 20 * scale - kick);
+      ctx.stroke();
+
+      // Head
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(x, headY, 12 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Eyes & Mouth
+      ctx.fillStyle = '#1E1E1E';
+      ctx.beginPath();
+      ctx.arc(x - 4 * scale, headY - 2 * scale, 1.8 * scale, 0, Math.PI * 2);
+      ctx.arc(x + 4 * scale, headY - 2 * scale, 1.8 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      if (panicking) {
+        ctx.arc(x, headY + 4 * scale, 3 * scale, 0, Math.PI * 2);
+      } else {
+        ctx.arc(x, headY + 2 * scale, 4.5 * scale, 0.15 * Math.PI, 0.85 * Math.PI);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function renderPerilScene(canvas, peril, livesCount, isPreview, t) {
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const cx = w * 0.5;
+      const bob = Math.sin(t * 2.2) * 5;
+      const danger = Math.min(1, Math.max(0, (6 - livesCount) / 6));
+
+      if (peril.id === 'SHARK_BALLOONS') {
+        const waterY = h * 0.80;
+        const harnessY = (h * 0.34 + (h * 0.62 - h * 0.34) * danger) + bob;
+        const offsets = [[-58,-48],[-34,-64],[-10,-72],[14,-70],[38,-60],[58,-44]];
+
+        for (let i = 0; i < 6; i++) {
+          if (i >= livesCount) continue;
+          const bx = cx + offsets[i][0] + Math.sin(t * 2 + i) * 3;
+          const by = harnessY + offsets[i][1] + Math.cos(t * 2 + i) * 2;
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(cx, harnessY);
+          ctx.quadraticCurveTo((cx + bx) * 0.5, (harnessY + by) * 0.5 + 8, bx, by + 20);
+          ctx.stroke();
+
+          ctx.fillStyle = BALLOON_COLORS[i];
+          ctx.beginPath();
+          ctx.ellipse(bx, by, 16, 19, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        drawStickman(ctx, cx, harnessY, 0.9, livesCount <= 2, true, t);
+
+        // Shark Fin or Open Jaws
+        if (!isPreview && livesCount <= 2) {
+          ctx.fillStyle = '#546E7A';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(cx - 38, waterY + 6);
+          ctx.quadraticCurveTo(cx, waterY - 48, cx + 38, waterY + 6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#E74C3C';
+          ctx.beginPath();
+          ctx.moveTo(cx - 26, waterY + 4);
+          ctx.quadraticCurveTo(cx, waterY - 34, cx + 26, waterY + 4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          const sx = cx + Math.sin(t * 1.4) * (w * 0.22);
+          ctx.fillStyle = '#546E7A';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(sx - 14, waterY + 4);
+          ctx.quadraticCurveTo(sx - 2, waterY - 24, sx + 16, waterY - 32);
+          ctx.quadraticCurveTo(sx + 8, waterY - 12, sx + 14, waterY + 4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Water waves
+        ctx.fillStyle = 'rgba(79, 195, 247, 0.35)';
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += 14) {
+          ctx.lineTo(x, waterY + Math.sin(t * 3 + x * 0.05) * 4.5);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = '#0288D1';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 14) {
+          const wy = waterY + Math.sin(t * 3 + x * 0.05) * 4.5;
+          if (x === 0) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
+        }
+        ctx.stroke();
+
+      } else if (peril.id === 'UFO_ABDUCTION') {
+        const ufoY = h * 0.18;
+        const groundY = h * 0.88;
+        const ufoX = cx + Math.sin(t * 1.5) * 10;
+
+        // Beam cone
+        ctx.fillStyle = 'rgba(118, 255, 3, 0.22)';
+        ctx.beginPath();
+        ctx.moveTo(ufoX - 34, ufoY + 10);
+        ctx.lineTo(ufoX + 34, ufoY + 10);
+        ctx.lineTo(ufoX + 90, groundY);
+        ctx.lineTo(ufoX - 90, groundY);
+        ctx.closePath();
+        ctx.fill();
+
+        const handY = (groundY - 72) + ((ufoY + 14) - (groundY - 72)) * danger + bob;
+        drawStickman(ctx, ufoX, handY, 0.85 * (1 - danger * 0.2), livesCount <= 2, danger > 0.1, t);
+
+        // UFO Saucer
+        ctx.fillStyle = '#80DEEA';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.ellipse(ufoX, ufoY - 12, 30, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#B0BEC5';
+        ctx.beginPath();
+        ctx.ellipse(ufoX, ufoY, 54, 13, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+      } else if (peril.id === 'VOLCANO_BLOCKS') {
+        const lavaY = h * 0.82;
+        const crateW = 64;
+        const crateH = 18;
+        for (let i = 0; i < livesCount; i++) {
+          const topY = lavaY - (i + 1) * crateH;
+          ctx.fillStyle = (i % 2 === 0) ? '#D7CCC8' : '#A1887F';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 2;
+          ctx.fillRect(cx - crateW * 0.5, topY, crateW, crateH - 1);
+          ctx.strokeRect(cx - crateW * 0.5, topY, crateW, crateH - 1);
+        }
+        const platformY = lavaY - livesCount * crateH;
+        drawStickman(ctx, cx, platformY - 64 + bob * 0.4, 0.85, livesCount <= 2, false, t);
+
+        ctx.fillStyle = '#FF5722';
+        ctx.fillRect(0, lavaY, w, h - lavaY);
+
+      } else if (peril.id === 'DINO_STEALTH') {
+        const groundY = h * 0.84;
+        const noise = 6 - livesCount;
+        for (let i = 0; i < 6; i++) {
+          ctx.fillStyle = (i < noise) ? (i < 3 ? '#FFD166' : '#E74C3C') : '#FFFFFF';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.6;
+          const bh = 10 + i * 3;
+          ctx.fillRect(18 + i * 20, 38 - bh, 15, bh);
+          ctx.strokeRect(18 + i * 20, 38 - bh, 15, bh);
+        }
+        drawStickman(ctx, w * 0.26, groundY - 66 + bob * 0.4, 0.85, livesCount <= 2, false, t);
+
+        // T-Rex Head
+        const jawOpen = livesCount <= 2 ? 14 : 0;
+        ctx.fillStyle = '#689F38';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.4;
+        ctx.fillRect(w * 0.48, groundY - 76 - jawOpen, 88, 36);
+        ctx.strokeRect(w * 0.48, groundY - 76 - jawOpen, 88, 36);
+        ctx.fillStyle = '#9CCC65';
+        ctx.fillRect(w * 0.50, groundY - 38 + jawOpen * 0.4, 78, 18);
+        ctx.strokeRect(w * 0.50, groundY - 38 + jawOpen * 0.4, 78, 18);
+      }
+    }
+
+    function drawCelebratingChalkStickman() {
+      const c = document.getElementById('victoryCanvas');
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = 'round';
+      const cx = 70, cy = 78;
+      ctx.beginPath();
+      ctx.arc(cx, cy - 28, 15, 0, Math.PI * 2);
+      ctx.moveTo(cx, cy - 13);
+      ctx.lineTo(cx, cy + 20);
+      ctx.moveTo(cx, cy - 5);
+      ctx.lineTo(cx - 22, cy - 25);
+      ctx.moveTo(cx, cy - 5);
+      ctx.lineTo(cx + 22, cy - 25);
+      ctx.moveTo(cx, cy + 20);
+      ctx.lineTo(cx - 16, cy + 46);
+      ctx.moveTo(cx, cy + 20);
+      ctx.lineTo(cx + 16, cy + 46);
+      ctx.stroke();
+    }
+
+    // Main 60fps animation loop
+    function animate(nowMs) {
+      const t = (nowMs || 0) / 1000;
+      const menuCanvas = document.getElementById('menuCanvas');
+      if (menuCanvas) {
+        renderPerilScene(menuCanvas, getPerilForLevel(campaignIdx + 1), 6, true, t);
+      }
+      const gameCanvas = document.getElementById('gameCanvas');
+      if (gameCanvas) {
+        renderPerilScene(gameCanvas, getPerilForLevel(activeLevel.number), lives, false, t);
+      }
+      requestAnimationFrame(animate);
+    }
+
+    updateMenuUI();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>

@@ -1,10 +1,18 @@
 package com.example
 
+import android.content.Context
+import android.media.MediaPlayer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import kotlin.math.exp
+import kotlin.random.Random
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -248,6 +256,217 @@ enum class RoundOutcome {
     GAME_OVER
 }
 
+/**
+ * Lightweight procedural sound engine that synthesizes 16-bit mono PCM WAV audio
+ * on the fly and plays it through standard Android [MediaPlayer] APIs.
+ */
+enum class DoodleSoundEffect {
+    POP,      // Balloon pop (sharp pitch drop + transient burst)
+    SPLASH,   // Shark water splash (filtered noise + bubbly modulation)
+    CRUNCH,   // Volcano stone crate crumble (multi-impulse rock crackle)
+    ZAP,      // UFO tractor beam pulse
+    CLANG,    // Sleeping T-Rex metallic noise clang
+    CHIME,    // Correct letter / power-up chime
+    VICTORY   // Level complete 4-note fanfare
+}
+
+object ProceduralSoundEngine {
+    var soundEnabled: Boolean = true
+    var lastPlayedEffect: DoodleSoundEffect? = null
+        private set
+
+    private var cacheDir: File? = null
+    private val wavFiles = mutableMapOf<DoodleSoundEffect, File>()
+
+    fun init(context: Context) {
+        if (cacheDir != null) return
+        cacheDir = File(context.cacheDir, "doodle_sfx").apply { mkdirs() }
+    }
+
+    fun play(effect: DoodleSoundEffect) {
+        if (!soundEnabled) return
+        lastPlayedEffect = effect
+        val dir = cacheDir ?: return
+
+        runCatching {
+            val wavFile = wavFiles.getOrPut(effect) {
+                val file = File(dir, "sfx_${effect.name.lowercase()}.wav")
+                if (!file.exists() || file.length() == 0L) {
+                    val pcmSamples = synthesizeSamples(effect)
+                    val wavBytes = encodePcm16MonoWav(pcmSamples, SAMPLE_RATE)
+                    FileOutputStream(file).use { it.write(wavBytes) }
+                }
+                file
+            }
+
+            val mediaPlayer = MediaPlayer()
+            FileInputStream(wavFile).use { fis ->
+                mediaPlayer.setDataSource(fis.fd)
+            }
+            mediaPlayer.setOnCompletionListener { mp ->
+                runCatching {
+                    mp.reset()
+                    mp.release()
+                }
+            }
+            mediaPlayer.setOnErrorListener { mp, _, _ ->
+                runCatching {
+                    mp.reset()
+                    mp.release()
+                }
+                true
+            }
+            mediaPlayer.prepare()
+            mediaPlayer.start()
+        }
+    }
+
+    private const val SAMPLE_RATE = 22050
+
+    private fun synthesizeSamples(effect: DoodleSoundEffect): ShortArray {
+        val rng = Random(effect.ordinal * 997 + 42)
+        return when (effect) {
+            DoodleSoundEffect.POP -> {
+                // 120ms sharp balloon pop: rapid frequency sweep 760Hz -> 110Hz + initial transient snap
+                val count = (SAMPLE_RATE * 0.12).toInt()
+                ShortArray(count) { i ->
+                    val t = i.toDouble() / SAMPLE_RATE
+                    val progress = i.toDouble() / count
+                    val freq = 760.0 * exp(-progress * 2.1) + 90.0
+                    val env = exp(-progress * 6.5)
+                    val snap = if (i < SAMPLE_RATE * 0.012) (rng.nextDouble() * 2.0 - 1.0) * 0.7 else 0.0
+                    val wave = (sin(2.0 * PI * freq * t) * 0.8 + snap) * env
+                    (wave.coerceIn(-1.0, 1.0) * Short.MAX_VALUE * 0.85).toInt().toShort()
+                }
+            }
+
+            DoodleSoundEffect.SPLASH -> {
+                // 450ms shark water splash: band-modulated water spray noise + bubbly low tones
+                val count = (SAMPLE_RATE * 0.45).toInt()
+                var lpState = 0.0
+                ShortArray(count) { i ->
+                    val t = i.toDouble() / SAMPLE_RATE
+                    val progress = i.toDouble() / count
+                    val noise = rng.nextDouble() * 2.0 - 1.0
+                    val cutoff = 0.35 - progress * 0.22
+                    lpState += cutoff * (noise - lpState)
+                    val bubbleFreq = 180.0 + 90.0 * sin(2.0 * PI * 19.0 * t)
+                    val bubble = sin(2.0 * PI * bubbleFreq * t) * 0.35
+                    val env = sin(progress * PI) * exp(-progress * 2.2)
+                    val wave = (lpState * 0.85 + bubble) * env
+                    (wave.coerceIn(-1.0, 1.0) * Short.MAX_VALUE * 0.85).toInt().toShort()
+                }
+            }
+
+            DoodleSoundEffect.CRUNCH -> {
+                // 320ms volcano stone crate crunch: granular multi-impulse rock fracture
+                val count = (SAMPLE_RATE * 0.32).toInt()
+                ShortArray(count) { i ->
+                    val t = i.toDouble() / SAMPLE_RATE
+                    val progress = i.toDouble() / count
+                    val grainPulse = if ((i / 420) % 2 == 0) 1.0 else 0.28
+                    val lowRumble = sin(2.0 * PI * 145.0 * t) + 0.5 * sin(2.0 * PI * 230.0 * t)
+                    val grit = (rng.nextDouble() * 2.0 - 1.0) * 0.75
+                    val env = exp(-progress * 3.8) * grainPulse
+                    val wave = (lowRumble * 0.45 + grit * 0.55) * env
+                    (wave.coerceIn(-1.0, 1.0) * Short.MAX_VALUE * 0.85).toInt().toShort()
+                }
+            }
+
+            DoodleSoundEffect.ZAP -> {
+                // 200ms UFO tractor beam FM zap
+                val count = (SAMPLE_RATE * 0.20).toInt()
+                ShortArray(count) { i ->
+                    val t = i.toDouble() / SAMPLE_RATE
+                    val progress = i.toDouble() / count
+                    val carrier = 880.0 - progress * 520.0
+                    val mod = sin(2.0 * PI * 45.0 * t) * 120.0
+                    val env = exp(-progress * 3.5)
+                    val wave = sin(2.0 * PI * (carrier + mod) * t) * env
+                    (wave.coerceIn(-1.0, 1.0) * Short.MAX_VALUE * 0.75).toInt().toShort()
+                }
+            }
+
+            DoodleSoundEffect.CLANG -> {
+                // 280ms T-Rex stealth metallic clang
+                val count = (SAMPLE_RATE * 0.28).toInt()
+                ShortArray(count) { i ->
+                    val t = i.toDouble() / SAMPLE_RATE
+                    val progress = i.toDouble() / count
+                    val partials = sin(2.0 * PI * 580.0 * t) * 0.45 +
+                        sin(2.0 * PI * 935.0 * t) * 0.35 +
+                        sin(2.0 * PI * 1410.0 * t) * 0.20
+                    val env = exp(-progress * 5.2)
+                    (partials * env * Short.MAX_VALUE * 0.8).toInt().toShort()
+                }
+            }
+
+            DoodleSoundEffect.CHIME -> {
+                // 160ms two-tone positive ink chime
+                val count = (SAMPLE_RATE * 0.16).toInt()
+                ShortArray(count) { i ->
+                    val t = i.toDouble() / SAMPLE_RATE
+                    val progress = i.toDouble() / count
+                    val freq = if (progress < 0.45) 587.33 else 880.0
+                    val env = exp(-progress * 4.0)
+                    (sin(2.0 * PI * freq * t) * env * Short.MAX_VALUE * 0.65).toInt().toShort()
+                }
+            }
+
+            DoodleSoundEffect.VICTORY -> {
+                // 440ms 4-note major arpeggio (C5 - E5 - G5 - C6)
+                val notes = doubleArrayOf(523.25, 659.25, 783.99, 1046.50)
+                val count = (SAMPLE_RATE * 0.44).toInt()
+                val noteLen = count / notes.size
+                ShortArray(count) { i ->
+                    val t = i.toDouble() / SAMPLE_RATE
+                    val noteIdx = (i / noteLen).coerceIn(0, notes.lastIndex)
+                    val localProg = (i % noteLen).toDouble() / noteLen
+                    val env = exp(-localProg * 3.0)
+                    val wave = sin(2.0 * PI * notes[noteIdx] * t) * env
+                    (wave * Short.MAX_VALUE * 0.7).toInt().toShort()
+                }
+            }
+        }
+    }
+
+    private fun encodePcm16MonoWav(samples: ShortArray, sampleRate: Int): ByteArray {
+        val dataSize = samples.size * 2
+        val totalSize = 36 + dataSize
+        val out = ByteArrayOutputStream(44 + dataSize)
+
+        fun writeAscii(s: String) = out.write(s.toByteArray(Charsets.US_ASCII))
+        fun writeIntLE(v: Int) {
+            out.write(v and 0xFF)
+            out.write((v ushr 8) and 0xFF)
+            out.write((v ushr 16) and 0xFF)
+            out.write((v ushr 24) and 0xFF)
+        }
+        fun writeShortLE(v: Int) {
+            out.write(v and 0xFF)
+            out.write((v ushr 8) and 0xFF)
+        }
+
+        writeAscii("RIFF")
+        writeIntLE(totalSize)
+        writeAscii("WAVE")
+        writeAscii("fmt ")
+        writeIntLE(16) // PCM chunk size
+        writeShortLE(1) // AudioFormat = 1 (PCM)
+        writeShortLE(1) // NumChannels = 1 (Mono)
+        writeIntLE(sampleRate)
+        writeIntLE(sampleRate * 2) // ByteRate
+        writeShortLE(2) // BlockAlign
+        writeShortLE(16) // BitsPerSample = 16
+        writeAscii("data")
+        writeIntLE(dataSize)
+        for (s in samples) {
+            writeShortLE(s.toInt())
+        }
+        return out.toByteArray()
+    }
+}
+
 val CAMPAIGN_LEVELS = listOf(
     WordLevel(1, "DIAMOND", "Guess a precious gemstone"),
     WordLevel(2, "CHINA", "What country was paper invented in?"),
@@ -315,6 +534,8 @@ class WordGameViewModel : ViewModel() {
         private set
 
     // Settings
+    var soundEffectsEnabled by mutableStateOf(true)
+        private set
     var useCursiveFont by mutableStateOf(false)
         private set
     var selectedPaperTheme by mutableStateOf(PaperTheme.CLASSIC)
@@ -444,6 +665,7 @@ class WordGameViewModel : ViewModel() {
             if (!revealedChars.contains(upper)) {
                 revealedChars.add(upper)
             }
+            ProceduralSoundEngine.play(DoodleSoundEffect.CHIME)
             checkVictoryCondition()
         } else {
             keyStatuses[upper] = KeyStatus.WRONG
@@ -464,6 +686,23 @@ class WordGameViewModel : ViewModel() {
             if (balloonsRemaining <= 0) {
                 currentStreak = 0
                 roundOutcome = RoundOutcome.GAME_OVER
+                // Play Splash on Shark Game Over, Crunch on Volcano, or hazard-specific sound
+                val gameOverSound = when (activePerilType) {
+                    PerilType.SHARK_BALLOONS -> DoodleSoundEffect.SPLASH
+                    PerilType.VOLCANO_BLOCKS -> DoodleSoundEffect.CRUNCH
+                    PerilType.UFO_ABDUCTION -> DoodleSoundEffect.ZAP
+                    PerilType.DINO_STEALTH -> DoodleSoundEffect.CLANG
+                }
+                ProceduralSoundEngine.play(gameOverSound)
+            } else {
+                // Play procedural 'pop' for balloons, 'crunch' for volcano crates, etc.
+                val hitSound = when (activePerilType) {
+                    PerilType.SHARK_BALLOONS -> DoodleSoundEffect.POP
+                    PerilType.VOLCANO_BLOCKS -> DoodleSoundEffect.CRUNCH
+                    PerilType.UFO_ABDUCTION -> DoodleSoundEffect.ZAP
+                    PerilType.DINO_STEALTH -> DoodleSoundEffect.CLANG
+                }
+                ProceduralSoundEngine.play(hitSound)
             }
         }
     }
@@ -481,6 +720,7 @@ class WordGameViewModel : ViewModel() {
             chestProgress = (chestProgress % 4) + 1
             themeProgress = (themeProgress % 10) + 1
             roundOutcome = RoundOutcome.VICTORY
+            ProceduralSoundEngine.play(DoodleSoundEffect.VICTORY)
         }
     }
 
@@ -586,6 +826,14 @@ class WordGameViewModel : ViewModel() {
         statusBannerMessage = "+$amount Doodle Coins added!"
     }
 
+    fun toggleSoundEffects() {
+        soundEffectsEnabled = !soundEffectsEnabled
+        ProceduralSoundEngine.soundEnabled = soundEffectsEnabled
+        if (soundEffectsEnabled) {
+            ProceduralSoundEngine.play(DoodleSoundEffect.POP)
+        }
+    }
+
     fun toggleFontStyle() {
         useCursiveFont = !useCursiveFont
     }
@@ -606,6 +854,7 @@ class WordGameViewModel : ViewModel() {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ProceduralSoundEngine.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             MaterialTheme {
@@ -742,9 +991,11 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
         // 5. Settings & Paper Theme Dialog
         if (viewModel.showSettingsDialog) {
             SettingsDoodleDialog(
+                soundEnabled = viewModel.soundEffectsEnabled,
                 useCursive = viewModel.useCursiveFont,
                 selectedTheme = viewModel.selectedPaperTheme,
                 fontFamily = activeFontFamily,
+                onToggleSound = { viewModel.toggleSoundEffects() },
                 onToggleFont = { viewModel.toggleFontStyle() },
                 onSelectTheme = { viewModel.selectTheme(it) },
                 onDismiss = { viewModel.showSettingsDialog = false }
@@ -3499,9 +3750,11 @@ fun TwoPlayerSetupScreen(
 
 @Composable
 fun SettingsDoodleDialog(
+    soundEnabled: Boolean,
     useCursive: Boolean,
     selectedTheme: PaperTheme,
     fontFamily: FontFamily,
+    onToggleSound: () -> Unit,
     onToggleFont: () -> Unit,
     onSelectTheme: (PaperTheme) -> Unit,
     onDismiss: () -> Unit
@@ -3513,7 +3766,7 @@ fun SettingsDoodleDialog(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(22.dp),
+                modifier = Modifier.padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -3524,7 +3777,70 @@ fun SettingsDoodleDialog(
                     color = DoodleColors.InkBlack
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Sound Effects Toggle
+                SketchyContainer(
+                    fillColor = if (soundEnabled) DoodleColors.DoodleYellow else Color.White,
+                    cornerRadius = 18.dp,
+                    onClick = onToggleSound,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .testTag("toggle_sound_button")
+                ) {
+                    Text(
+                        text = if (soundEnabled) "🔊 Sound Effects: ON" else "🔇 Sound Effects: OFF",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 15.sp,
+                        color = DoodleColors.InkBlack
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Quick MediaPlayer Procedural Sound Audition Buttons (Pop, Splash, Crunch)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    SketchyContainer(
+                        fillColor = Color.White,
+                        cornerRadius = 12.dp,
+                        onClick = { ProceduralSoundEngine.play(DoodleSoundEffect.POP) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
+                            .testTag("test_pop_sound")
+                    ) {
+                        Text("🎈 Pop", fontFamily = fontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                    SketchyContainer(
+                        fillColor = Color.White,
+                        cornerRadius = 12.dp,
+                        onClick = { ProceduralSoundEngine.play(DoodleSoundEffect.SPLASH) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
+                            .testTag("test_splash_sound")
+                    ) {
+                        Text("🌊 Splash", fontFamily = fontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                    SketchyContainer(
+                        fillColor = Color.White,
+                        cornerRadius = 12.dp,
+                        onClick = { ProceduralSoundEngine.play(DoodleSoundEffect.CRUNCH) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
+                            .testTag("test_crunch_sound")
+                    ) {
+                        Text("🪨 Crunch", fontFamily = fontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 SketchyContainer(
                     fillColor = Color.White,
@@ -3532,28 +3848,28 @@ fun SettingsDoodleDialog(
                     onClick = onToggleFont,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp)
+                        .height(46.dp)
                 ) {
                     Text(
                         text = if (useCursive) "Font: Cursive Script (Tap to switch)" else "Font: Comic Bold Sans (Tap to switch)",
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         color = DoodleColors.InkBlack
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = "Graph Paper Theme:",
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     color = DoodleColors.InkBlack
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 PaperTheme.entries.forEach { theme ->
                     val isSelected = theme == selectedTheme
@@ -3563,20 +3879,20 @@ fun SettingsDoodleDialog(
                         onClick = { onSelectTheme(theme) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(44.dp)
-                            .padding(vertical = 3.dp)
+                            .height(42.dp)
+                            .padding(vertical = 2.dp)
                     ) {
                         Text(
                             text = if (isSelected) "✓ ${theme.title}" else theme.title,
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             color = DoodleColors.InkBlack
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 SketchyContainer(
                     fillColor = DoodleColors.DoodleYellow,
@@ -3584,7 +3900,7 @@ fun SettingsDoodleDialog(
                     onClick = onDismiss,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(46.dp)
                 ) {
                     Text(
                         text = "Close",
