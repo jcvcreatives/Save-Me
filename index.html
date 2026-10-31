@@ -691,19 +691,28 @@
       </div>
 
       <div class="menu-buttons">
-        <div class="sketch-box" style="padding:8px 14px;border-radius:16px;width:100%;">
-          <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:700;margin-bottom:5px;">
-            <span>⭐ Campaign Progress</span>
-            <span id="menuCampaignProgressText" style="color:var(--ink-blue);">0 / 100 Completed</span>
-          </div>
-          <div class="progress-track" style="height:14px;">
-            <div id="menuCampaignProgressFill" class="progress-fill" style="background:var(--correct-green);width:0%;"></div>
+        <div id="tierProgressionCard" class="sketch-box" style="padding:10px 14px;border-radius:18px;width:100%;position:relative;overflow:hidden;background:var(--paper-bg);">
+          <canvas id="rankAuraCanvas" width="360" height="76" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0.55;"></canvas>
+          <div style="position:relative;z-index:1;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:7px;">
+              <div style="text-align:left;flex:1;">
+                <div id="menuRankTitleText" style="font-size:15px;font-weight:700;color:var(--ink-black);line-height:1.2;">Tier 1: Doodle Novice</div>
+                <div id="menuRankTierSub" style="font-size:11px;font-weight:700;color:var(--ink-blue);margin-top:2px;">Progress: Level 1 / 50 (Next Tier at Lv 51)</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0;">
+                <div id="menuRankBadgeDesc" style="font-size:10px;font-weight:700;background:rgba(255,255,255,0.9);padding:2px 8px;border-radius:10px;border:1.5px solid var(--ink-black);">✨ Hatching Pulse</div>
+                <div id="menuCampaignProgressText" style="font-size:10px;font-weight:700;color:var(--ink-black);opacity:0.75;margin-top:2px;">0/1000 ★</div>
+              </div>
+            </div>
+            <div class="progress-track" style="height:15px;background:var(--paper-bg);border:2px solid var(--ink-black);">
+              <div id="menuCampaignProgressFill" class="progress-fill" style="background:#FFF59D;width:2%;"></div>
+            </div>
           </div>
         </div>
 
         <button class="sketch-box sketch-btn sketch-yellow menu-btn" onclick="openWorldMapModal()">
           <span id="menuLevelBtnText">Level 1</span>
-          <small id="menuPerilSubText">Shark &amp; Balloons • Tap for 100-Level Map</small>
+          <small id="menuPerilSubText">Shark &amp; Balloons • Doodle Novice</small>
         </button>
 
         <button class="sketch-box sketch-btn menu-btn" onclick="openTwoPlayerModal()">
@@ -875,14 +884,14 @@
     </div>
   </div>
 
-  <!-- ================= 100-LEVEL BOARD GAME WORLD MAP MODAL ================= -->
+  <!-- ================= 1,000-LEVEL BOARD GAME WORLD MAP MODAL ================= -->
   <div id="worldMapModal" class="modal-backdrop">
     <div class="sketch-box dialog-card" style="width:min(520px,96vw);max-height:90vh;display:flex;flex-direction:column;padding:14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <button class="sketch-box sketch-btn icon-btn" style="width:38px;height:38px;font-size:16px;" onclick="closeAllModals()">←</button>
         <div>
-          <div style="font-size:19px;font-weight:700;">100-Level World Map</div>
-          <div id="worldMapSubStats" style="font-size:12px;color:var(--ink-blue);font-weight:700;">0/100 Solved • ⭐ 0/300 Stars</div>
+          <div style="font-size:19px;font-weight:700;">1,000-Level World Map</div>
+          <div id="worldMapSubStats" style="font-size:12px;color:var(--ink-blue);font-weight:700;">0/1000 Solved • ⭐ 0/3000 Stars</div>
         </div>
         <button id="freePlayToggleBtn" class="sketch-box sketch-btn quick-chip" style="padding:5px 9px;font-size:11px;" onclick="toggleFreePlayAll()">🔒 Campaign</button>
       </div>
@@ -1023,16 +1032,44 @@
     }
 
     // =========================================================================
-    // 2. GAME DATA & 6 PERIL SCENARIOS ACROSS 100 LEVELS
+    // 2. GAME DATA: 20 RANK TIERS, 15 PERIL SCENARIOS & 1,000 LEVELS
     // =========================================================================
     const BALLOON_COLORS = ['#FF595E', '#FFCA3A', '#8AC926', '#1982C4', '#6A4C93', '#FF924C'];
     const VOWELS_SET = new Set(['A', 'E', 'I', 'O', 'U']);
+
+    const RANK_TIERS = [
+      { tier: 1, start: 1, end: 50, title: 'Doodle Novice', badge: '✨ Hatching Pulse', color: '#FBC02D' },
+      { tier: 2, start: 51, end: 100, title: 'Ink Apprentice', badge: '💧 Ink-Splash Rings', color: '#0288D1' },
+      { tier: 3, start: 101, end: 150, title: 'Sketch Master', badge: '✳️ Cross-Hatch Starburst', color: '#2E7D32' },
+      { tier: 4, start: 151, end: 200, title: 'Graph Paper Wizard', badge: '🔮 Coordinate Grid Pulse', color: '#7B1FA2' },
+      { tier: 5, start: 201, end: 250, title: 'Epic Doodle Legend', badge: '🔥 Golden Flame Sparks', color: '#EF6C00' },
+      { tier: 6, start: 251, end: 300, title: 'Mythic Ink God', badge: '⚡ Rainbow Lightning', color: '#D500F9' },
+      { tier: 7, start: 301, end: 350, title: 'Dimension Sketcher', badge: '🟢 Matrix Code Grid', color: '#00C853' },
+      { tier: 8, start: 351, end: 400, title: 'Cosmic Doodle Overlord', badge: '🪐 Orbiting Planets', color: '#3949AB' },
+      { tier: 9, start: 401, end: 450, title: 'Quantum Ink Architect', badge: '⚛️ Atomic Rings', color: '#00838F' },
+      { tier: 10, start: 451, end: 500, title: 'Infinity Paper Sovereign', badge: '🌌 Spiral Galaxy Sketch', color: '#AD1457' },
+      { tier: 11, start: 501, end: 550, title: 'Celestial Scribbler', badge: '✨ Constellation Lines', color: '#1565C0' },
+      { tier: 12, start: 551, end: 600, title: 'Nebula Doodle Walker', badge: '☄️ Cosmic Dust Swirl', color: '#8E24AA' },
+      { tier: 13, start: 601, end: 650, title: 'Vortex Line Master', badge: '🌀 Blackhole Ring', color: '#37474F' },
+      { tier: 14, start: 651, end: 700, title: 'Solar Prism Forger', badge: '🌈 Prismatic Sunbeams', color: '#F57F17' },
+      { tier: 15, start: 701, end: 750, title: 'Chrono Graphite Hero', badge: '⚙️ Clock Gear & Pendulum', color: '#5D4037' },
+      { tier: 16, start: 751, end: 800, title: 'Ether Sketch Warden', badge: '👻 Ghostly Blue Flame', color: '#0097A7' },
+      { tier: 17, start: 801, end: 850, title: 'Titanium Ink Berserker', badge: '⚔️ Metallic Sparks', color: '#C62828' },
+      { tier: 18, start: 851, end: 900, title: 'Astral Paper Sovereign', badge: '🌟 Golden Runes & Stars', color: '#F9A825' },
+      { tier: 19, start: 901, end: 950, title: 'Omniscient Doodle Sage', badge: '👁️ Ancient Scroll Aura', color: '#4527A0' },
+      { tier: 20, start: 951, end: 1000, title: 'The Supreme Doodle God', badge: '👑 Gold & Rainbow Cosmos', color: '#FFD600' }
+    ];
+
+    function getRankForLevel(lvlNum) {
+      const safe = Math.max(1, Math.min(1000, lvlNum));
+      const idx = Math.min(19, Math.floor((safe - 1) / 50));
+      return RANK_TIERS[idx];
+    }
 
     const PERILS = {
       SHARK_BALLOONS: {
         id: 'SHARK_BALLOONS',
         name: 'Shark & Balloons',
-        rangeLabel: 'Levels 1–16',
         panic: 'Come on, you can do that!',
         hitLabel: 'POP!',
         overTitle: 'SPLASH! SHARK SNACK',
@@ -1043,7 +1080,6 @@
       UFO_ABDUCTION: {
         id: 'UFO_ABDUCTION',
         name: 'UFO Abduction',
-        rangeLabel: 'Levels 17–33',
         panic: 'Beam me up... wait, no!',
         hitLabel: 'ZAP!',
         overTitle: 'ZAP! ABDUCTED!',
@@ -1054,7 +1090,6 @@
       VOLCANO_BLOCKS: {
         id: 'VOLCANO_BLOCKS',
         name: 'Volcano Lava',
-        rangeLabel: 'Levels 34–50',
         panic: 'My shoes are melting!',
         hitLabel: 'CRUMBLE!',
         overTitle: 'SIZZLE! MELTDOWN!',
@@ -1065,7 +1100,6 @@
       GIANT_VENUS_FLYTRAP: {
         id: 'GIANT_VENUS_FLYTRAP',
         name: 'Giant Venus Flytrap',
-        rangeLabel: 'Levels 51–66',
         panic: 'Vegetarian option!',
         hitLabel: 'SNAP!',
         overTitle: 'CHOMP! PLANT SALAD!',
@@ -1076,7 +1110,6 @@
       DINO_STEALTH: {
         id: 'DINO_STEALTH',
         name: 'Sleeping T-Rex',
-        rangeLabel: 'Levels 67–83',
         panic: "Shhh! Don't wake Rex!",
         hitLabel: 'CLANG!',
         overTitle: 'ROOOAR! REX AWOKE!',
@@ -1087,28 +1120,130 @@
       LEAKY_SUBMARINE: {
         id: 'LEAKY_SUBMARINE',
         name: 'Leaky Submarine',
-        rangeLabel: 'Levels 84–100',
         panic: 'Glub glub! Holding my breath!',
         hitLabel: 'PING!',
         overTitle: 'GLUB! TANK FLOODED!',
         overDesc: 'All 6 bolts popped and the submarine glass tank flooded!',
         sound: 'pop',
         overSound: 'splash'
+      },
+      TIGHTROPE_SAW: {
+        id: 'TIGHTROPE_SAW',
+        name: 'Tightrope Saw',
+        panic: "Don't look down! Keep balanced!",
+        hitLabel: 'BZZT!',
+        overTitle: 'SNIP! ROPE SEVERED!',
+        overDesc: 'The spinning saw blade sliced through the tightrope!',
+        sound: 'clang',
+        overSound: 'crunch'
+      },
+      METEOR_SHOWER: {
+        id: 'METEOR_SHOWER',
+        name: 'Meteor Shower',
+        panic: 'Incoming space rock! Duck!',
+        hitLabel: 'BOOM!',
+        overTitle: 'KABOOM! METEOR IMPACT!',
+        overDesc: 'The giant flaming meteor crashed into the asteroid!',
+        sound: 'crunch',
+        overSound: 'crunch'
+      },
+      MAD_SCIENTIST_POTION: {
+        id: 'MAD_SCIENTIST_POTION',
+        name: 'Mad Scientist Potion',
+        panic: 'That green acid is fizzing!',
+        hitLabel: 'FIZZ!',
+        overTitle: 'FIZZLE! POTION OVERFLOW!',
+        overDesc: 'The bubbling green beaker dissolved everything!',
+        sound: 'pop',
+        overSound: 'splash'
+      },
+      PIRATE_PLANK: {
+        id: 'PIRATE_PLANK',
+        name: 'Pirate Plank',
+        panic: 'Back off, Kraken tentacles!',
+        hitLabel: 'CREAK!',
+        overTitle: 'SPLASH! WALKED THE PLANK!',
+        overDesc: 'The Kraken pulled the stickman off the pirate plank!',
+        sound: 'crunch',
+        overSound: 'splash'
+      },
+      SPIDER_WEB: {
+        id: 'SPIDER_WEB',
+        name: 'Spider Web',
+        panic: 'Eight legs is six too many!',
+        hitLabel: 'TWANG!',
+        overTitle: 'WRAPPED! SPIDER COCOON!',
+        overDesc: 'The giant doodle spider wrapped the stickman in silk!',
+        sound: 'pop',
+        overSound: 'crunch'
+      },
+      QUICKSAND_PIT: {
+        id: 'QUICKSAND_PIT',
+        name: 'Quicksand Pit',
+        panic: 'Stop wiggling! It sinks faster!',
+        hitLabel: 'SLURP!',
+        overTitle: 'GULP! SUNK IN QUICKSAND!',
+        overDesc: 'The swirling desert quicksand swallowed the stickman!',
+        sound: 'crunch',
+        overSound: 'splash'
+      },
+      GHOST_MANOR: {
+        id: 'GHOST_MANOR',
+        name: 'Ghost Manor',
+        panic: 'Who turned out the candles?!',
+        hitLabel: 'BOO!',
+        overTitle: 'SPOOKED! LIGHTS OUT!',
+        overDesc: 'The last candle went out in Haunted Ghost Manor!',
+        sound: 'zap',
+        overSound: 'zap'
+      },
+      TICKING_TIME_BOMB: {
+        id: 'TICKING_TIME_BOMB',
+        name: 'Ticking Time Bomb',
+        panic: 'Cut the red wire! Or blue?!',
+        hitLabel: 'SIZZLE!',
+        overTitle: 'BOOM! FUSE BURNED OUT!',
+        overDesc: 'The fuse reached the cartoon bomb before the word was solved!',
+        sound: 'zap',
+        overSound: 'crunch'
+      },
+      DRAGON_CAVE: {
+        id: 'DRAGON_CAVE',
+        name: 'Dragon Cave',
+        panic: 'Is it hot in here or is that Dragon breath?!',
+        hitLabel: 'ROAR!',
+        overTitle: 'TOASTED! DRAGON FIRE!',
+        overDesc: 'The dragon fire melted through the last shield rivet!',
+        sound: 'clang',
+        overSound: 'crunch'
       }
     };
 
+    const PERIL_ORDER = [
+      PERILS.SHARK_BALLOONS,
+      PERILS.UFO_ABDUCTION,
+      PERILS.VOLCANO_BLOCKS,
+      PERILS.GIANT_VENUS_FLYTRAP,
+      PERILS.DINO_STEALTH,
+      PERILS.LEAKY_SUBMARINE,
+      PERILS.TIGHTROPE_SAW,
+      PERILS.METEOR_SHOWER,
+      PERILS.MAD_SCIENTIST_POTION,
+      PERILS.PIRATE_PLANK,
+      PERILS.SPIDER_WEB,
+      PERILS.QUICKSAND_PIT,
+      PERILS.GHOST_MANOR,
+      PERILS.TICKING_TIME_BOMB,
+      PERILS.DRAGON_CAVE
+    ];
+
     function getPerilForLevel(lvlNum) {
-      const normalized = (((lvlNum <= 0 ? 1 : lvlNum) - 1) % 100) + 1;
-      if (normalized <= 16) return PERILS.SHARK_BALLOONS;
-      if (normalized <= 33) return PERILS.UFO_ABDUCTION;
-      if (normalized <= 50) return PERILS.VOLCANO_BLOCKS;
-      if (normalized <= 66) return PERILS.GIANT_VENUS_FLYTRAP;
-      if (normalized <= 83) return PERILS.DINO_STEALTH;
-      return PERILS.LEAKY_SUBMARINE;
+      const safe = Math.max(1, lvlNum);
+      const idx = Math.floor((safe - 1) / 20) % PERIL_ORDER.length;
+      return PERIL_ORDER[idx];
     }
 
-    const CAMPAIGN_LEVELS = [
-      // WORLD 1: SHARK & BALLOONS (Levels 1–16)
+    const CORE_100_LEVELS = [
       { number: 1, word: 'DIAMOND', clue: 'Hard Science & Tech: Guess a precious carbon gemstone' },
       { number: 2, word: 'CHINA', clue: 'World History & Geography: What country was paper invented in?' },
       { number: 3, word: 'PRANK', clue: "Pop Culture & Idioms: April Fool's Day tradition" },
@@ -1125,8 +1260,6 @@
       { number: 14, word: 'POPCORN', clue: 'Food & Desserts: Buttery snack eaten at the cinema' },
       { number: 15, word: 'ASTRONAUT', clue: 'Boss • Hard Science: Explorer who travels into outer space' },
       { number: 16, word: 'IGLOO', clue: 'World History & Geography: Dome shelter built from snow blocks' },
-
-      // WORLD 2: UFO ABDUCTION (Levels 17–33)
       { number: 17, word: 'TORNADO', clue: 'Animals & Nature: Violently rotating column of wind' },
       { number: 18, word: 'PANCAKE', clue: 'Food & Desserts: Flat breakfast cake served with syrup' },
       { number: 19, word: 'DINOSAUR', clue: 'Animals & Nature: Prehistoric reptile that ruled Earth' },
@@ -1144,8 +1277,6 @@
       { number: 31, word: 'CHEETAH', clue: 'Animals & Nature: Fastest land feline with black tear stripes' },
       { number: 32, word: 'CUPCAKE', clue: 'Food & Desserts: Single-serving frosted cake in a paper cup' },
       { number: 33, word: 'SAMURAI', clue: 'World History & Geography: Feudal Japanese armored warrior' },
-
-      // WORLD 3: VOLCANO LAVA (Levels 34–50)
       { number: 34, word: 'SUPERHERO', clue: 'Pop Culture & Idioms: Masked crime-fighter with superpowers' },
       { number: 35, word: 'ROBOTICS', clue: 'Boss • Hard Science: Engineering branch that builds automatons' },
       { number: 36, word: 'KOALA', clue: 'Animals & Nature: Eucalyptus-munching Australian marsupial' },
@@ -1162,9 +1293,7 @@
       { number: 47, word: 'MACARON', clue: 'Food & Desserts: Delicate French almond meringue sandwich cookie' },
       { number: 48, word: 'AMAZON', clue: 'World History & Geography: Vast South American river and rainforest' },
       { number: 49, word: 'KARAOKE', clue: 'Pop Culture & Idioms: Singing along to instrumental tracks' },
-      { number: 50, word: 'QUANTUM', clue: 'Boss • Frozen Vowels! Hard Science: Subatomic physics realm' },
-
-      // WORLD 4: GIANT VENUS FLYTRAP (Levels 51–66, Frozen Vowels Active!)
+      { number: 50, word: 'QUANTUM', clue: 'Boss • Hard Science: Subatomic physics realm' },
       { number: 51, word: 'PLATYPUS', clue: 'Animals & Nature: Duck-billed egg-laying mammal' },
       { number: 52, word: 'TIRAMISU', clue: 'Food & Desserts: Coffee-flavored Italian layered dessert' },
       { number: 53, word: 'SPARTA', clue: 'World History & Geography: Ancient Greek warrior city-state' },
@@ -1181,8 +1310,6 @@
       { number: 64, word: 'BRAINSTORM', clue: 'Pop Culture & Idioms: Group session generating creative ideas' },
       { number: 65, word: 'NEUTRON', clue: 'Boss • Hard Science: Subatomic particle with zero electric charge' },
       { number: 66, word: 'PEACOCK', clue: 'Animals & Nature: Bird with iridescent tail feathers and eyespots' },
-
-      // WORLD 5: SLEEPING T-REX (Levels 67–83, Frozen Vowels Active!)
       { number: 67, word: 'BROWNIE', clue: 'Food & Desserts: Rich square baked chocolate fudge treat' },
       { number: 68, word: 'ACROPOLIS', clue: 'World History & Geography: Ancient citadel perched above Athens' },
       { number: 69, word: 'UNDERDOG', clue: 'Pop Culture & Idioms: Competitor thought least likely to win' },
@@ -1200,8 +1327,6 @@
       { number: 81, word: 'WALRUS', clue: 'Animals & Nature: Whiskered Arctic marine mammal with long tusks' },
       { number: 82, word: 'CHEESECAKE', clue: 'Food & Desserts: Creamy graham-crust dessert made with soft cheese' },
       { number: 83, word: 'SILKROAD', clue: 'World History & Geography: Ancient Eurasian trade route network' },
-
-      // WORLD 6: LEAKY SUBMARINE (Levels 84–100, Frozen Vowels Active!)
       { number: 84, word: 'TIMEWARP', clue: 'Pop Culture & Idioms: Distortion of time in sci-fi adventures' },
       { number: 85, word: 'SUPERNOVA', clue: 'Boss • Hard Science: Brilliant explosion of a dying giant star' },
       { number: 86, word: 'MEERKAT', clue: 'Animals & Nature: Upright-standing desert mongoose sentry' },
@@ -1218,8 +1343,129 @@
       { number: 97, word: 'GELATO', clue: 'Food & Desserts: Dense artisanal Italian frozen dessert' },
       { number: 98, word: 'MACHUPICCHU', clue: 'World History & Geography: Incan citadel high in the Andes Mountains' },
       { number: 99, word: 'SHOWDOWN', clue: 'Pop Culture & Idioms: Final dramatic confrontation between rivals' },
-      { number: 100, word: 'SINGULARITY', clue: 'Final Boss • Hard Science: Point of infinite density at a black hole center' }
+      { number: 100, word: 'SINGULARITY', clue: 'Boss • Hard Science: Point of infinite density at a black hole center' }
     ];
+
+    const CATEGORY_BANKS = [
+      ['Animals', [
+        ['AXOLOTL', 'Smiling Mexican walking salamander'],
+        ['CAPYBARA', 'Largest living rodent native to South America'],
+        ['ORANGUTAN', 'Red-haired great ape of Borneo rainforests'],
+        ['ARMADILLO', 'New World mammal with leathery armor shell'],
+        ['CHINCHILLA', 'Velvet-furred Andean mountain rodent'],
+        ['KINGFISHER', 'Brightly colored bird that dives for fish'],
+        ['WOLVERINE', 'Fierce solitary northern carnivore'],
+        ['PANGOLIN', 'Scaly anteater that rolls into an armored ball'],
+        ['BARRACUDA', 'Ray-finned ocean predator with fang-like jaws'],
+        ['MANTARAY', 'Giant winged ocean glider']
+      ]],
+      ['Science', [
+        ['CATALYST', 'Substance that speeds up a chemical reaction'],
+        ['ISOTOPE', 'Atom variant with a different number of neutrons'],
+        ['PHOTON', 'Elementary quantum packet of electromagnetic light'],
+        ['NEBULA', 'Giant interstellar cloud of cosmic dust and gas'],
+        ['QUASAR', 'Luminous active galactic nucleus'],
+        ['SYNAPSE', 'Junction gap where neurons transmit impulses'],
+        ['PENDULUM', 'Suspended weight swinging under gravity'],
+        ['REFRACTION', 'Bending of light waves passing into water'],
+        ['SEISMOGRAPH', 'Instrument that records earthquake tremors'],
+        ['ENTROPY', 'Thermodynamic measure of disorder in a system']
+      ]],
+      ['History', [
+        ['RENAISSANCE', 'European cultural rebirth of art and science'],
+        ['AQUEDUCT', 'Roman stone bridge channel carrying water'],
+        ['CATAPULT', 'Ancient siege engine hurling heavy boulders'],
+        ['PHARAOH', 'Monarch of ancient dynastic Egypt'],
+        ['ASTROLABE', 'Ancient astronomical inclinometer used at sea'],
+        ['TREBUCHET', 'Counterweight siege engine smashing castle walls'],
+        ['OBELISK', 'Tall four-sided tapered stone monument'],
+        ['TAPESTRY', 'Heavy woven wall textile depicting battles'],
+        ['SHOGUN', 'Hereditary military commander of feudal Japan'],
+        ['LEGION', 'Principal military unit of ancient Rome']
+      ]],
+      ['Pop Culture', [
+        ['COSPLAY', 'Dressing up in handcrafted character costumes'],
+        ['SPEEDRUN', 'Completing a video game as fast as possible'],
+        ['FLASHMOB', 'Crowd assembling suddenly for a surprise dance'],
+        ['SYNTHWAVE', 'Neon retro-futuristic electronic music genre'],
+        ['MARIONETTE', 'Articulated wooden puppet on strings'],
+        ['JOYSTICK', 'Pivoting handheld controller for arcade games'],
+        ['JUKEBOX', 'Coin-operated retro vinyl music machine'],
+        ['STUNTMAN', 'Performer who executes dangerous film leaps'],
+        ['PREQUEL', 'Story installment set before the original work'],
+        ['ENCORE', 'Extra song performed at the end of a concert']
+      ]],
+      ['Geography', [
+        ['ARCHIPELAGO', 'Expansive chain or cluster of islands'],
+        ['PENINSULA', 'Landmass bordered by water on three sides'],
+        ['SERENGETI', 'Tanzanian ecosystem famous for migrations'],
+        ['PATAGONIA', 'Wind-swept southern tip of South America'],
+        ['KILIMANJARO', 'Snow-capped volcanic mountain in Tanzania'],
+        ['GIBRALTAR', 'Narrow strait connecting Atlantic and Mediterranean'],
+        ['YOSEMITE', 'California valley famed for granite cliffs'],
+        ['MADAGASCAR', 'Fourth-largest island in the world'],
+        ['EQUATOR', 'Zero-degree latitude circle dividing Earth'],
+        ['FJORD', 'Long narrow sea inlet between steep glacial cliffs']
+      ]],
+      ['Food', [
+        ['FOCACCIA', 'Oven-baked Italian flatbread with olive oil'],
+        ['TEMPURA', 'Seafood or vegetables in light crispy batter'],
+        ['PAELLA', 'Valencian saffron rice dish cooked in a wide pan'],
+        ['FALAFEL', 'Spiced deep-fried ball made from chickpeas'],
+        ['TORTELLINI', 'Ring-shaped stuffed pasta from Bologna'],
+        ['BAKLAVA', 'Layered filo pastry filled with nuts and honey'],
+        ['BRIOCHE', 'Rich golden French bread made with butter'],
+        ['PARMESAN', 'Hard granular aged Italian cheese'],
+        ['BAGUETTE', 'Long crisp-crusted loaf of French bread'],
+        ['CHURRO', 'Ridged fried-dough pastry dusted in cinnamon']
+      ]],
+      ['Tech', [
+        ['CYBERNETICS', 'Study of control and communication in machines'],
+        ['ENCRYPTION', 'Encoding messages for authorized readers only'],
+        ['TRANSISTOR', 'Semiconductor device that amplifies signals'],
+        ['BLOCKCHAIN', 'Distributed cryptographic ledger of blocks'],
+        ['COMPILER', 'Program translating source code into machine code'],
+        ['GYROSCOPE', 'Sensor measuring orientation and angular velocity'],
+        ['FIBREOPTIC', 'Flexible glass strand transmitting light pulses'],
+        ['TELEMETRY', 'Automated remote transmission of sensor data'],
+        ['CAPACITOR', 'Component storing energy in an electric field'],
+        ['MAINFRAME', 'High-performance computer for large transactions']
+      ]],
+      ['Mythology', [
+        ['PHOENIX', 'Immortal firebird rising reborn from its ashes'],
+        ['PEGASUS', 'Winged divine stallion of Greek myth'],
+        ['MINOTAUR', 'Bull-headed monster inside the Cretan labyrinth'],
+        ['VALKYRIE', 'Norse maiden guiding heroes to Valhalla'],
+        ['POSEIDON', 'Olympian god of the sea wielding a trident'],
+        ['CERBERUS', 'Three-headed hound guarding the Underworld'],
+        ['EXCALIBUR', 'Legendary magical sword of King Arthur'],
+        ['LEVIATHAN', 'Primordial sea monster of ancient myth'],
+        ['MJOLNIR', 'Enchanted thunder hammer of the Norse god Thor'],
+        ['GRIFFIN', 'Guardian beast with lion body and eagle head']
+      ]]
+    ];
+
+    const CAMPAIGN_LEVELS = (() => {
+      const list = [...CORE_100_LEVELS];
+      for (let lvl = 101; lvl <= 1000; lvl++) {
+        const offset = lvl - 101;
+        const catIdx = offset % CATEGORY_BANKS.length;
+        const [catName, pool] = CATEGORY_BANKS[catIdx];
+        const [word, baseClue] = pool[(Math.floor(offset / CATEGORY_BANKS.length) + catIdx * 3) % pool.length];
+        const rank = getRankForLevel(lvl);
+        const prefix = (lvl === 1000)
+          ? `Supreme Final Boss (1000) • ${catName}`
+          : (lvl % 5 === 0)
+            ? `Boss • ${rank.title} (${catName})`
+            : `${catName} • ${rank.title}`;
+        list.push({
+          number: lvl,
+          word,
+          clue: `${prefix}: ${baseClue}`
+        });
+      }
+      return list;
+    })();
 
     const ADVENTURE_LEVELS = [
       { number: 1, word: 'LABYRINTH', clue: 'Devil Boss: An intricate maze of winding passages', isAdventure: true },
@@ -1248,14 +1494,14 @@
     let themeProg = 1;
     let useCursive = false;
 
-    const STORAGE_KEY = 'doodle_word_shark_100_v2';
+    const STORAGE_KEY = 'doodle_word_shark_1000_v1';
     function loadSavedState() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return;
         const data = JSON.parse(raw);
         if (typeof data.coins === 'number') coins = data.coins;
-        if (typeof data.campaignIdx === 'number') campaignIdx = Math.max(0, Math.min(99, data.campaignIdx));
+        if (typeof data.campaignIdx === 'number') campaignIdx = Math.max(0, Math.min(999, data.campaignIdx));
         if (Array.isArray(data.completed)) completedCampaignSet = new Set(data.completed);
         if (data.stars && typeof data.stars === 'object') levelStarsMap = data.stars;
         if (Array.isArray(data.chests)) claimedChestsSet = new Set(data.chests);
@@ -1299,7 +1545,7 @@
     let lastFrameMs = performance.now();
 
     function hasFrozenVowelsModifier(level) {
-      return Boolean(level && !level.isAdventure && level.number >= 50);
+      return Boolean(level && !level.isAdventure && level.number >= 150);
     }
 
     function getGuessedConsonantsCount() {
@@ -1324,8 +1570,8 @@
 
     function isLevelUnlocked(lvlNum) {
       if (freePlayAll) return true;
-      // First level of each of the 6 Peril Worlds is unlocked so players can sample any world
-      if ([1, 17, 34, 51, 67, 84].includes(lvlNum)) return true;
+      // First level of each 20-level Peril Chapter is unlocked so players can jump to any chapter
+      if (lvlNum === 1 || (lvlNum - 1) % 20 === 0) return true;
       const highestDone = completedCampaignSet.size ? Math.max(...Array.from(completedCampaignSet)) : 0;
       return lvlNum <= Math.max(highestDone + 1, campaignIdx + 1);
     }
@@ -1376,16 +1622,29 @@
     function updateMenuUI() {
       const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
       const peril = getPerilForLevel(lvlNum);
-      const totalLevels = CAMPAIGN_LEVELS.length; // 100
+      const rank = getRankForLevel(lvlNum);
+      const totalLevels = CAMPAIGN_LEVELS.length; // 1000
       const doneCount = completedCampaignSet.size;
+      const tierSpan = Math.max(1, rank.end - rank.start + 1);
+      const levelInTier = Math.min(tierSpan, Math.max(1, lvlNum - rank.start + 1));
+      const tierPct = Math.min(100, Math.max(4, (levelInTier / tierSpan) * 100));
+      const nextTierLabel = rank.tier < RANK_TIERS.length
+        ? `Next Tier at Lv ${rank.end + 1}`
+        : 'Max Rank Tier!';
 
       document.getElementById('menuCoinText').textContent = coins;
       document.getElementById('gameCoinText').textContent = coins;
-      document.getElementById('menuCampaignProgressText').textContent = `${doneCount} / ${totalLevels} Completed`;
-      document.getElementById('menuCampaignProgressFill').style.width = `${(doneCount / totalLevels) * 100}%`;
+      document.getElementById('menuRankTitleText').textContent = `Tier ${rank.tier}: ${rank.title}`;
+      document.getElementById('menuRankTierSub').textContent =
+        `Progress: Level ${lvlNum} / ${rank.end} (${nextTierLabel})`;
+      document.getElementById('menuRankBadgeDesc').textContent = rank.badge;
+      document.getElementById('menuCampaignProgressText').textContent = `${doneCount}/${totalLevels} ★`;
+      const fillEl = document.getElementById('menuCampaignProgressFill');
+      fillEl.style.width = `${tierPct}%`;
+      fillEl.style.background = rank.color;
       document.getElementById('menuLevelBtnText').textContent =
         (lvlNum % 5 === 0) ? `Level ${lvlNum} (BOSS 💣)` : `Level ${lvlNum}`;
-      document.getElementById('menuPerilSubText').textContent = `${peril.name} • Tap for 100-Level Map`;
+      document.getElementById('menuPerilSubText').textContent = `${peril.name} • ${rank.title}`;
     }
 
     function isBoss(level) {
@@ -1439,7 +1698,7 @@
       freePlayAll = !freePlayAll;
       saveState();
       renderWorldMapModal();
-      showToast(freePlayAll ? '🔓 Free Play enabled: All 100 levels unlocked!' : '🔒 Standard Campaign progression enabled');
+      showToast(freePlayAll ? '🔓 Free Play enabled: All 1,000 levels unlocked!' : '🔒 Standard Campaign progression enabled');
     }
 
     function claimMilestoneChest(milestoneLvl) {
@@ -1448,17 +1707,17 @@
         return;
       }
       if (!freePlayAll && !completedCampaignSet.has(milestoneLvl)) {
-        showToast(`Complete Level ${milestoneLvl} first to unlock this Milestone Chest!`);
+        showToast(`Complete Level ${milestoneLvl} first to unlock this Rank Milestone Chest!`);
         return;
       }
       claimedChestsSet.add(milestoneLvl);
-      coins += 200;
+      coins += 250;
       freePotions += 1;
       saveState();
       playProceduralSound('victory');
       renderWorldMapModal();
       updateMenuUI();
-      showToast(`🎁 Level ${milestoneLvl} Chest Opened! +200 Coins & +1 Shield Potion!`);
+      showToast(`🎁 Level ${milestoneLvl} Rank Chest Opened! +250 Coins & +1 Shield Potion!`);
     }
 
     function openWorldMapModal() {
@@ -1471,36 +1730,32 @@
       const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
       const peril = getPerilForLevel(lvlNum);
       document.getElementById('worldMapSubStats').textContent =
-        `${completedCampaignSet.size}/100 Solved • ⭐ ${totalStars}/300 Stars`;
+        `${completedCampaignSet.size}/1000 Solved • ⭐ ${totalStars}/3000 Stars`;
       document.getElementById('worldMapQuickPlayBtn').textContent =
         `▶ Play Level ${lvlNum} (${peril.name})`;
       const fpBtn = document.getElementById('freePlayToggleBtn');
       fpBtn.textContent = freePlayAll ? '🔓 All Open' : '🔒 Campaign';
       fpBtn.style.background = freePlayAll ? '#FFF9C4' : '#FFFFFF';
 
-      const worlds = [
-        { title: 'World 1: Shark & Balloons', start: 1, end: 16, color: '#0288D1' },
-        { title: 'World 2: UFO Abduction', start: 17, end: 33, color: '#558B2F' },
-        { title: 'World 3: Volcano Lava', start: 34, end: 50, color: '#D84315' },
-        { title: 'World 4: Giant Venus Flytrap (🧊 Frozen Vowels)', start: 51, end: 66, color: '#2E7D32' },
-        { title: 'World 5: Sleeping T-Rex (🧊 Frozen Vowels)', start: 67, end: 83, color: '#4E342E' },
-        { title: 'World 6: Leaky Submarine (🧊 Frozen Vowels)', start: 84, end: 100, color: '#0277BD' }
-      ];
-
       const container = document.getElementById('worldMapScroll');
       container.innerHTML = '';
 
-      worlds.forEach(w => {
+      for (let chIdx = 0; chIdx < 50; chIdx++) {
+        const start = chIdx * 20 + 1;
+        const end = (chIdx + 1) * 20;
+        const chPeril = getPerilForLevel(start);
+        const chRank = getRankForLevel(start);
+
         const header = document.createElement('div');
         header.className = 'sketch-box';
-        header.style.cssText = `padding:8px 12px;margin:8px 0 6px;border-color:${w.color};background:#FFF;display:flex;justify-content:space-between;align-items:center;`;
-        header.innerHTML = `<strong style="color:${w.color};font-size:14px;">${w.title}</strong><span style="font-size:11px;font-weight:700;">Lv ${w.start}–${w.end}</span>`;
+        header.style.cssText = `padding:8px 12px;margin:8px 0 6px;border-color:${chRank.color};background:#FFF;display:flex;justify-content:space-between;align-items:center;`;
+        header.innerHTML = `<strong style="color:var(--ink-black);font-size:13px;">Ch ${chIdx + 1}: ${chPeril.name} • ${chRank.title}</strong><span style="font-size:11px;font-weight:700;color:var(--ink-blue);">Lv ${start}–${end}</span>`;
         container.appendChild(header);
 
         const grid = document.createElement('div');
         grid.style.cssText = 'display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;margin-bottom:8px;';
 
-        for (let lv = w.start; lv <= w.end; lv++) {
+        for (let lv = start; lv <= end; lv++) {
           const unlocked = isLevelUnlocked(lv);
           const done = completedCampaignSet.has(lv);
           const stars = levelStarsMap[lv] || 0;
@@ -1514,16 +1769,16 @@
           };opacity:${unlocked ? '1' : '0.78'};`;
           node.onclick = () => selectCampaignLevelFromMap(lv);
 
-          const badge = boss ? '<span style="position:absolute;top:2px;right:4px;font-size:10px;">💣</span>' : (lv >= 50 ? '<span style="position:absolute;top:2px;left:4px;font-size:9px;">🧊</span>' : '');
+          const badge = boss ? '<span style="position:absolute;top:2px;right:4px;font-size:10px;">💣</span>' : (lv >= 150 ? '<span style="position:absolute;top:2px;left:4px;font-size:9px;">🧊</span>' : '');
           if (unlocked) {
             const starRow = [1, 2, 3].map(s => `<span style="color:${s <= stars ? '#FBC02D' : '#BDBDBD'};font-size:10px;">★</span>`).join('');
-            node.innerHTML = `${badge}<div style="font-size:15px;font-weight:700;line-height:1.1;">${lv}</div><div style="line-height:1;">${starRow}</div>`;
+            node.innerHTML = `${badge}<div style="font-size:14px;font-weight:700;line-height:1.1;">${lv}</div><div style="line-height:1;">${starRow}</div>`;
           } else {
             node.innerHTML = `${badge}<div style="font-size:13px;">🔒</div><div style="font-size:11px;font-weight:700;color:#616161;">${lv}</div>`;
           }
           grid.appendChild(node);
 
-          if (lv % 10 === 0) {
+          if (lv % 50 === 0) {
             const chestClaimed = claimedChestsSet.has(lv);
             const chestReady = (freePlayAll || completedCampaignSet.has(lv)) && !chestClaimed;
             const chestBtn = document.createElement('button');
@@ -1532,14 +1787,14 @@
               chestClaimed ? '#E8F5E9' : chestReady ? '#FFF8E1' : '#F5F5F5'
             };`;
             chestBtn.onclick = () => claimMilestoneChest(lv);
-            chestBtn.innerHTML = `<span>🧰 Level ${lv} Milestone Chest</span><strong style="color:${chestClaimed ? 'var(--correct-green)' : 'var(--hint-orange)'};">${
-              chestClaimed ? '✓ Claimed' : chestReady ? 'Tap: +200 ⭐ & 🛡️' : 'Solve Lv ' + lv
+            chestBtn.innerHTML = `<span>🧰 Level ${lv} Rank Milestone Chest</span><strong style="color:${chestClaimed ? 'var(--correct-green)' : 'var(--hint-orange)'};">${
+              chestClaimed ? '✓ Claimed' : chestReady ? 'Tap: +250 ⭐ & 🛡️' : 'Solve Lv ' + lv
             }</strong>`;
             grid.appendChild(chestBtn);
           }
         }
         container.appendChild(grid);
-      });
+      }
     }
 
     function startAdventure() {
@@ -3298,7 +3553,9 @@
 
       const menuCanvas = document.getElementById('menuCanvas');
       if (menuCanvas && document.getElementById('menuScreen').classList.contains('active')) {
-        renderPerilScene(menuCanvas, getPerilForLevel(campaignIdx + 1), 6, 6, true, t, dt);
+        const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
+        renderPerilScene(menuCanvas, getPerilForLevel(curLvl), 6, 6, true, t, dt);
+        renderRankAuraCanvas(getRankForLevel(curLvl), t);
       }
       const gameCanvas = document.getElementById('gameCanvas');
       if (gameCanvas && document.getElementById('gameScreen').classList.contains('active')) {
@@ -3308,6 +3565,57 @@
         renderVictoryCelebration(t, dt);
       }
       requestAnimationFrame(animate);
+    }
+
+    function renderRankAuraCanvas(rank, t) {
+      const canvas = document.getElementById('rankAuraCanvas');
+      if (!canvas) return;
+      const ctx = setupHiDPICanvas(canvas);
+      const w = canvas.clientWidth || 340;
+      const h = canvas.clientHeight || 72;
+      ctx.clearRect(0, 0, w, h);
+
+      const pulse = 0.94 + Math.sin(t * 2.6) * 0.08;
+      ctx.save();
+      ctx.fillStyle = rank.color;
+      ctx.globalAlpha = 0.22;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = rank.color;
+      ctx.lineWidth = 2;
+      if (rank.tier === 1) {
+        for (let x = -h; x < w + h; x += 15) {
+          const shift = Math.sin(t * 2 + x * 0.03) * 4;
+          ctx.beginPath();
+          ctx.moveTo(x + shift, h);
+          ctx.lineTo(x + h * 0.7 + shift, 0);
+          ctx.stroke();
+        }
+      } else if (rank.tier === 2) {
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath();
+          ctx.arc(w * (0.18 + i * 0.2) + Math.cos(t * 2 + i) * 5, h * 0.5, (12 + i * 10) * pulse, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else if (rank.tier === 3) {
+        for (let i = 0; i < 10; i++) {
+          const ang = t * 1.6 + (i * Math.PI * 2) / 10;
+          ctx.beginPath();
+          ctx.moveTo(w * 0.78, h * 0.5);
+          ctx.lineTo(w * 0.78 + Math.cos(ang) * 28 * pulse, h * 0.5 + Math.sin(ang) * 28 * pulse);
+          ctx.stroke();
+        }
+      } else {
+        for (let i = 0; i < 6; i++) {
+          const px = w * (0.12 + i * 0.15) + Math.cos(t * 2.2 + i) * 6;
+          const py = h * 0.5 + Math.sin(t * 2.5 + i * 1.1) * (h * 0.28);
+          ctx.beginPath();
+          ctx.arc(px, py, 5 * pulse, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
     }
 
     updateMenuUI();
