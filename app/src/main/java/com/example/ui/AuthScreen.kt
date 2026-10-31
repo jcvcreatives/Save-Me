@@ -76,10 +76,12 @@ tailrec fun Context.findActivity(): Activity? = when (this) {
 fun RegistrationAuthScreen(
     currentUser: FirebaseUser?,
     cloudAccount: PlayerAccount?,
+    isGuestSession: Boolean = false,
     isSyncing: Boolean,
     authErrorMessage: String?,
     localLevelNumber: Int,
     localCoins: Int,
+    completedLevelsCount: Int = 0,
     fontFamily: FontFamily,
     onGoogleIdTokenReceived: (idToken: String, preferredNickname: String?, preferredEmail: String?, authMethod: String) -> Unit,
     onUpdateCloudProfile: (nickname: String, email: String?, authMethod: String) -> Unit,
@@ -92,18 +94,26 @@ fun RegistrationAuthScreen(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
-    var nicknameInput by remember(cloudAccount?.displayName, currentUser?.displayName) {
+    var nicknameInput by remember(cloudAccount?.displayName, currentUser?.displayName, isGuestSession) {
         mutableStateOf(
-            cloudAccount?.displayName
-                ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
-                ?: ""
+            if (currentUser != null) {
+                cloudAccount?.displayName
+                    ?: currentUser.displayName?.takeIf { it.isNotBlank() }
+                    ?: ""
+            } else {
+                ""
+            }
         )
     }
-    var emailInput by remember(cloudAccount?.email, currentUser?.email) {
+    var emailInput by remember(cloudAccount?.email, currentUser?.email, isGuestSession) {
         mutableStateOf(
-            cloudAccount?.email
-                ?: currentUser?.email?.takeIf { it.isNotBlank() }
-                ?: ""
+            if (currentUser != null) {
+                cloudAccount?.email
+                    ?: currentUser.email?.takeIf { it.isNotBlank() }
+                    ?: ""
+            } else {
+                ""
+            }
         )
     }
     var showCreateAccountForm by remember { mutableStateOf(true) }
@@ -184,27 +194,58 @@ fun RegistrationAuthScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Top Header Badge: Firebase Spark Plan (No-Cost Cloud Sync)
-        SketchyContainer(
-            fillColor = Color(0xFFFFF8E1),
-            borderColor = DoodleColors.InkBlack,
-            cornerRadius = 18.dp,
-            strokeWidth = 2.dp
+        // Top Header Row: Optional Back Button + Firebase Spark Plan Badge
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(text = "🔥", fontSize = 15.sp)
-                Text(
-                    text = "FIREBASE SPARK PLAN • NO-COST CLOUD SYNC",
-                    fontFamily = fontFamily,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 11.sp,
-                    color = DoodleColors.InkBlack
-                )
+            if (currentUser != null || isGuestSession) {
+                SketchyContainer(
+                    fillColor = Color.White,
+                    borderColor = DoodleColors.InkBlack,
+                    cornerRadius = 12.dp,
+                    onClick = onContinueToGame,
+                    modifier = Modifier
+                        .height(36.dp)
+                        .testTag("reg_back_to_menu_button")
+                ) {
+                    Text(
+                        text = "← Back",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 13.sp,
+                        color = DoodleColors.InkBlack,
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.width(1.dp))
             }
+
+            SketchyContainer(
+                fillColor = Color(0xFFFFF8E1),
+                borderColor = DoodleColors.InkBlack,
+                cornerRadius = 18.dp,
+                strokeWidth = 2.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(text = "🔥", fontSize = 15.sp)
+                    Text(
+                        text = "FIREBASE SPARK PLAN • NO-COST CLOUD SYNC",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp,
+                        color = DoodleColors.InkBlack
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(1.dp))
         }
 
         // Doodle Stickman Welcome Illustration + WORD Header
@@ -443,7 +484,11 @@ fun RegistrationAuthScreen(
                         SketchyContainer(
                             fillColor = Color(0xFFFFCDD2),
                             cornerRadius = 14.dp,
-                            onClick = onSignOut,
+                            onClick = {
+                                nicknameInput = ""
+                                emailInput = ""
+                                onSignOut()
+                            },
                             modifier = Modifier
                                 .height(48.dp)
                                 .padding(horizontal = 4.dp)
@@ -654,7 +699,11 @@ fun RegistrationAuthScreen(
                 fillColor = Color.White,
                 borderColor = DoodleColors.InkBlack,
                 cornerRadius = 24.dp,
-                onClick = onContinueAsGuest,
+                onClick = {
+                    nicknameInput = ""
+                    emailInput = ""
+                    onContinueAsGuest()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp)
@@ -676,15 +725,76 @@ fun RegistrationAuthScreen(
                     )
                 }
             }
-
-            Text(
-                text = "Guest progress saves on your device. Sign in with Gmail anytime to back up your 1,000-level progress to Firebase Firestore (Spark Plan).",
-                fontFamily = fontFamily,
-                fontSize = 11.sp,
-                color = DoodleColors.InkBlack.copy(alpha = 0.65f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
-            )
         }
+
+        // Live localStorage <-> Firestore Parity Status Card
+        val activeDisplayName = cloudAccount?.displayName
+            ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
+            ?: "Cloud"
+        SketchyContainer(
+            fillColor = Color(0xFFE8F5E9),
+            borderColor = DoodleColors.InkBlack,
+            cornerRadius = 14.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("reg_parity_banner")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (currentUser != null) {
+                            "☁️ Firestore ⇄ localStorage Parity Active ($activeDisplayName)"
+                        } else {
+                            "💾 Local Device Save Active"
+                        },
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 12.sp,
+                        color = Color(0xFF1B5E20)
+                    )
+                    Text(
+                        text = if (currentUser != null) {
+                            "Synced Lv $localLevelNumber/1000 • ⭐ $localCoins Coins • $completedLevelsCount Solved"
+                        } else {
+                            "localStorage Lv $localLevelNumber/1000 • ⭐ $localCoins Coins (Sign in to sync with Firestore)"
+                        },
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = DoodleColors.InkBlue
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (currentUser != null) Color(0xFFC8E6C9) else Color(0xFFFFF9C4))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = if (currentUser != null) "PARITY ✓" else "LOCAL",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 10.sp,
+                        color = DoodleColors.InkBlack
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = "Guest progress saves on your device. Sign in with Gmail anytime to back up your 1,000-level progress to Firebase Firestore (Spark Plan).",
+            fontFamily = fontFamily,
+            fontSize = 11.sp,
+            color = DoodleColors.InkBlack.copy(alpha = 0.65f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+        )
     }
 }

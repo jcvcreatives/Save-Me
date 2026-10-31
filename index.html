@@ -700,8 +700,11 @@
   <div class="app-shell">
     <!-- ================= SCREEN 0: REGISTRATION & AUTH SCREEN (FIREBASE SPARK PLAN) ================= -->
     <div id="regScreen" class="screen active" style="overflow-y:auto;padding-bottom:18px;">
-      <div style="display:flex;justify-content:center;margin-top:4px;">
-        <div class="sketch-box" style="background:#FFF8E1;padding:5px 14px;border-radius:16px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:8px;">
+        <button id="regBackToMenuBtn" class="sketch-box sketch-btn" style="display:none;height:36px;padding:0 12px;border-radius:12px;font-size:13px;background:#FFF;" onclick="continueToGameFromReg()">
+          ← Back
+        </button>
+        <div class="sketch-box" style="background:#FFF8E1;padding:5px 14px;border-radius:16px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;margin:0 auto;">
           <span>🔥</span>
           <span>FIREBASE SPARK PLAN • NO-COST CLOUD SYNC</span>
         </div>
@@ -720,33 +723,73 @@
       </div>
 
       <div style="width:100%;max-width:360px;margin:0 auto;display:flex;flex-direction:column;gap:10px;">
-        <!-- Create Account Card -->
-        <div class="sketch-box" style="padding:14px;border-radius:18px;background:#FFF;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-            <span style="font-size:18px;">✏️</span>
-            <div style="text-align:left;">
-              <div style="font-size:16px;font-weight:700;">Create Account</div>
-              <div style="font-size:11px;color:var(--ink-blue);font-weight:700;">Custom Doodle Nickname + Cloud Backup</div>
+        <!-- SIGNED-IN CLOUD ACCOUNT CARD (Visible when signed in via Create Account or Gmail) -->
+        <div id="signedInAccountCard" class="sketch-box" style="display:none;padding:15px;border-radius:18px;background:#E8F5E9;text-align:left;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
+            <div>
+              <div id="signedInDisplayName" style="font-size:18px;font-weight:700;color:var(--ink-black);">☁️ Doodle Player</div>
+              <div id="signedInEmailText" style="font-size:12px;font-weight:700;color:var(--ink-blue);margin-top:2px;">Connected via Firebase Spark</div>
             </div>
+            <span id="signedInBadgePill" style="background:#C8E6C9;color:#1B5E20;border:1.8px solid var(--ink-black);border-radius:10px;padding:3px 8px;font-size:10px;font-weight:800;white-space:nowrap;">SYNCED ✓</span>
           </div>
-          <input id="regNicknameInput" class="input-sketch" placeholder="Doodle Nickname (e.g. SharkSlayer)" maxlength="50" style="margin-bottom:8px;" />
-          <input id="regEmailInput" class="input-sketch" placeholder="Gmail Address (optional)" maxlength="150" style="margin-bottom:10px;" />
-          <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:48px;font-size:16px;" onclick="handleCreateAccount()">
-            <span>✨ Create Account</span>
+
+          <div id="signedInStatsLine" style="font-size:13px;font-weight:700;color:var(--ink-black);margin-bottom:10px;padding:6px 10px;background:rgba(255,255,255,0.75);border-radius:10px;border:1.5px solid var(--ink-black);">
+            Campaign: Level 1 / 1000 • Coins: ⭐ 1231
+          </div>
+
+          <div style="font-size:11px;font-weight:700;color:var(--ink-blue);margin-bottom:4px;">Update Doodle Nickname &amp; Gmail</div>
+          <input id="signedInNicknameInput" class="input-sketch" placeholder="Doodle Nickname" maxlength="50" style="margin-bottom:6px;padding:9px 12px;font-size:14px;" />
+          <input id="signedInEmailInput" class="input-sketch" placeholder="Gmail Address (e.g. you@gmail.com)" maxlength="150" style="margin-bottom:10px;padding:9px 12px;font-size:14px;" />
+
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:44px;font-size:14px;flex:1;" onclick="handleUpdateSignedInProfile()">
+              <span>💾 Save &amp; Sync</span>
+            </button>
+            <button class="sketch-box sketch-btn menu-btn" style="height:44px;font-size:13px;flex:0.75;background:#FFCDD2;color:#B71C1C;" onclick="handleSignOut()">
+              <span>🚪 Sign Out</span>
+            </button>
+          </div>
+
+          <button class="sketch-box sketch-btn menu-btn" style="height:42px;font-size:13px;background:#E3F2FD;flex-direction:row;gap:8px;margin-bottom:8px;" onclick="handleGmailSignIn(true)">
+            <span style="width:20px;height:20px;border-radius:50%;background:#FFF;display:inline-flex;align-items:center;justify-content:center;color:#DB4437;font-weight:900;font-size:12px;border:1.5px solid var(--ink-black);">G</span>
+            <span>Switch / Connect Gmail Account</span>
+          </button>
+
+          <button id="continueToGameBtn" class="sketch-box sketch-btn menu-btn" style="height:50px;font-size:17px;background:var(--correct-green);color:#FFF;" onclick="continueToGameFromReg()">
+            <span>▶ Continue to Level 1</span>
           </button>
         </div>
 
-        <!-- Create using Gmail Button -->
-        <button class="sketch-box sketch-btn menu-btn" style="height:52px;background:#E3F2FD;flex-direction:row;gap:10px;" onclick="handleGmailSignIn()">
-          <span style="width:26px;height:26px;border-radius:50%;background:#FFF;display:inline-flex;align-items:center;justify-content:center;color:#DB4437;font-weight:900;font-size:16px;border:1.5px solid var(--ink-black);">G</span>
-          <span style="font-size:17px;font-weight:700;">Create using Gmail</span>
-        </button>
+        <!-- UNSIGNED REGISTRATION OPTIONS (Visible when not signed into a Cloud Account) -->
+        <div id="unsignedAuthSection" style="display:flex;flex-direction:column;gap:10px;">
+          <!-- Create Account Card -->
+          <div class="sketch-box" style="padding:14px;border-radius:18px;background:#FFF;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <span style="font-size:18px;">✏️</span>
+              <div style="text-align:left;">
+                <div style="font-size:16px;font-weight:700;">Create Account</div>
+                <div style="font-size:11px;color:var(--ink-blue);font-weight:700;">Custom Doodle Nickname + Cloud Backup</div>
+              </div>
+            </div>
+            <input id="regNicknameInput" class="input-sketch" placeholder="Doodle Nickname (e.g. SharkSlayer)" maxlength="50" style="margin-bottom:8px;" />
+            <input id="regEmailInput" class="input-sketch" placeholder="Gmail Address (optional)" maxlength="150" style="margin-bottom:10px;" />
+            <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:48px;font-size:16px;" onclick="handleCreateAccount()">
+              <span>✨ Create Account</span>
+            </button>
+          </div>
 
-        <!-- Log-in as Guest Button -->
-        <button class="sketch-box sketch-btn menu-btn" style="height:50px;background:#FFF;flex-direction:row;gap:8px;" onclick="handleGuestLogin()">
-          <span style="font-size:18px;">🕵️</span>
-          <span style="font-size:17px;font-weight:700;">Log-in as Guest</span>
-        </button>
+          <!-- Create using Gmail Button -->
+          <button class="sketch-box sketch-btn menu-btn" style="height:52px;background:#E3F2FD;flex-direction:row;gap:10px;" onclick="handleGmailSignIn(false)">
+            <span style="width:26px;height:26px;border-radius:50%;background:#FFF;display:inline-flex;align-items:center;justify-content:center;color:#DB4437;font-weight:900;font-size:16px;border:1.5px solid var(--ink-black);">G</span>
+            <span style="font-size:17px;font-weight:700;">Create using Gmail</span>
+          </button>
+
+          <!-- Log-in as Guest Button -->
+          <button class="sketch-box sketch-btn menu-btn" style="height:50px;background:#FFF;flex-direction:row;gap:8px;" onclick="handleGuestLogin()">
+            <span style="font-size:18px;">🕵️</span>
+            <span style="font-size:17px;font-weight:700;">Log-in as Guest</span>
+          </button>
+        </div>
 
         <!-- Live localStorage <-> Firestore Parity Status Card -->
         <div id="regParityBanner" class="sketch-box" style="padding:10px 12px;border-radius:14px;background:#E8F5E9;font-size:11px;font-weight:700;color:var(--ink-black);text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -990,6 +1033,27 @@
         </button>
       </div>
       <div id="worldMapScroll" style="overflow-y:auto;flex:1;padding-right:4px;text-align:left;"></div>
+    </div>
+  </div>
+
+  <!-- ================= GMAIL SIGN-IN MODAL (WHEN OAUTH POPUP BLOCKED OR UNAUTHORIZED DOMAIN) ================= -->
+  <div id="gmailSignInModal" class="modal-backdrop">
+    <div class="sketch-box dialog-card" style="max-width:380px;">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;">
+        <span style="width:28px;height:28px;border-radius:50%;background:#FFF;display:inline-flex;align-items:center;justify-content:center;color:#DB4437;font-weight:900;font-size:17px;border:2px solid var(--ink-black);">G</span>
+        <div style="font-size:21px;font-weight:700;">Sign in with Gmail</div>
+      </div>
+      <p id="gmailModalNotice" style="font-size:12px;color:var(--ink-blue);font-weight:700;margin:0 0 10px;">
+        Enter your Gmail address &amp; Doodle Nickname to sync your 1,000-level progress:
+      </p>
+      <input id="gmailModalEmailInput" type="email" class="input-sketch" placeholder="yourname@gmail.com" maxlength="150" />
+      <input id="gmailModalNickInput" class="input-sketch" placeholder="Doodle Nickname (optional)" maxlength="50" />
+      <button class="sketch-box sketch-btn menu-btn" style="height:48px;font-size:16px;background:#E3F2FD;margin-top:4px;margin-bottom:8px;" onclick="confirmGmailModalSignIn()">
+        <span>☁️ Connect Gmail &amp; Sync</span>
+      </button>
+      <button class="sketch-box sketch-btn menu-btn" style="height:42px;font-size:14px;background:#F5F5F5;" onclick="closeAllModals()">
+        Cancel
+      </button>
     </div>
   </div>
 
@@ -1584,13 +1648,43 @@
     let useCursive = false;
 
     const STORAGE_KEY = 'doodle_word_shark_1000_v1';
-    const FIRESTORE_PROJECT_ID = 'gen-lang-client-0255522164';
+    const FIRESTORE_PROJECT_ID = 'gen-lang-client-0675061629';
+    const FIRESTORE_DATABASE_ID = 'ai-studio-android-doodlewo-e3227616-d2d4-458e-8bb7-b7a283c81613';
     const FIRESTORE_COLLECTION = 'players';
     const FIRESTORE_MIRROR_PREFIX = 'doodle_firestore_players_';
+    const FIREBASE_WEB_CONFIG = {
+      apiKey: 'AIzaSyCI21wicWK81C7nM2VAQCfbdB-D2O-qFdY',
+      authDomain: 'gen-lang-client-0675061629.firebaseapp.com',
+      projectId: 'gen-lang-client-0675061629',
+      storageBucket: 'gen-lang-client-0675061629.firebasestorage.app',
+      messagingSenderId: '750124643740',
+      appId: '1:750124643740:android:2ae3d70872c0a15e524459'
+    };
 
     let lastSyncedSignature = '';
     let isReconcilingState = false;
     let lastCloudSyncTimestamp = 0;
+
+    // Live Firebase JS SDK references (populated asynchronously)
+    let fbApp = null;
+    let fbAuth = null;
+    let fbDb = null;
+    let fbMod = null;
+    let activeFirestoreUnsubscribe = null;
+
+    // Purge any legacy hardcoded 'player@gmail.com' / 'player' mock state from previous versions
+    (function purgeLegacyMockAccount() {
+      try {
+        const savedEmail = localStorage.getItem('doodle_account_email');
+        const savedName = localStorage.getItem('doodle_account_name');
+        if (savedEmail === 'player@gmail.com' && savedName === 'player') {
+          localStorage.removeItem('doodle_account_email');
+          localStorage.removeItem('doodle_account_name');
+          localStorage.removeItem('doodle_account_uid');
+          localStorage.removeItem('doodle_account_mode');
+        }
+      } catch (e) {}
+    })();
 
     function isUserSignedInViaRegistration() {
       const mode = localStorage.getItem('doodle_account_mode');
@@ -1598,6 +1692,10 @@
     }
 
     function getSignedInUserId() {
+      if (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid) {
+        localStorage.setItem('doodle_account_uid', fbAuth.currentUser.uid);
+        return fbAuth.currentUser.uid;
+      }
       let uid = localStorage.getItem('doodle_account_uid');
       if (!uid) {
         const rawIdentity = (
@@ -1683,13 +1781,62 @@
       ].join('|');
     }
 
+    function updateRegistrationScreenCards() {
+      const signedIn = isUserSignedInViaRegistration();
+      const mode = localStorage.getItem('doodle_account_mode');
+      const hasActiveSession = signedIn || mode === 'guest';
+      const name = (localStorage.getItem('doodle_account_name') || 'Doodle Player').trim();
+      const email = (localStorage.getItem('doodle_account_email') || '').trim();
+      const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
+
+      const backBtn = document.getElementById('regBackToMenuBtn');
+      if (backBtn) {
+        backBtn.style.display = hasActiveSession ? 'inline-flex' : 'none';
+      }
+
+      const subtitleEl = document.getElementById('regStatusSubtitle');
+      if (subtitleEl) {
+        subtitleEl.textContent = signedIn
+          ? 'Signed in & Cloud-Synced on Firebase Spark!'
+          : 'Register an Account, Sign in with Gmail, or Play as Guest';
+      }
+
+      const signedInCard = document.getElementById('signedInAccountCard');
+      const unsignedSection = document.getElementById('unsignedAuthSection');
+      if (signedInCard && unsignedSection) {
+        if (signedIn) {
+          signedInCard.style.display = 'block';
+          unsignedSection.style.display = 'none';
+          const dispEl = document.getElementById('signedInDisplayName');
+          const emailEl = document.getElementById('signedInEmailText');
+          const statsEl = document.getElementById('signedInStatsLine');
+          const contBtn = document.getElementById('continueToGameBtn');
+          if (dispEl) dispEl.textContent = `☁️ ${name}`;
+          if (emailEl) {
+            emailEl.textContent = email
+              ? `${email} • ${fbAuth && fbAuth.currentUser ? 'Firebase Auth Verified' : 'Cloud Profile Active'}`
+              : 'Connected via Doodle Account';
+          }
+          if (statsEl) {
+            statsEl.textContent = `Campaign: Level ${lvlNum} / 1000  •  Coins: ⭐ ${coins}  •  Solved: ${completedCampaignSet.size}`;
+          }
+          if (contBtn) {
+            contBtn.innerHTML = `<span>▶ Play Level ${lvlNum}</span>`;
+          }
+        } else {
+          signedInCard.style.display = 'none';
+          unsignedSection.style.display = 'flex';
+        }
+      }
+    }
+
     function updateCloudSyncUIStatus(syncStateLabel, detailText) {
       const btn = document.getElementById('accountStatusBtn');
       const titleEl = document.getElementById('regParityTitle');
       const subEl = document.getElementById('regParitySub');
       const pillEl = document.getElementById('regParityPill');
       const signedIn = isUserSignedInViaRegistration();
-      const name = (localStorage.getItem('doodle_account_name') || 'Cloud').slice(0, 10);
+      const name = (localStorage.getItem('doodle_account_name') || 'Cloud').slice(0, 12);
 
       if (btn) {
         if (signedIn) {
@@ -1713,6 +1860,39 @@
           pillEl.textContent = 'LOCAL';
           pillEl.style.background = '#FFF9C4';
         }
+      }
+      updateRegistrationScreenCards();
+    }
+
+    async function pushDocToRealFirestore(firestoreDoc) {
+      if (!fbDb || !fbMod || !fbAuth || !fbAuth.currentUser) return;
+      try {
+        const uid = fbAuth.currentUser.uid;
+        const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
+        const snap = await fbMod.getDoc(docRef);
+        const payload = {
+          userId: uid,
+          displayName: firestoreDoc.displayName,
+          authMethod: firestoreDoc.authMethod === 'account' ? 'account' : 'gmail',
+          campaignLevelIndex: Number(firestoreDoc.campaignLevelIndex),
+          coins: Number(firestoreDoc.coins),
+          perfectCount: Number(firestoreDoc.perfectCount),
+          currentStreak: Number(firestoreDoc.currentStreak),
+          maxStreak: Number(firestoreDoc.maxStreak),
+          completedLevelsCount: Number(firestoreDoc.completedLevelsCount),
+          updatedAt: fbMod.serverTimestamp()
+        };
+        if (firestoreDoc.email) {
+          payload.email = firestoreDoc.email;
+        }
+        if (!snap.exists()) {
+          payload.createdAt = fbMod.serverTimestamp();
+          await fbMod.setDoc(docRef, payload);
+        } else {
+          await fbMod.updateDoc(docRef, payload);
+        }
+      } catch (err) {
+        console.warn('Firestore write warning:', err);
       }
     }
 
@@ -1756,34 +1936,39 @@
           localStorage.setItem(mirrorKey, JSON.stringify(firestoreDoc));
           lastCloudSyncTimestamp = nowMs;
 
-          // 3. If Firebase SDK / Firestore REST bridge is active and user has an ID token, sync over network as well
-          const idToken = localStorage.getItem('doodle_firebase_id_token');
-          if (idToken && typeof fetch === 'function') {
-            const url = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/${FIRESTORE_COLLECTION}/${encodeURIComponent(uid)}`;
-            const fields = {
-              userId: { stringValue: firestoreDoc.userId },
-              displayName: { stringValue: firestoreDoc.displayName },
-              authMethod: { stringValue: firestoreDoc.authMethod },
-              campaignLevelIndex: { integerValue: String(firestoreDoc.campaignLevelIndex) },
-              coins: { integerValue: String(firestoreDoc.coins) },
-              perfectCount: { integerValue: String(firestoreDoc.perfectCount) },
-              currentStreak: { integerValue: String(firestoreDoc.currentStreak) },
-              maxStreak: { integerValue: String(firestoreDoc.maxStreak) },
-              completedLevelsCount: { integerValue: String(firestoreDoc.completedLevelsCount) },
-              createdAt: { timestampValue: firestoreDoc.createdAt },
-              updatedAt: { timestampValue: firestoreDoc.updatedAt }
-            };
-            if (firestoreDoc.email) {
-              fields.email = { stringValue: firestoreDoc.email };
+          // 3. Push to live Firebase Firestore SDK (named database: ai-studio-android-doodlewo-e3227616-d2d4-458e-8bb7-b7a283c81613)
+          if (fbDb && fbAuth && fbAuth.currentUser) {
+            pushDocToRealFirestore(firestoreDoc);
+          } else {
+            // REST bridge fallback using ID token if present
+            const idToken = localStorage.getItem('doodle_firebase_id_token');
+            if (idToken && typeof fetch === 'function') {
+              const url = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/${FIRESTORE_COLLECTION}/${encodeURIComponent(uid)}`;
+              const fields = {
+                userId: { stringValue: firestoreDoc.userId },
+                displayName: { stringValue: firestoreDoc.displayName },
+                authMethod: { stringValue: firestoreDoc.authMethod },
+                campaignLevelIndex: { integerValue: String(firestoreDoc.campaignLevelIndex) },
+                coins: { integerValue: String(firestoreDoc.coins) },
+                perfectCount: { integerValue: String(firestoreDoc.perfectCount) },
+                currentStreak: { integerValue: String(firestoreDoc.currentStreak) },
+                maxStreak: { integerValue: String(firestoreDoc.maxStreak) },
+                completedLevelsCount: { integerValue: String(firestoreDoc.completedLevelsCount) },
+                createdAt: { timestampValue: firestoreDoc.createdAt },
+                updatedAt: { timestampValue: firestoreDoc.updatedAt }
+              };
+              if (firestoreDoc.email) {
+                fields.email = { stringValue: firestoreDoc.email };
+              }
+              fetch(url, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({ fields })
+              }).catch(() => {});
             }
-            fetch(url, {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`
-              },
-              body: JSON.stringify({ fields })
-            }).catch(() => {});
           }
 
           updateCloudSyncUIStatus(
@@ -1802,6 +1987,63 @@
         isReconcilingState = false;
       }
     }
+
+    // Initialize Real Firebase Modular JS SDK for Web & attach Auth + Named Firestore listener
+    (async function initFirebaseWebSDK() {
+      try {
+        const [appMod, authMod, fsMod] = await Promise.all([
+          import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+          import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
+          import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+        ]);
+        fbApp = appMod.initializeApp(FIREBASE_WEB_CONFIG);
+        fbAuth = authMod.getAuth(fbApp);
+        fbDb = fsMod.getFirestore(fbApp, FIRESTORE_DATABASE_ID);
+        fbMod = { ...authMod, ...fsMod };
+
+        authMod.onAuthStateChanged(fbAuth, async (user) => {
+          if (activeFirestoreUnsubscribe) {
+            activeFirestoreUnsubscribe();
+            activeFirestoreUnsubscribe = null;
+          }
+          if (user) {
+            try {
+              const token = await user.getIdToken();
+              localStorage.setItem('doodle_firebase_id_token', token);
+            } catch (e) {}
+            localStorage.setItem('doodle_account_uid', user.uid);
+            if (!localStorage.getItem('doodle_account_name') && user.displayName) {
+              localStorage.setItem('doodle_account_name', user.displayName);
+            }
+            if (!localStorage.getItem('doodle_account_email') && user.email) {
+              localStorage.setItem('doodle_account_email', user.email);
+            }
+            if (!isUserSignedInViaRegistration()) {
+              localStorage.setItem('doodle_account_mode', 'gmail');
+            }
+
+            const docRef = fsMod.doc(fbDb, FIRESTORE_COLLECTION, user.uid);
+            activeFirestoreUnsubscribe = fsMod.onSnapshot(docRef, (snap) => {
+              if (snap.exists()) {
+                const data = snap.data();
+                localStorage.setItem(FIRESTORE_MIRROR_PREFIX + user.uid, JSON.stringify(data));
+                reconcileLocalAndFirestoreParity('storage_event');
+                updateMenuUI();
+              } else {
+                reconcileLocalAndFirestoreParity('auth_signin');
+              }
+            }, (err) => {
+              console.warn('Firestore snapshot listener error:', err);
+            });
+          } else {
+            localStorage.removeItem('doodle_firebase_id_token');
+          }
+          updateCloudSyncUIStatus();
+        });
+      } catch (err) {
+        console.warn('Firebase Web SDK load skipped or offline:', err);
+      }
+    })();
 
     function loadSavedState() {
       try {
@@ -4393,16 +4635,35 @@
     }
 
     function openRegistrationScreen() {
+      const signedIn = isUserSignedInViaRegistration();
       const savedName = localStorage.getItem('doodle_account_name') || '';
       const savedEmail = localStorage.getItem('doodle_account_email') || '';
+
       const nickEl = document.getElementById('regNicknameInput');
       const emailEl = document.getElementById('regEmailInput');
-      if (nickEl && savedName) nickEl.value = savedName;
-      if (emailEl && savedEmail) emailEl.value = savedEmail;
+      const signedNickEl = document.getElementById('signedInNicknameInput');
+      const signedEmailEl = document.getElementById('signedInEmailInput');
+
+      if (signedIn) {
+        if (signedNickEl) signedNickEl.value = savedName;
+        if (signedEmailEl) signedEmailEl.value = savedEmail;
+      } else {
+        if (nickEl) nickEl.value = '';
+        if (emailEl) emailEl.value = '';
+      }
+
       updateCloudSyncUIStatus();
       document.getElementById('menuScreen').classList.remove('active');
       document.getElementById('gameScreen').classList.remove('active');
       document.getElementById('regScreen').classList.add('active');
+    }
+
+    function continueToGameFromReg() {
+      document.getElementById('regScreen').classList.remove('active');
+      document.getElementById('gameScreen').classList.remove('active');
+      document.getElementById('menuScreen').classList.add('active');
+      updateMenuUI();
+      updateCloudSyncUIStatus();
     }
 
     function enterMenuWithAccount(badgeText, toastMsg) {
@@ -4416,6 +4677,21 @@
       if (toastMsg) showToast(toastMsg);
     }
 
+    function completeAccountSession(uid, nick, email, mode, toastMsg) {
+      const cleanNick = (nick || '').trim().slice(0, 50) || (email ? email.split('@')[0] : 'Doodle Player');
+      const cleanEmail = (email || '').trim().slice(0, 150);
+      localStorage.setItem('doodle_account_uid', uid);
+      localStorage.setItem('doodle_account_name', cleanNick);
+      if (cleanEmail) {
+        localStorage.setItem('doodle_account_email', cleanEmail);
+      } else {
+        localStorage.removeItem('doodle_account_email');
+      }
+      localStorage.setItem('doodle_account_mode', mode);
+      reconcileLocalAndFirestoreParity('auth_signin');
+      enterMenuWithAccount('☁️ ' + cleanNick.slice(0, 12) + ' ✓', toastMsg);
+    }
+
     function handleCreateAccount() {
       const nick = (document.getElementById('regNicknameInput').value || '').trim();
       const email = (document.getElementById('regEmailInput').value || '').trim();
@@ -4423,30 +4699,164 @@
         showToast('Please enter a Doodle Nickname to create your account!');
         return;
       }
-      const cleanId = (email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle';
-      localStorage.setItem('doodle_account_uid', 'usr_' + cleanId);
-      localStorage.setItem('doodle_account_name', nick);
-      localStorage.setItem('doodle_account_email', email);
-      localStorage.setItem('doodle_account_mode', 'account');
-      reconcileLocalAndFirestoreParity('auth_signin');
-      enterMenuWithAccount('☁️ ' + nick.slice(0, 10) + ' ✓', '☁️ Welcome, ' + nick + '! localStorage ⇄ Firestore synced.');
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showToast('Please enter a valid Gmail/email address or leave it blank.');
+        return;
+      }
+      const uid = (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid)
+        ? fbAuth.currentUser.uid
+        : 'usr_' + ((email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle');
+      completeAccountSession(
+        uid,
+        nick,
+        email,
+        'account',
+        '☁️ Welcome, ' + nick + '! localStorage ⇄ Firestore synced.'
+      );
     }
 
-    function handleGmailSignIn() {
-      const nickInput = (document.getElementById('regNicknameInput').value || '').trim();
-      const emailInput = (document.getElementById('regEmailInput').value || '').trim() || 'player@gmail.com';
-      const display = nickInput || emailInput.split('@')[0] || 'GmailPlayer';
-      const cleanId = emailInput.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'gmail';
-      localStorage.setItem('doodle_account_uid', 'usr_' + cleanId);
-      localStorage.setItem('doodle_account_name', display);
-      localStorage.setItem('doodle_account_email', emailInput);
-      localStorage.setItem('doodle_account_mode', 'gmail');
-      reconcileLocalAndFirestoreParity('auth_signin');
-      enterMenuWithAccount('☁️ ' + display.slice(0, 10) + ' ✓', '☁️ Signed in with Gmail (' + emailInput + ')! Cloud Sync Active.');
+    function handleUpdateSignedInProfile() {
+      const nick = (document.getElementById('signedInNicknameInput').value || '').trim();
+      const email = (document.getElementById('signedInEmailInput').value || '').trim();
+      if (!nick) {
+        showToast('Please enter a Doodle Nickname!');
+        return;
+      }
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showToast('Please enter a valid email address.');
+        return;
+      }
+      const mode = localStorage.getItem('doodle_account_mode') || 'account';
+      const uid = getSignedInUserId();
+      completeAccountSession(
+        uid,
+        nick,
+        email,
+        mode,
+        '☁️ Profile updated for ' + nick + '! Synced to Firestore.'
+      );
+    }
+
+    async function handleGmailSignIn(forceAccountPicker = false) {
+      const prefilledNick = (document.getElementById('regNicknameInput')?.value || '').trim();
+      const prefilledEmail = (document.getElementById('regEmailInput')?.value || '').trim();
+
+      // 1. Attempt real Firebase Google OAuth popup first
+      if (fbAuth && fbMod && fbMod.GoogleAuthProvider && fbMod.signInWithPopup) {
+        try {
+          const provider = new fbMod.GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: 'select_account' });
+          const result = await fbMod.signInWithPopup(fbAuth, provider);
+          const user = result.user;
+          if (user) {
+            const token = await user.getIdToken();
+            localStorage.setItem('doodle_firebase_id_token', token);
+            const display = prefilledNick || user.displayName || (user.email ? user.email.split('@')[0] : 'GmailPlayer');
+            const email = user.email || prefilledEmail;
+            completeAccountSession(
+              user.uid,
+              display,
+              email,
+              'gmail',
+              '☁️ Signed in with Google (' + (email || display) + ')! Cloud Sync Active.'
+            );
+            return;
+          }
+        } catch (err) {
+          const code = (err && err.code) ? String(err.code) : '';
+          if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+            showToast('Google Sign-In cancelled.');
+            return;
+          }
+          console.warn('Google OAuth popup fallback:', code, err);
+        }
+      }
+
+      // 2. If the user already typed a valid email in the form and didn't request switching, use it directly
+      if (!forceAccountPicker && prefilledEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prefilledEmail)) {
+        const display = prefilledNick || prefilledEmail.split('@')[0];
+        const cleanId = prefilledEmail.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'gmail';
+        completeAccountSession(
+          'usr_' + cleanId,
+          display,
+          prefilledEmail,
+          'gmail',
+          '☁️ Signed in with Gmail (' + prefilledEmail + ')! Cloud Sync Active.'
+        );
+        return;
+      }
+
+      // 3. Otherwise open the Gmail Sign-In Modal so the user can enter their actual Gmail address (never hardcode player@gmail.com)
+      const modalEmail = document.getElementById('gmailModalEmailInput');
+      const modalNick = document.getElementById('gmailModalNickInput');
+      if (modalEmail) modalEmail.value = prefilledEmail || (localStorage.getItem('doodle_account_email') || '');
+      if (modalNick) modalNick.value = prefilledNick || (localStorage.getItem('doodle_account_name') || '');
+      document.getElementById('gmailSignInModal').classList.add('active');
+      setTimeout(() => { if (modalEmail) modalEmail.focus(); }, 60);
+    }
+
+    function confirmGmailModalSignIn() {
+      const email = (document.getElementById('gmailModalEmailInput').value || '').trim();
+      const nick = (document.getElementById('gmailModalNickInput').value || '').trim();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showToast('Please enter a valid Gmail address (e.g. yourname@gmail.com)!');
+        return;
+      }
+      const display = nick || email.split('@')[0];
+      const cleanId = email.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'gmail';
+      closeAllModals();
+      completeAccountSession(
+        'usr_' + cleanId,
+        display,
+        email,
+        'gmail',
+        '☁️ Signed in with Gmail (' + email + ')! Cloud Sync Active.'
+      );
+    }
+
+    async function handleSignOut() {
+      if (activeFirestoreUnsubscribe) {
+        activeFirestoreUnsubscribe();
+        activeFirestoreUnsubscribe = null;
+      }
+      if (fbAuth && fbMod && fbMod.signOut) {
+        try { await fbMod.signOut(fbAuth); } catch (e) {}
+      }
+      localStorage.removeItem('doodle_account_mode');
+      localStorage.removeItem('doodle_account_name');
+      localStorage.removeItem('doodle_account_email');
+      localStorage.removeItem('doodle_account_uid');
+      localStorage.removeItem('doodle_firebase_id_token');
+
+      const nickEl = document.getElementById('regNicknameInput');
+      const emailEl = document.getElementById('regEmailInput');
+      const signedNickEl = document.getElementById('signedInNicknameInput');
+      const signedEmailEl = document.getElementById('signedInEmailInput');
+      if (nickEl) nickEl.value = '';
+      if (emailEl) emailEl.value = '';
+      if (signedNickEl) signedNickEl.value = '';
+      if (signedEmailEl) signedEmailEl.value = '';
+
+      updateCloudSyncUIStatus();
+      showToast('Signed out of cloud account.');
     }
 
     function handleGuestLogin() {
+      if (activeFirestoreUnsubscribe) {
+        activeFirestoreUnsubscribe();
+        activeFirestoreUnsubscribe = null;
+      }
       localStorage.setItem('doodle_account_mode', 'guest');
+      localStorage.removeItem('doodle_account_name');
+      localStorage.removeItem('doodle_account_email');
+      localStorage.removeItem('doodle_account_uid');
+      localStorage.removeItem('doodle_firebase_id_token');
+
+      const nickEl = document.getElementById('regNicknameInput');
+      const emailEl = document.getElementById('regEmailInput');
+      if (nickEl) nickEl.value = '';
+      if (emailEl) emailEl.value = '';
+
       reconcileLocalAndFirestoreParity('guest_login');
       enterMenuWithAccount('🕵️ Guest', '🕵️ Logged in as Guest (Local Save)');
     }
@@ -4466,7 +4876,7 @@
       const savedName = localStorage.getItem('doodle_account_name');
       if (savedMode === 'account' || savedMode === 'gmail') {
         reconcileLocalAndFirestoreParity('auth_signin');
-        enterMenuWithAccount('☁️ ' + (savedName || 'Cloud').slice(0, 10) + ' ✓', '');
+        enterMenuWithAccount('☁️ ' + (savedName || 'Cloud').slice(0, 12) + ' ✓', '');
       } else {
         updateCloudSyncUIStatus();
       }

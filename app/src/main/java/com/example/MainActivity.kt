@@ -1561,10 +1561,16 @@ class WordGameViewModel : ViewModel() {
     }
 
     fun continueAsGuest() {
+        accountSnapshotJob?.cancel()
+        accountSnapshotJob = null
+        authInstance?.signOut()
+        currentUser = null
+        cloudAccount = null
         isGuestSession = true
         authErrorMessage = null
         currentScreen = ScreenState.MAIN_MENU
         statusBannerMessage = "🕵️ Logged in as Guest (Local Device Save)"
+        writeLocalStorageOnly()
     }
 
     fun setAuthError(message: String?) {
@@ -2142,10 +2148,12 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                     RegistrationAuthScreen(
                         currentUser = viewModel.currentUser,
                         cloudAccount = viewModel.cloudAccount,
+                        isGuestSession = viewModel.isGuestSession,
                         isSyncing = viewModel.isSyncingCloud,
                         authErrorMessage = viewModel.authErrorMessage,
                         localLevelNumber = viewModel.currentCampaignLevelNumber,
                         localCoins = viewModel.coins,
+                        completedLevelsCount = viewModel.completedCampaignCount,
                         fontFamily = activeFontFamily,
                         onGoogleIdTokenReceived = { idToken, nickname, email, method ->
                             viewModel.signInWithGoogleIdToken(idToken, nickname, email, method)

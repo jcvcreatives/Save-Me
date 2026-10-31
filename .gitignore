@@ -17,4 +17,10 @@ local.properties
 .env
 debug.keystore
 *-debug.log
-
+.build-outputs/
+/app/build/
+*.apk
+*.aab
+*.mp4
+/public/assets/aistudio/
+node_modules/
