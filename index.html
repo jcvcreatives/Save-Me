@@ -235,8 +235,11 @@
 
     .word-title-row {
       display: flex;
+      justify-content: center;
+      align-items: center;
       gap: 16px;
-      margin: 4px 0 6px;
+      margin: 4px auto 6px;
+      width: 100%;
     }
 
     .word-letter-col {
@@ -700,30 +703,30 @@
   <div class="app-shell">
     <!-- ================= SCREEN 0: REGISTRATION & AUTH SCREEN (FIREBASE SPARK PLAN) ================= -->
     <div id="regScreen" class="screen active" style="overflow-y:auto;padding-bottom:18px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:8px;">
-        <button id="regBackToMenuBtn" class="sketch-box sketch-btn" style="display:none;height:36px;padding:0 12px;border-radius:12px;font-size:13px;background:#FFF;" onclick="continueToGameFromReg()">
+      <div style="width:100%;max-width:360px;margin:4px auto 0;display:flex;justify-content:center;align-items:center;position:relative;min-height:36px;">
+        <button id="regBackToMenuBtn" class="sketch-box sketch-btn" style="display:none;position:absolute;left:0;height:34px;padding:0 10px;border-radius:12px;font-size:12px;background:#FFF;" onclick="continueToGameFromReg()">
           ← Back
         </button>
-        <div class="sketch-box" style="background:#FFF8E1;padding:5px 14px;border-radius:16px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;margin:0 auto;">
+        <div class="sketch-box" style="background:#FFF8E1;padding:5px 14px;border-radius:16px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:6px;">
           <span>🔥</span>
           <span>FIREBASE SPARK PLAN • NO-COST CLOUD SYNC</span>
         </div>
       </div>
 
-      <div style="text-align:center;margin:6px 0 2px;">
-        <div class="word-title-row" style="margin:2px 0;">
+      <div style="width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;margin:6px auto 2px;">
+        <div class="word-title-row" style="margin:2px auto;justify-content:center;">
           <div class="word-letter-col" style="font-size:32px;">W<div class="word-underline" style="background:#FF595E"></div></div>
           <div class="word-letter-col" style="font-size:32px;">O<div class="word-underline" style="background:#2ECC71"></div></div>
           <div class="word-letter-col" style="font-size:32px;">R<div class="word-underline" style="background:#2196F3"></div></div>
           <div class="word-letter-col" style="font-size:32px;">D<div class="word-underline" style="background:#FF9800"></div></div>
         </div>
-        <div id="regStatusSubtitle" style="font-size:13px;font-weight:700;color:var(--ink-blue);margin-top:4px;">
-          Register an Account, Sign in with Gmail, or Play as Guest
+        <div id="regStatusSubtitle" style="font-size:13px;font-weight:700;color:var(--ink-blue);margin-top:4px;text-align:center;">
+          Log in to your Account, Create a New Account, or Play as Guest
         </div>
       </div>
 
       <div style="width:100%;max-width:360px;margin:0 auto;display:flex;flex-direction:column;gap:10px;">
-        <!-- SIGNED-IN CLOUD ACCOUNT CARD (Visible when signed in via Create Account or Gmail) -->
+        <!-- SIGNED-IN CLOUD ACCOUNT CARD (Visible when signed in via Log in, Create Account, or Gmail) -->
         <div id="signedInAccountCard" class="sketch-box" style="display:none;padding:15px;border-radius:18px;background:#E8F5E9;text-align:left;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
             <div>
@@ -760,34 +763,58 @@
           </button>
         </div>
 
-        <!-- UNSIGNED REGISTRATION OPTIONS (Visible when not signed into a Cloud Account) -->
+        <!-- UNSIGNED REGISTRATION & LOGIN OPTIONS (Visible when not signed into a Cloud Account) -->
         <div id="unsignedAuthSection" style="display:flex;flex-direction:column;gap:10px;">
-          <!-- Create Account Card -->
-          <div class="sketch-box" style="padding:14px;border-radius:18px;background:#FFF;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-              <span style="font-size:18px;">✏️</span>
-              <div style="text-align:left;">
-                <div style="font-size:16px;font-weight:700;">Create Account</div>
-                <div style="font-size:11px;color:var(--ink-blue);font-weight:700;">Custom Doodle Nickname + Cloud Backup</div>
-              </div>
+          <!-- 1. LOG IN CARD (For already registered players - follows sample layout) -->
+          <div id="loginAccountCardView" class="sketch-box" style="padding:16px 15px;border-radius:18px;background:#FFF;text-align:left;">
+            <div style="font-size:17px;font-weight:700;color:var(--ink-black);margin-bottom:10px;">
+              Log into Doodle Word
             </div>
-            <input id="regNicknameInput" class="input-sketch" placeholder="Doodle Nickname (e.g. SharkSlayer)" maxlength="50" style="margin-bottom:8px;" />
-            <input id="regEmailInput" class="input-sketch" placeholder="Gmail Address (optional)" maxlength="150" style="margin-bottom:10px;" />
-            <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:48px;font-size:16px;" onclick="handleCreateAccount()">
-              <span>✨ Create Account</span>
+            <input id="loginIdentifierInput" class="input-sketch" placeholder="Email or Doodle Nickname" maxlength="150" style="margin-bottom:8px;border-radius:14px;padding:11px 14px;" />
+            <input id="loginPasswordInput" type="password" class="input-sketch" placeholder="Password" maxlength="100" style="margin-bottom:12px;border-radius:14px;padding:11px 14px;" />
+            <button id="loginSubmitBtn" class="sketch-box sketch-btn menu-btn" style="height:46px;font-size:16px;font-weight:700;border-radius:24px;background:#0064E0;color:#FFFFFF;border-color:#004AAD;margin-bottom:10px;" onclick="handlePlayerLogin()">
+              <span>Log in</span>
+            </button>
+            <div style="text-align:center;margin-bottom:12px;">
+              <button type="button" style="background:none;border:none;color:var(--ink-black);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;padding:2px 8px;" onclick="openForgotPasswordModal()">
+                Forgot password?
+              </button>
+            </div>
+            <button id="openCreateAccountViewBtn" type="button" class="sketch-box sketch-btn menu-btn" style="height:44px;font-size:15px;font-weight:700;border-radius:24px;background:#FFFFFF;color:#0064E0;border:2px solid #0064E0;box-shadow:none;" onclick="switchAuthCardView('create')">
+              <span>Create new account</span>
             </button>
           </div>
 
-          <!-- Create using Gmail Button -->
-          <button class="sketch-box sketch-btn menu-btn" style="height:52px;background:#E3F2FD;flex-direction:row;gap:10px;" onclick="handleGmailSignIn(false)">
+          <!-- 2. CREATE NEW ACCOUNT CARD (Toggled via "Create new account") -->
+          <div id="createAccountCardView" class="sketch-box" style="display:none;padding:16px 15px;border-radius:18px;background:#FFF;text-align:left;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+              <span style="font-size:18px;">✏️</span>
+              <div style="text-align:left;">
+                <div style="font-size:17px;font-weight:700;">Create Account</div>
+                <div style="font-size:11px;color:var(--ink-blue);font-weight:700;">Custom Doodle Nickname + Cloud Backup</div>
+              </div>
+            </div>
+            <input id="regNicknameInput" class="input-sketch" placeholder="Doodle Nickname (e.g. SharkSlayer)" maxlength="50" style="margin-bottom:8px;border-radius:14px;padding:11px 14px;" />
+            <input id="regEmailInput" class="input-sketch" placeholder="Gmail or Email Address (optional)" maxlength="150" style="margin-bottom:8px;border-radius:14px;padding:11px 14px;" />
+            <input id="regPasswordInput" type="password" class="input-sketch" placeholder="Password" maxlength="100" style="margin-bottom:12px;border-radius:14px;padding:11px 14px;" />
+            <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:48px;font-size:16px;border-radius:24px;margin-bottom:10px;" onclick="handleCreateAccount()">
+              <span>✨ Create Account</span>
+            </button>
+            <button type="button" class="sketch-box sketch-btn menu-btn" style="height:42px;font-size:14px;font-weight:700;border-radius:24px;background:#FFFFFF;color:#0064E0;border:2px solid #0064E0;box-shadow:none;" onclick="switchAuthCardView('login')">
+              <span>Already registered? Log in</span>
+            </button>
+          </div>
+
+          <!-- Create / Sign in using Gmail Button -->
+          <button class="sketch-box sketch-btn menu-btn" style="height:50px;background:#E3F2FD;flex-direction:row;gap:10px;" onclick="handleGmailSignIn(false)">
             <span style="width:26px;height:26px;border-radius:50%;background:#FFF;display:inline-flex;align-items:center;justify-content:center;color:#DB4437;font-weight:900;font-size:16px;border:1.5px solid var(--ink-black);">G</span>
-            <span style="font-size:17px;font-weight:700;">Create using Gmail</span>
+            <span style="font-size:16px;font-weight:700;">Continue with Gmail</span>
           </button>
 
           <!-- Log-in as Guest Button -->
-          <button class="sketch-box sketch-btn menu-btn" style="height:50px;background:#FFF;flex-direction:row;gap:8px;" onclick="handleGuestLogin()">
+          <button class="sketch-box sketch-btn menu-btn" style="height:48px;background:#FFF;flex-direction:row;gap:8px;" onclick="handleGuestLogin()">
             <span style="font-size:18px;">🕵️</span>
-            <span style="font-size:17px;font-weight:700;">Log-in as Guest</span>
+            <span style="font-size:16px;font-weight:700;">Log-in as Guest</span>
           </button>
         </div>
 
@@ -1052,6 +1079,24 @@
         <span>☁️ Connect Gmail &amp; Sync</span>
       </button>
       <button class="sketch-box sketch-btn menu-btn" style="height:42px;font-size:14px;background:#F5F5F5;" onclick="closeAllModals()">
+        Cancel
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= FORGOT PASSWORD / ACCOUNT RECOVERY MODAL ================= -->
+  <div id="forgotPasswordModal" class="modal-backdrop">
+    <div class="sketch-box dialog-card" style="max-width:380px;">
+      <div style="font-size:21px;font-weight:700;margin-bottom:6px;">🔑 Reset Account Password</div>
+      <p style="font-size:12px;color:var(--ink-blue);font-weight:700;margin:0 0 10px;">
+        Enter your registered Email or Doodle Nickname and set a new password to recover your account:
+      </p>
+      <input id="forgotPasswordIdentifierInput" class="input-sketch" placeholder="Email or Doodle Nickname" maxlength="150" />
+      <input id="forgotPasswordNewInput" type="password" class="input-sketch" placeholder="New Password" maxlength="100" />
+      <button class="sketch-box sketch-btn menu-btn" style="height:46px;font-size:15px;background:#0064E0;color:#FFF;border-radius:24px;margin-top:4px;margin-bottom:8px;" onclick="confirmPasswordReset()">
+        <span>🔑 Update Password &amp; Log in</span>
+      </button>
+      <button class="sketch-box sketch-btn menu-btn" style="height:42px;font-size:14px;background:#F5F5F5;border-radius:24px;" onclick="closeAllModals()">
         Cancel
       </button>
     </div>
@@ -1798,7 +1843,7 @@
       if (subtitleEl) {
         subtitleEl.textContent = signedIn
           ? 'Signed in & Cloud-Synced on Firebase Spark!'
-          : 'Register an Account, Sign in with Gmail, or Play as Guest';
+          : 'Log in to your Account, Create a New Account, or Play as Guest';
       }
 
       const signedInCard = document.getElementById('signedInAccountCard');
@@ -4634,6 +4679,92 @@
       ctx.restore();
     }
 
+    const ACCOUNTS_REGISTRY_KEY = 'doodle_registered_accounts_v1';
+
+    function getRegisteredAccountsMap() {
+      try {
+        const raw = localStorage.getItem(ACCOUNTS_REGISTRY_KEY);
+        return raw ? (JSON.parse(raw) || {}) : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveRegisteredAccountRecord(record) {
+      if (!record || !record.uid) return;
+      try {
+        const map = getRegisteredAccountsMap();
+        const existing = map[record.uid] || {};
+        const merged = {
+          uid: record.uid,
+          nick: (record.nick || existing.nick || 'Doodle Player').trim(),
+          email: (record.email !== undefined ? record.email : (existing.email || '')).trim(),
+          password: record.password !== undefined && record.password !== '' ? record.password : (existing.password || ''),
+          mode: record.mode || existing.mode || 'account',
+          updatedAt: Date.now()
+        };
+        map[record.uid] = merged;
+        localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(map));
+      } catch (e) {}
+    }
+
+    function findRegisteredAccount(identifier) {
+      const clean = (identifier || '').trim().toLowerCase();
+      if (!clean) return null;
+      const map = getRegisteredAccountsMap();
+      for (const uid of Object.keys(map)) {
+        const acc = map[uid];
+        if (!acc) continue;
+        if (
+          (acc.email && acc.email.toLowerCase() === clean) ||
+          (acc.nick && acc.nick.toLowerCase() === clean) ||
+          uid.toLowerCase() === clean
+        ) {
+          return acc;
+        }
+      }
+      // Also check existing Firestore player mirrors in localStorage for previously created accounts
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(FIRESTORE_MIRROR_PREFIX)) {
+            const doc = JSON.parse(localStorage.getItem(k) || 'null');
+            if (doc) {
+              const docEmail = (doc.email || '').toLowerCase();
+              const docName = (doc.displayName || '').toLowerCase();
+              if (docEmail === clean || docName === clean) {
+                return {
+                  uid: doc.userId || k.slice(FIRESTORE_MIRROR_PREFIX.length),
+                  nick: doc.displayName || identifier.trim(),
+                  email: doc.email || '',
+                  password: '',
+                  mode: doc.authMethod || 'account'
+                };
+              }
+            }
+          }
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    function switchAuthCardView(mode) {
+      const loginCard = document.getElementById('loginAccountCardView');
+      const createCard = document.getElementById('createAccountCardView');
+      if (!loginCard || !createCard) return;
+      if (mode === 'create') {
+        loginCard.style.display = 'none';
+        createCard.style.display = 'block';
+        const nickEl = document.getElementById('regNicknameInput');
+        if (nickEl) setTimeout(() => nickEl.focus(), 40);
+      } else {
+        createCard.style.display = 'none';
+        loginCard.style.display = 'block';
+        const loginEl = document.getElementById('loginIdentifierInput');
+        if (loginEl) setTimeout(() => loginEl.focus(), 40);
+      }
+    }
+
     function openRegistrationScreen() {
       const signedIn = isUserSignedInViaRegistration();
       const savedName = localStorage.getItem('doodle_account_name') || '';
@@ -4641,6 +4772,9 @@
 
       const nickEl = document.getElementById('regNicknameInput');
       const emailEl = document.getElementById('regEmailInput');
+      const passEl = document.getElementById('regPasswordInput');
+      const loginIdEl = document.getElementById('loginIdentifierInput');
+      const loginPassEl = document.getElementById('loginPasswordInput');
       const signedNickEl = document.getElementById('signedInNicknameInput');
       const signedEmailEl = document.getElementById('signedInEmailInput');
 
@@ -4650,6 +4784,12 @@
       } else {
         if (nickEl) nickEl.value = '';
         if (emailEl) emailEl.value = '';
+        if (passEl) passEl.value = '';
+        if (loginPassEl) loginPassEl.value = '';
+        if (loginIdEl && !loginIdEl.value) {
+          loginIdEl.value = savedEmail || savedName || '';
+        }
+        switchAuthCardView('login');
       }
 
       updateCloudSyncUIStatus();
@@ -4677,9 +4817,16 @@
       if (toastMsg) showToast(toastMsg);
     }
 
-    function completeAccountSession(uid, nick, email, mode, toastMsg) {
+    function completeAccountSession(uid, nick, email, mode, toastMsg, passwordOpt) {
       const cleanNick = (nick || '').trim().slice(0, 50) || (email ? email.split('@')[0] : 'Doodle Player');
       const cleanEmail = (email || '').trim().slice(0, 150);
+      saveRegisteredAccountRecord({
+        uid,
+        nick: cleanNick,
+        email: cleanEmail,
+        password: passwordOpt,
+        mode
+      });
       localStorage.setItem('doodle_account_uid', uid);
       localStorage.setItem('doodle_account_name', cleanNick);
       if (cleanEmail) {
@@ -4692,9 +4839,130 @@
       enterMenuWithAccount('☁️ ' + cleanNick.slice(0, 12) + ' ✓', toastMsg);
     }
 
-    function handleCreateAccount() {
+    async function handlePlayerLogin() {
+      const identifier = (document.getElementById('loginIdentifierInput')?.value || '').trim();
+      const password = (document.getElementById('loginPasswordInput')?.value || '');
+      if (!identifier) {
+        showToast('Please enter your Email or Doodle Nickname to log in!');
+        return;
+      }
+      if (!password) {
+        showToast('Please enter your password to log in!');
+        return;
+      }
+
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+
+      // 1. If Email + Firebase Auth Email/Password is available, attempt live Firebase sign-in
+      if (isEmail && fbAuth && fbMod && fbMod.signInWithEmailAndPassword) {
+        try {
+          const cred = await fbMod.signInWithEmailAndPassword(fbAuth, identifier, password);
+          if (cred && cred.user) {
+            const token = await cred.user.getIdToken();
+            localStorage.setItem('doodle_firebase_id_token', token);
+            const existing = findRegisteredAccount(identifier);
+            const display = (existing && existing.nick) || cred.user.displayName || identifier.split('@')[0];
+            completeAccountSession(
+              cred.user.uid,
+              display,
+              identifier,
+              'account',
+              '☁️ Welcome back, ' + display + '! Cloud progress synced.',
+              password
+            );
+            return;
+          }
+        } catch (err) {
+          const code = (err && err.code) ? String(err.code) : '';
+          if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+            const localMatch = findRegisteredAccount(identifier);
+            if (localMatch && localMatch.password && localMatch.password !== password) {
+              showToast('Incorrect password. Tap "Forgot password?" to reset.');
+              return;
+            }
+          }
+        }
+      }
+
+      // 2. Check registered accounts in localStorage / Firestore mirror
+      const found = findRegisteredAccount(identifier);
+      if (found) {
+        if (found.password && found.password !== password) {
+          showToast('Incorrect password for "' + found.nick + '". Tap "Forgot password?" to reset.');
+          return;
+        }
+        completeAccountSession(
+          found.uid,
+          found.nick,
+          found.email,
+          found.mode || 'account',
+          '☁️ Welcome back, ' + found.nick + '! Account synced.',
+          password
+        );
+        return;
+      }
+
+      // 3. Returning player signing in on this browser for the first time
+      const derivedNick = isEmail ? identifier.split('@')[0] : identifier;
+      const derivedEmail = isEmail ? identifier : '';
+      const uid = 'usr_' + (identifier.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle');
+      completeAccountSession(
+        uid,
+        derivedNick,
+        derivedEmail,
+        'account',
+        '☁️ Logged in as ' + derivedNick + '! localStorage ⇄ Firestore synced.',
+        password
+      );
+    }
+
+    function openForgotPasswordModal() {
+      const loginId = (document.getElementById('loginIdentifierInput')?.value || '').trim();
+      const resetIdEl = document.getElementById('forgotPasswordIdentifierInput');
+      const resetNewEl = document.getElementById('forgotPasswordNewInput');
+      if (resetIdEl) resetIdEl.value = loginId || (localStorage.getItem('doodle_account_email') || localStorage.getItem('doodle_account_name') || '');
+      if (resetNewEl) resetNewEl.value = '';
+      document.getElementById('forgotPasswordModal').classList.add('active');
+      setTimeout(() => {
+        if (resetIdEl && !resetIdEl.value) resetIdEl.focus();
+        else if (resetNewEl) resetNewEl.focus();
+      }, 60);
+    }
+
+    async function confirmPasswordReset() {
+      const identifier = (document.getElementById('forgotPasswordIdentifierInput')?.value || '').trim();
+      const newPassword = (document.getElementById('forgotPasswordNewInput')?.value || '');
+      if (!identifier) {
+        showToast('Please enter your Email or Doodle Nickname!');
+        return;
+      }
+      if (!newPassword || newPassword.length < 3) {
+        showToast('Please enter a new password (at least 3 characters)!');
+        return;
+      }
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+      if (isEmail && fbAuth && fbMod && fbMod.sendPasswordResetEmail) {
+        try { await fbMod.sendPasswordResetEmail(fbAuth, identifier); } catch (e) {}
+      }
+      const found = findRegisteredAccount(identifier);
+      const uid = found ? found.uid : ('usr_' + (identifier.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle'));
+      const nick = found ? found.nick : (isEmail ? identifier.split('@')[0] : identifier);
+      const email = found ? found.email : (isEmail ? identifier : '');
+      closeAllModals();
+      completeAccountSession(
+        uid,
+        nick,
+        email,
+        found?.mode || 'account',
+        '🔑 Password updated! Logged in as ' + nick + '.',
+        newPassword
+      );
+    }
+
+    async function handleCreateAccount() {
       const nick = (document.getElementById('regNicknameInput').value || '').trim();
       const email = (document.getElementById('regEmailInput').value || '').trim();
+      const password = (document.getElementById('regPasswordInput')?.value || '');
       if (!nick) {
         showToast('Please enter a Doodle Nickname to create your account!');
         return;
@@ -4703,6 +4971,30 @@
         showToast('Please enter a valid Gmail/email address or leave it blank.');
         return;
       }
+      if (!password) {
+        showToast('Please enter a password so you can log back into your account anytime!');
+        return;
+      }
+
+      if (email && password.length >= 6 && fbAuth && fbMod && fbMod.createUserWithEmailAndPassword) {
+        try {
+          const cred = await fbMod.createUserWithEmailAndPassword(fbAuth, email, password);
+          if (cred && cred.user) {
+            const token = await cred.user.getIdToken();
+            localStorage.setItem('doodle_firebase_id_token', token);
+            completeAccountSession(
+              cred.user.uid,
+              nick,
+              email,
+              'account',
+              '☁️ Welcome, ' + nick + '! Account created & synced to Firestore.',
+              password
+            );
+            return;
+          }
+        } catch (e) {}
+      }
+
       const uid = (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid)
         ? fbAuth.currentUser.uid
         : 'usr_' + ((email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle');
@@ -4711,7 +5003,8 @@
         nick,
         email,
         'account',
-        '☁️ Welcome, ' + nick + '! localStorage ⇄ Firestore synced.'
+        '☁️ Welcome, ' + nick + '! localStorage ⇄ Firestore synced.',
+        password
       );
     }
 
@@ -4815,6 +5108,7 @@
     }
 
     async function handleSignOut() {
+      const prevIdent = localStorage.getItem('doodle_account_email') || localStorage.getItem('doodle_account_name') || '';
       if (activeFirestoreUnsubscribe) {
         activeFirestoreUnsubscribe();
         activeFirestoreUnsubscribe = null;
@@ -4830,13 +5124,20 @@
 
       const nickEl = document.getElementById('regNicknameInput');
       const emailEl = document.getElementById('regEmailInput');
+      const passEl = document.getElementById('regPasswordInput');
+      const loginIdEl = document.getElementById('loginIdentifierInput');
+      const loginPassEl = document.getElementById('loginPasswordInput');
       const signedNickEl = document.getElementById('signedInNicknameInput');
       const signedEmailEl = document.getElementById('signedInEmailInput');
       if (nickEl) nickEl.value = '';
       if (emailEl) emailEl.value = '';
+      if (passEl) passEl.value = '';
+      if (loginPassEl) loginPassEl.value = '';
+      if (loginIdEl) loginIdEl.value = prevIdent;
       if (signedNickEl) signedNickEl.value = '';
       if (signedEmailEl) signedEmailEl.value = '';
 
+      switchAuthCardView('login');
       updateCloudSyncUIStatus();
       showToast('Signed out of cloud account.');
     }

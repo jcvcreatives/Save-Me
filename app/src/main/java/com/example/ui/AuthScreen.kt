@@ -525,6 +525,147 @@ fun RegistrationAuthScreen(
                 }
             }
         } else {
+            // 0. LOG INTO DOODLE WORD CARD (For already registered players - matches sample layout)
+            var loginIdentifier by remember { mutableStateOf("") }
+            var loginPassword by remember { mutableStateOf("") }
+            var createPassword by remember { mutableStateOf("") }
+
+            SketchyContainer(
+                fillColor = Color.White,
+                borderColor = DoodleColors.InkBlack,
+                cornerRadius = 18.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("login_account_card")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Log into Doodle Word",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                        color = DoodleColors.InkBlack
+                    )
+
+                    OutlinedTextField(
+                        value = loginIdentifier,
+                        onValueChange = { loginIdentifier = it.take(150) },
+                        label = { Text("Email or Doodle Nickname", fontFamily = fontFamily) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = DoodleColors.InkBlack,
+                            unfocusedBorderColor = DoodleColors.InkBlack.copy(alpha = 0.6f),
+                            focusedContainerColor = DoodleColors.PaperOffWhite,
+                            unfocusedContainerColor = DoodleColors.PaperOffWhite
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("login_identifier_input")
+                    )
+
+                    OutlinedTextField(
+                        value = loginPassword,
+                        onValueChange = { loginPassword = it.take(100) },
+                        label = { Text("Password", fontFamily = fontFamily) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = DoodleColors.InkBlack,
+                            unfocusedBorderColor = DoodleColors.InkBlack.copy(alpha = 0.6f),
+                            focusedContainerColor = DoodleColors.PaperOffWhite,
+                            unfocusedContainerColor = DoodleColors.PaperOffWhite
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("login_password_input")
+                    )
+
+                    SketchyContainer(
+                        fillColor = Color(0xFF0064E0),
+                        borderColor = Color(0xFF004AAD),
+                        cornerRadius = 24.dp,
+                        onClick = {
+                            val cleanId = loginIdentifier.trim()
+                            if (cleanId.isEmpty()) {
+                                onSetAuthError("Please enter your Email or Doodle Nickname to log in!")
+                            } else if (loginPassword.isEmpty()) {
+                                onSetAuthError("Please enter your password to log in!")
+                            } else if (!isLaunchingCredentialManager && !isSyncing) {
+                                if (cleanId.contains("@")) {
+                                    emailInput = cleanId
+                                    if (nicknameInput.isBlank()) {
+                                        nicknameInput = cleanId.substringBefore("@")
+                                    }
+                                } else {
+                                    nicknameInput = cleanId
+                                }
+                                triggerGoogleSignIn(authMethod = "account")
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("login_submit_button")
+                    ) {
+                        Text(
+                            text = "Log in",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 17.sp,
+                            color = Color.White
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSetAuthError(
+                                    "Enter your Email or Doodle Nickname above and sign in with Google to restore your cloud account!"
+                                )
+                            }
+                            .padding(vertical = 4.dp)
+                            .testTag("forgot_password_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Forgot password?",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = DoodleColors.InkBlack
+                        )
+                    }
+
+                    SketchyContainer(
+                        fillColor = Color.White,
+                        borderColor = Color(0xFF0064E0),
+                        cornerRadius = 24.dp,
+                        onClick = {
+                            showCreateAccountForm = true
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("open_create_account_button")
+                    ) {
+                        Text(
+                            text = "Create new account",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 15.sp,
+                            color = Color(0xFF0064E0)
+                        )
+                    }
+                }
+            }
+
             // 1. CREATE ACCOUNT CARD (Doodle Nickname + Gmail / Google Cloud Profile)
             SketchyContainer(
                 fillColor = Color.White,
@@ -608,6 +749,22 @@ fun RegistrationAuthScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("reg_email_input")
+                            )
+
+                            OutlinedTextField(
+                                value = createPassword,
+                                onValueChange = { createPassword = it.take(100) },
+                                label = { Text("Password", fontFamily = fontFamily) },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = DoodleColors.InkBlack,
+                                    unfocusedBorderColor = DoodleColors.InkBlack.copy(alpha = 0.6f),
+                                    focusedContainerColor = DoodleColors.PaperOffWhite,
+                                    unfocusedContainerColor = DoodleColors.PaperOffWhite
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("reg_password_input")
                             )
 
                             SketchyContainer(
