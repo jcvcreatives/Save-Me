@@ -713,10 +713,7 @@
       </div>
 
       <div class="menu-hero">
-        <canvas id="menuCanvas" width="420" height="270" onclick="cycleMenuPerilPreview()" title="Tap to preview all 15 Peril Scenarios!" style="cursor:pointer;"></canvas>
-        <div id="menuPerilPill" class="peril-preview-pill" onclick="cycleMenuPerilPreview()" title="Tap to cycle through all 15 Peril Scenarios">
-          <span id="menuPerilPillText">🎬 Peril 1/15: Shark &amp; Balloons ↻</span>
-        </div>
+        <canvas id="menuCanvas" width="420" height="270"></canvas>
 
         <div class="word-title-row">
           <div class="word-letter-col">W<div class="word-underline" style="background:#FF595E"></div></div>
@@ -727,7 +724,7 @@
       </div>
 
       <div class="menu-buttons">
-        <div id="tierProgressionCard" class="sketch-box" onclick="cycleMenuTierAuraPreview()" title="Tap to preview all 20 Tier Auras!" style="padding:11px 14px;border-radius:18px;width:100%;position:relative;overflow:hidden;background:var(--paper-bg);cursor:pointer;">
+        <div id="tierProgressionCard" class="sketch-box" style="padding:11px 14px;border-radius:18px;width:100%;position:relative;overflow:hidden;background:var(--paper-bg);">
           <canvas id="rankAuraCanvas" width="360" height="86" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:1;display:block;"></canvas>
           <div style="position:relative;z-index:1;">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:7px;">
@@ -761,9 +758,9 @@
     <div id="gameScreen" class="screen">
       <div class="top-bar">
         <button class="sketch-box sketch-btn icon-btn" onclick="goMainMenu()" title="Back">←</button>
-        <div style="text-align:center;cursor:pointer;" onclick="cycleGameplayPeril()" title="Tap to switch Peril Scenario!">
+        <div style="text-align:center;">
           <div id="gameHeaderTitle" style="font-size:22px;font-weight:700;">Level 1</div>
-          <div id="gameHeaderSub" style="font-size:12px;color:var(--ink-blue);font-weight:700;">Shark &amp; Balloons ↻</div>
+          <div id="gameHeaderSub" style="font-size:12px;color:var(--ink-blue);font-weight:700;">Shark &amp; Balloons</div>
         </div>
         <div class="sketch-box coin-pill" onclick="openCoinModal()">
           <span>⭐</span>
@@ -809,8 +806,7 @@
   <!-- ================= VICTORY OVERLAY ("WELL DONE!") ================= -->
   <div id="victoryModal" class="modal-backdrop">
     <div class="victory-card">
-      <div class="chalk-header" onclick="cycleVictoryCelebration()" title="Tap to switch celebration!">
-        <div id="victoryStyleBadge" class="celebration-badge">🕺 Disco Party! 🎲</div>
+      <div class="chalk-header">
         <canvas id="victoryCanvas" width="165" height="170" style="width:165px;height:170px;flex-shrink:0;"></canvas>
         <div style="flex:1;text-align:center;z-index:2;">
           <div id="victoryWord" style="font-size:25px;font-weight:700;color:var(--doodle-yellow);letter-spacing:2.5px;">DIAMOND</div>
@@ -833,15 +829,6 @@
             <span id="chestText">2/4</span>
           </div>
           <span style="font-size:24px;">🧰</span>
-        </div>
-
-        <div class="progress-row">
-          <strong style="width:58px;text-align:left;">Theme</strong>
-          <div class="progress-track">
-            <div id="themeFill" class="progress-fill" style="background:var(--hint-blue);width:20%;"></div>
-            <span id="themeText">2/10</span>
-          </div>
-          <span style="font-size:24px;">🎨</span>
         </div>
 
         <button id="nextLevelBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-top:14px;" onclick="nextLevelAfterVictory()">
@@ -1655,80 +1642,27 @@
       el._timer = setTimeout(() => { el.style.display = 'none'; }, 2100);
     }
 
-    let menuPerilPreviewIdx = null;
-    let menuTierPreviewIdx = null;
-    let gamePerilOverrideIdx = null;
-
-    function cycleMenuPerilPreview() {
-      const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
-      const defaultIdx = Math.floor((lvlNum - 1) / 20) % PERIL_ORDER.length;
-      if (menuPerilPreviewIdx === null) {
-        menuPerilPreviewIdx = (defaultIdx + 1) % PERIL_ORDER.length;
-      } else {
-        menuPerilPreviewIdx = (menuPerilPreviewIdx + 1) % PERIL_ORDER.length;
-      }
-      playProceduralSound('pop');
-      updateMenuUI();
-    }
-
-    function cycleMenuTierAuraPreview() {
-      const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
-      const defaultIdx = Math.min(19, Math.floor((lvlNum - 1) / 50));
-      if (menuTierPreviewIdx === null) {
-        menuTierPreviewIdx = (defaultIdx + 1) % RANK_TIERS.length;
-      } else {
-        menuTierPreviewIdx = (menuTierPreviewIdx + 1) % RANK_TIERS.length;
-      }
-      playProceduralSound('chime');
-      updateMenuUI();
-    }
-
     function getActiveMenuPeril(lvlNum) {
-      if (menuPerilPreviewIdx !== null) {
-        return PERIL_ORDER[menuPerilPreviewIdx % PERIL_ORDER.length];
-      }
       return getPerilForLevel(lvlNum);
     }
 
     function getActiveMenuRank(lvlNum) {
-      if (menuTierPreviewIdx !== null) {
-        return RANK_TIERS[menuTierPreviewIdx % RANK_TIERS.length];
-      }
       return getRankForLevel(lvlNum);
     }
 
     function getActiveGamePeril() {
-      if (gamePerilOverrideIdx !== null) {
-        return PERIL_ORDER[gamePerilOverrideIdx % PERIL_ORDER.length];
-      }
       return getPerilForLevel(activeLevel.number);
-    }
-
-    function cycleGameplayPeril() {
-      const currentPeril = getActiveGamePeril();
-      const curIdx = PERIL_ORDER.indexOf(currentPeril);
-      gamePerilOverrideIdx = (curIdx + 1) % PERIL_ORDER.length;
-      playProceduralSound('pop');
-      renderGameplayUI();
-      const gc = document.getElementById('gameCanvas');
-      if (gc) {
-        renderPerilScene(gc, getActiveGamePeril(), lives, smoothLives, false, performance.now() / 1000, 0.016);
-      }
     }
 
     function updateMenuUI() {
       const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
       const displayPeril = getActiveMenuPeril(lvlNum);
       const displayRank = getActiveMenuRank(lvlNum);
-      const perilIdx = PERIL_ORDER.indexOf(displayPeril) + 1;
 
       const totalLevels = CAMPAIGN_LEVELS.length; // 1000
       const doneCount = completedCampaignSet.size;
       const tierSpan = Math.max(1, displayRank.end - displayRank.start + 1);
-      const effectiveLvl = menuTierPreviewIdx !== null
-        ? displayRank.start + Math.floor(tierSpan * 0.64)
-        : lvlNum;
-      const levelInTier = Math.min(tierSpan, Math.max(1, effectiveLvl - displayRank.start + 1));
+      const levelInTier = Math.min(tierSpan, Math.max(1, lvlNum - displayRank.start + 1));
       const tierPct = Math.min(100, Math.max(6, (levelInTier / tierSpan) * 100));
       const nextTierLabel = displayRank.tier < RANK_TIERS.length
         ? `Next Tier at Lv ${displayRank.end + 1}`
@@ -1736,15 +1670,9 @@
 
       document.getElementById('menuCoinText').textContent = coins;
       document.getElementById('gameCoinText').textContent = coins;
-      const pillEl = document.getElementById('menuPerilPillText');
-      if (pillEl) {
-        pillEl.textContent = `🎬 Peril ${perilIdx}/${PERIL_ORDER.length}: ${displayPeril.name} ↻`;
-      }
       document.getElementById('menuRankTitleText').textContent = `Tier ${displayRank.tier}: ${displayRank.title}`;
       document.getElementById('menuRankTierSub').textContent =
-        menuTierPreviewIdx !== null
-          ? `Aura Preview (${displayRank.start}–${displayRank.end}) • Tap card for next Tier!`
-          : `Progress: Level ${lvlNum} / ${displayRank.end} (${nextTierLabel})`;
+        `Progress: Level ${lvlNum} / ${displayRank.end} (${nextTierLabel})`;
       document.getElementById('menuRankBadgeDesc').textContent = displayRank.badge;
       document.getElementById('menuCampaignProgressText').textContent = `${doneCount}/${totalLevels} ★`;
       const fillEl = document.getElementById('menuCampaignProgressFill');
@@ -1774,7 +1702,6 @@
       particles = [];
       floatingHits = [];
       shakeTimer = 0;
-      gamePerilOverrideIdx = menuPerilPreviewIdx;
 
       if (isBoss(level)) {
         const targetSet = new Set(level.word.toUpperCase().split(''));
@@ -1802,7 +1729,6 @@
         return;
       }
       campaignIdx = lvlNum - 1;
-      menuPerilPreviewIdx = null;
       saveState();
       closeAllModals();
       startCampaign();
@@ -1964,7 +1890,7 @@
       document.getElementById('gameHeaderTitle').textContent =
         activeLevel.isAdventure ? `Adventure ${activeLevel.number}` : `Level ${activeLevel.number}`;
       const sub = document.getElementById('gameHeaderSub');
-      sub.textContent = boss ? `${peril.name} ↻ • 💣 BOSS (-2 ❤️)` : `${peril.name} ↻`;
+      sub.textContent = boss ? `${peril.name} • 💣 BOSS (-2 ❤️)` : `${peril.name}`;
       sub.style.color = boss ? 'var(--wrong-red)' : 'var(--ink-blue)';
 
       document.getElementById('bossBadge').style.display = boss ? 'block' : 'none';
@@ -2218,19 +2144,8 @@
       }
       activeVictoryStyleIdx = nextIdx;
       const style = VICTORY_CELEBRATIONS[activeVictoryStyleIdx];
-      document.getElementById('victoryStyleBadge').textContent = style.badge;
       document.getElementById('victoryCheerText').textContent = style.cheer;
       spawnVictoryConfetti();
-    }
-
-    function cycleVictoryCelebration() {
-      activeVictoryStyleIdx = (activeVictoryStyleIdx + 1) % VICTORY_CELEBRATIONS.length;
-      const style = VICTORY_CELEBRATIONS[activeVictoryStyleIdx];
-      document.getElementById('victoryStyleBadge').textContent = style.badge;
-      document.getElementById('victoryCheerText').textContent = style.cheer;
-      spawnVictoryConfetti();
-      playProceduralSound('pop');
-      renderVictoryCelebration(performance.now() / 1000, 0.016);
     }
 
     // Modals
@@ -2243,8 +2158,6 @@
       document.getElementById('statMaxStreak').textContent = `Max Streak: ${maxStreak}`;
       document.getElementById('chestFill').style.width = `${(chestProg / 4) * 100}%`;
       document.getElementById('chestText').textContent = `${chestProg}/4`;
-      document.getElementById('themeFill').style.width = `${(themeProg / 10) * 100}%`;
-      document.getElementById('themeText').textContent = `${themeProg}/10`;
       document.getElementById('nextLevelBtn').textContent = `NEXT (+${reward} Coins) →`;
       selectRandomVictoryCelebration();
       document.getElementById('victoryModal').classList.add('active');

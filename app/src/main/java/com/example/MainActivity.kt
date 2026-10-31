@@ -2035,28 +2035,8 @@ fun MainMenuScreen(
     onOpenSettings: () -> Unit,
     onOpenCoinShop: () -> Unit
 ) {
-    val defaultPeril = PerilType.forLevel(levelNumber)
-    val defaultRank = RankTier.forLevel(levelNumber)
-
-    var previewPerilOverride by remember(levelNumber) { mutableStateOf<PerilType?>(null) }
-    var previewRankOverride by remember(levelNumber) { mutableStateOf<RankTier?>(null) }
-
-    val activePeril = previewPerilOverride ?: defaultPeril
-    val activeRank = previewRankOverride ?: defaultRank
-
-    val cyclePerilPreview = {
-        val allPerils = PerilType.entries
-        val nextIndex = (allPerils.indexOf(activePeril) + 1) % allPerils.size
-        previewPerilOverride = allPerils[nextIndex]
-        ProceduralSoundEngine.play(DoodleSoundEffect.POP)
-    }
-
-    val cycleTierPreview = {
-        val allTiers = RankTier.entries
-        val nextIndex = (allTiers.indexOf(activeRank) + 1) % allTiers.size
-        previewRankOverride = allTiers[nextIndex]
-        ProceduralSoundEngine.play(DoodleSoundEffect.CHIME)
-    }
+    val activePeril = PerilType.forLevel(levelNumber)
+    val activeRank = RankTier.forLevel(levelNumber)
 
     Column(
         modifier = Modifier
@@ -2104,7 +2084,7 @@ fun MainMenuScreen(
             )
         }
 
-        // Center Hero: Animated Peril Scene + Interactive Peril Pill + "W O R D" title
+        // Center Hero: Animated Peril Scene + "W O R D" title
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -2117,12 +2097,7 @@ fun MainMenuScreen(
                     .fillMaxWidth()
                     .weight(1f)
                     .heightIn(min = 185.dp)
-                    .padding(vertical = 2.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = cyclePerilPreview
-                    ),
+                    .padding(vertical = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
                 DynamicPerilSceneCanvas(
@@ -2139,30 +2114,6 @@ fun MainMenuScreen(
                         .fillMaxSize()
                         .testTag("menu_peril_canvas")
                 )
-
-                // Interactive Peril Scenario Badge Pill (tap to preview all 15 Peril Scenarios)
-                val perilNumber = PerilType.entries.indexOf(activePeril) + 1
-                SketchyContainer(
-                    fillColor = DoodleColors.PaperOffWhite.copy(alpha = 0.94f),
-                    cornerRadius = 16.dp,
-                    strokeWidth = 1.6.dp,
-                    shadowOffset = 1.5.dp,
-                    onClick = cyclePerilPreview,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 2.dp)
-                        .height(26.dp)
-                        .testTag("peril_preview_pill")
-                ) {
-                    Text(
-                        text = "🎬 Peril $perilNumber/${PerilType.entries.size}: ${activePeril.displayName} ↻",
-                        fontFamily = fontFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 11.sp,
-                        color = DoodleColors.InkBlack,
-                        modifier = Modifier.padding(horizontal = 10.dp)
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -2173,14 +2124,13 @@ fun MainMenuScreen(
         Spacer(modifier = Modifier.height(4.dp))
 
         // Dynamic Tier Progression Card (Current Rank Title, Tier Progress Bar & Vivid Animated Canvas Aura)
-        val previewLevelForCard = if (previewRankOverride != null) activeRank.levelRange.first else levelNumber
         TierProgressionCard(
             rankTier = activeRank,
-            levelNumber = previewLevelForCard,
+            levelNumber = levelNumber,
             completedLevels = completedLevels,
             totalLevels = totalCampaignLevels,
             fontFamily = fontFamily,
-            onClick = cycleTierPreview,
+            onClick = null,
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 360.dp)
@@ -2200,7 +2150,7 @@ fun MainMenuScreen(
             SketchyContainer(
                 fillColor = DoodleColors.DoodleYellow,
                 cornerRadius = 28.dp,
-                onClick = { onPlayCampaign(previewPerilOverride) },
+                onClick = { onPlayCampaign(null) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(58.dp)
@@ -3425,14 +3375,12 @@ fun GameplayScreen(
                         append(perilType.displayName)
                         if (level.isBossLevel) append(" • 💣 BOSS (-2 ❤️)")
                         if (level.hasFrozenVowels) append(" • 🧊 ICE VOWELS")
-                        append(" ↻")
                     },
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 11.sp,
                     color = if (level.isBossLevel) DoodleColors.WrongRed else DoodleColors.InkBlue,
                     modifier = Modifier
-                        .clickable { viewModel.cycleGameplayPeril() }
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                         .testTag("peril_subtitle_text")
                 )
@@ -6775,15 +6723,12 @@ fun VictoryOverlay(
                 .clip(RoundedCornerShape(26.dp))
                 .background(DoodleColors.PaperOffWhite)
         ) {
-            // Top dark chalkboard header with 60fps random winner animation & tap-to-switch badge
+            // Top dark chalkboard header with 60fps random winner animation
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(215.dp)
                     .background(DoodleColors.ChalkboardDark)
-                    .clickable {
-                        celebrationIndex = (celebrationIndex + 1) % styles.size
-                    }
                     .padding(14.dp)
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -6862,27 +6807,6 @@ fun VictoryOverlay(
                         )
                     }
                 }
-
-                // Celebration Style Chip (Top-Right)
-                SketchyContainer(
-                    fillColor = DoodleColors.DoodleYellow,
-                    cornerRadius = 12.dp,
-                    strokeWidth = 1.5.dp,
-                    shadowOffset = 1.5.dp,
-                    onClick = { celebrationIndex = (celebrationIndex + 1) % styles.size },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .height(26.dp)
-                ) {
-                    Text(
-                        text = activeStyle.badgeLabel,
-                        fontFamily = fontFamily,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 11.sp,
-                        color = DoodleColors.InkBlack,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    )
-                }
             }
 
             // Bottom white graph-paper card
@@ -6925,18 +6849,6 @@ fun VictoryOverlay(
                         fontFamily = fontFamily
                     ) {
                         DrawDoodleChestIcon()
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    DoodleProgressRow(
-                        label = "Theme",
-                        current = themeProgress,
-                        total = 10,
-                        barColor = DoodleColors.HintPotionBlue,
-                        fontFamily = fontFamily
-                    ) {
-                        DrawDoodlePaletteIcon()
                     }
 
                     Spacer(modifier = Modifier.height(22.dp))
