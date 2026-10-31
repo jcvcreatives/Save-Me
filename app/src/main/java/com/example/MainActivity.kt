@@ -1284,8 +1284,22 @@ class WordGameViewModel : ViewModel() {
     val currentRankTier: RankTier
         get() = RankTier.forLevel(currentCampaignLevelNumber)
 
+    var gameplayPerilOverride by mutableStateOf<PerilType?>(null)
+        private set
+
     val activePerilType: PerilType
-        get() = activeLevel.perilType
+        get() = gameplayPerilOverride ?: activeLevel.perilType
+
+    fun setPerilOverride(peril: PerilType?) {
+        gameplayPerilOverride = peril
+    }
+
+    fun cycleGameplayPeril() {
+        val all = PerilType.entries
+        val nextIdx = (all.indexOf(activePerilType) + 1) % all.size
+        gameplayPerilOverride = all[nextIdx]
+        ProceduralSoundEngine.play(DoodleSoundEffect.POP)
+    }
 
     /** Required consonants to thaw Frozen Vowels on Levels 150+ (capped at unique consonants in word) */
     val requiredConsonantsToThaw: Int
@@ -1750,7 +1764,11 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                         totalCampaignLevels = viewModel.totalCampaignCount,
                         coins = viewModel.coins,
                         fontFamily = activeFontFamily,
-                        onPlayCampaign = { viewModel.openWorldMap() },
+                        onPlayCampaign = { chosenPeril ->
+                            viewModel.setPerilOverride(chosenPeril)
+                            viewModel.startCampaignLevel()
+                        },
+                        onOpenWorldMap = { viewModel.openWorldMap() },
                         onPlayAdventure = { viewModel.startAdventureLevel() },
                         onPlayTwoPlayer = { viewModel.openTwoPlayerSetup() },
                         onSelectPerilLevel = { lvl -> viewModel.selectCampaignLevelNumber(lvl) },
@@ -2009,7 +2027,8 @@ fun MainMenuScreen(
     totalCampaignLevels: Int,
     coins: Int,
     fontFamily: FontFamily,
-    onPlayCampaign: () -> Unit,
+    onPlayCampaign: (PerilType?) -> Unit,
+    onOpenWorldMap: () -> Unit,
     onPlayAdventure: () -> Unit,
     onPlayTwoPlayer: () -> Unit,
     onSelectPerilLevel: (Int) -> Unit,
@@ -2053,12 +2072,28 @@ fun MainMenuScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SketchyIconButton(
-                testTag = "settings_button",
-                contentDescription = "Settings",
-                onClick = onOpenSettings
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                DrawDoodleGearIcon()
+                SketchyIconButton(
+                    testTag = "settings_button",
+                    contentDescription = "Settings",
+                    onClick = onOpenSettings
+                ) {
+                    DrawDoodleGearIcon()
+                }
+
+                SketchyIconButton(
+                    testTag = "world_map_button",
+                    contentDescription = "1,000-Level World Map",
+                    onClick = onOpenWorldMap
+                ) {
+                    Text(
+                        text = "🗺️",
+                        fontSize = 18.sp
+                    )
+                }
             }
 
             CoinBalancePill(
@@ -2161,11 +2196,11 @@ fun MainMenuScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Level X (Yellow fill, primary action)
+            // 1. Level X (Yellow fill, primary action -> launches Level X directly!)
             SketchyContainer(
                 fillColor = DoodleColors.DoodleYellow,
                 cornerRadius = 28.dp,
-                onClick = onPlayCampaign,
+                onClick = { onPlayCampaign(previewPerilOverride) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(58.dp)
@@ -2180,7 +2215,7 @@ fun MainMenuScreen(
                         color = DoodleColors.InkBlack
                     )
                     Text(
-                        text = "${defaultPeril.displayName} • ${defaultRank.title}",
+                        text = "${activePeril.displayName} • ${activeRank.title}",
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
@@ -3390,12 +3425,16 @@ fun GameplayScreen(
                         append(perilType.displayName)
                         if (level.isBossLevel) append(" • 💣 BOSS (-2 ❤️)")
                         if (level.hasFrozenVowels) append(" • 🧊 ICE VOWELS")
+                        append(" ↻")
                     },
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 11.sp,
                     color = if (level.isBossLevel) DoodleColors.WrongRed else DoodleColors.InkBlue,
-                    modifier = Modifier.testTag("peril_subtitle_text")
+                    modifier = Modifier
+                        .clickable { viewModel.cycleGameplayPeril() }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .testTag("peril_subtitle_text")
                 )
             }
 
@@ -3410,12 +3449,13 @@ fun GameplayScreen(
         Spacer(modifier = Modifier.height(4.dp))
 
         // 2. Upper Split Scene:
-        // Left Half: Custom Compose Canvas rendering the active PerilType (all 6 perils)
+        // Left Half: Custom Compose Canvas rendering the active PerilType (all 15 perils)
         // Right Half: Category pill + Clue/Category prompt + Boss & Frozen Vowel badges
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f)
+                .heightIn(min = 190.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left Half: Dynamic Peril Canvas
@@ -3423,6 +3463,7 @@ fun GameplayScreen(
                 modifier = Modifier
                     .weight(0.53f)
                     .fillMaxHeight()
+                    .heightIn(min = 185.dp)
                     .padding(end = 6.dp)
             ) {
                 DynamicPerilSceneCanvas(

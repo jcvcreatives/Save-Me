@@ -192,6 +192,7 @@
 
     #menuCanvas {
       width: 100%;
+      height: 225px;
       min-height: 185px;
       max-height: 290px;
       flex: 1;
@@ -295,16 +296,18 @@
       display: flex;
       width: 100%;
       flex: 1;
+      height: 230px;
       min-height: 190px;
       max-height: 310px;
       gap: 8px;
-      align-items: center;
+      align-items: stretch;
       margin-top: 4px;
     }
 
     .scene-half {
       flex: 0.53;
       height: 100%;
+      min-height: 190px;
       position: relative;
       display: flex;
       align-items: center;
@@ -314,11 +317,14 @@
     #gameCanvas {
       width: 100%;
       height: 100%;
+      min-height: 190px;
+      display: block;
     }
 
     .clue-half {
       flex: 0.47;
       height: 100%;
+      min-height: 190px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -695,7 +701,10 @@
     <!-- ================= SCREEN 1: MAIN MENU ================= -->
     <div id="menuScreen" class="screen active">
       <div class="top-bar">
-        <button class="sketch-box sketch-btn icon-btn" onclick="openSettings()" title="Settings">⚙️</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="sketch-box sketch-btn icon-btn" onclick="openSettings()" title="Settings">⚙️</button>
+          <button class="sketch-box sketch-btn icon-btn" onclick="openWorldMapModal()" title="1,000-Level World Map">🗺️</button>
+        </div>
         <div class="sketch-box coin-pill" onclick="openCoinModal()">
           <span>⭐</span>
           <span id="menuCoinText">1231</span>
@@ -719,7 +728,7 @@
 
       <div class="menu-buttons">
         <div id="tierProgressionCard" class="sketch-box" onclick="cycleMenuTierAuraPreview()" title="Tap to preview all 20 Tier Auras!" style="padding:11px 14px;border-radius:18px;width:100%;position:relative;overflow:hidden;background:var(--paper-bg);cursor:pointer;">
-          <canvas id="rankAuraCanvas" width="360" height="86" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:1;"></canvas>
+          <canvas id="rankAuraCanvas" width="360" height="86" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:1;display:block;"></canvas>
           <div style="position:relative;z-index:1;">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:7px;">
               <div style="text-align:left;flex:1;">
@@ -737,7 +746,7 @@
           </div>
         </div>
 
-        <button class="sketch-box sketch-btn sketch-yellow menu-btn" onclick="openWorldMapModal()">
+        <button class="sketch-box sketch-btn sketch-yellow menu-btn" onclick="startCampaign()">
           <span id="menuLevelBtnText">Level 1</span>
           <small id="menuPerilSubText">Shark &amp; Balloons • Doodle Novice</small>
         </button>
@@ -752,9 +761,9 @@
     <div id="gameScreen" class="screen">
       <div class="top-bar">
         <button class="sketch-box sketch-btn icon-btn" onclick="goMainMenu()" title="Back">←</button>
-        <div style="text-align:center">
+        <div style="text-align:center;cursor:pointer;" onclick="cycleGameplayPeril()" title="Tap to switch Peril Scenario!">
           <div id="gameHeaderTitle" style="font-size:22px;font-weight:700;">Level 1</div>
-          <div id="gameHeaderSub" style="font-size:12px;color:var(--ink-blue);font-weight:700;">Shark &amp; Balloons</div>
+          <div id="gameHeaderSub" style="font-size:12px;color:var(--ink-blue);font-weight:700;">Shark &amp; Balloons ↻</div>
         </div>
         <div class="sketch-box coin-pill" onclick="openCoinModal()">
           <span>⭐</span>
@@ -1065,26 +1074,26 @@
     const VOWELS_SET = new Set(['A', 'E', 'I', 'O', 'U']);
 
     const RANK_TIERS = [
-      { tier: 1, start: 1, end: 50, title: 'Doodle Novice', badge: '✨ Hatching Pulse', color: '#FBC02D' },
-      { tier: 2, start: 51, end: 100, title: 'Ink Apprentice', badge: '💧 Ink-Splash Rings', color: '#0288D1' },
-      { tier: 3, start: 101, end: 150, title: 'Sketch Master', badge: '✳️ Cross-Hatch Starburst', color: '#2E7D32' },
-      { tier: 4, start: 151, end: 200, title: 'Graph Paper Wizard', badge: '🔮 Coordinate Grid Pulse', color: '#7B1FA2' },
-      { tier: 5, start: 201, end: 250, title: 'Epic Doodle Legend', badge: '🔥 Golden Flame Sparks', color: '#EF6C00' },
-      { tier: 6, start: 251, end: 300, title: 'Mythic Ink God', badge: '⚡ Rainbow Lightning', color: '#D500F9' },
-      { tier: 7, start: 301, end: 350, title: 'Dimension Sketcher', badge: '🟢 Matrix Code Grid', color: '#00C853' },
-      { tier: 8, start: 351, end: 400, title: 'Cosmic Doodle Overlord', badge: '🪐 Orbiting Planets', color: '#3949AB' },
-      { tier: 9, start: 401, end: 450, title: 'Quantum Ink Architect', badge: '⚛️ Atomic Rings', color: '#00838F' },
-      { tier: 10, start: 451, end: 500, title: 'Infinity Paper Sovereign', badge: '🌌 Spiral Galaxy Sketch', color: '#AD1457' },
-      { tier: 11, start: 501, end: 550, title: 'Celestial Scribbler', badge: '✨ Constellation Lines', color: '#1565C0' },
-      { tier: 12, start: 551, end: 600, title: 'Nebula Doodle Walker', badge: '☄️ Cosmic Dust Swirl', color: '#8E24AA' },
-      { tier: 13, start: 601, end: 650, title: 'Vortex Line Master', badge: '🌀 Blackhole Ring', color: '#37474F' },
-      { tier: 14, start: 651, end: 700, title: 'Solar Prism Forger', badge: '🌈 Prismatic Sunbeams', color: '#F57F17' },
-      { tier: 15, start: 701, end: 750, title: 'Chrono Graphite Hero', badge: '⚙️ Clock Gear & Pendulum', color: '#5D4037' },
-      { tier: 16, start: 751, end: 800, title: 'Ether Sketch Warden', badge: '👻 Ghostly Blue Flame', color: '#0097A7' },
-      { tier: 17, start: 801, end: 850, title: 'Titanium Ink Berserker', badge: '⚔️ Metallic Sparks', color: '#C62828' },
-      { tier: 18, start: 851, end: 900, title: 'Astral Paper Sovereign', badge: '🌟 Golden Runes & Stars', color: '#F9A825' },
-      { tier: 19, start: 901, end: 950, title: 'Omniscient Doodle Sage', badge: '👁️ Ancient Scroll Aura', color: '#4527A0' },
-      { tier: 20, start: 951, end: 1000, title: 'The Supreme Doodle God', badge: '👑 Gold & Rainbow Cosmos', color: '#FFD600' }
+      { tier: 1, start: 1, end: 50, title: 'Doodle Novice', badge: '✨ Hatching Pulse', primaryColor: '#FFF59D', secondaryColor: '#FFD54F', color: '#FBC02D' },
+      { tier: 2, start: 51, end: 100, title: 'Ink Apprentice', badge: '💧 Ink-Splash Rings', primaryColor: '#81D4FA', secondaryColor: '#29B6F6', color: '#0288D1' },
+      { tier: 3, start: 101, end: 150, title: 'Sketch Master', badge: '✳️ Cross-Hatch Starburst', primaryColor: '#A5D6A7', secondaryColor: '#4CAF50', color: '#2E7D32' },
+      { tier: 4, start: 151, end: 200, title: 'Graph Paper Wizard', badge: '🔮 Coordinate Grid Pulse', primaryColor: '#CE93D8', secondaryColor: '#AB47BC', color: '#7B1FA2' },
+      { tier: 5, start: 201, end: 250, title: 'Epic Doodle Legend', badge: '🔥 Golden Flame Sparks', primaryColor: '#FFD54F', secondaryColor: '#FF9800', color: '#EF6C00' },
+      { tier: 6, start: 251, end: 300, title: 'Mythic Ink God', badge: '⚡ Rainbow Lightning', primaryColor: '#FF80AB', secondaryColor: '#7C4DFF', color: '#D500F9' },
+      { tier: 7, start: 301, end: 350, title: 'Dimension Sketcher', badge: '🟢 Matrix Code Grid', primaryColor: '#69F0AE', secondaryColor: '#00E676', color: '#00C853' },
+      { tier: 8, start: 351, end: 400, title: 'Cosmic Doodle Overlord', badge: '🪐 Orbiting Planets', primaryColor: '#9FA8DA', secondaryColor: '#5C6BC0', color: '#3949AB' },
+      { tier: 9, start: 401, end: 450, title: 'Quantum Ink Architect', badge: '⚛️ Atomic Rings', primaryColor: '#80DEEA', secondaryColor: '#00ACC1', color: '#00838F' },
+      { tier: 10, start: 451, end: 500, title: 'Infinity Paper Sovereign', badge: '🌌 Spiral Galaxy Sketch', primaryColor: '#B39DDB', secondaryColor: '#EC407A', color: '#AD1457' },
+      { tier: 11, start: 501, end: 550, title: 'Celestial Scribbler', badge: '✨ Constellation Lines', primaryColor: '#FFE082', secondaryColor: '#42A5F5', color: '#1565C0' },
+      { tier: 12, start: 551, end: 600, title: 'Nebula Doodle Walker', badge: '☄️ Cosmic Dust Swirl', primaryColor: '#F48FB1', secondaryColor: '#AB47BC', color: '#8E24AA' },
+      { tier: 13, start: 601, end: 650, title: 'Vortex Line Master', badge: '🌀 Blackhole Ring', primaryColor: '#90A4AE', secondaryColor: '#546E7A', color: '#37474F' },
+      { tier: 14, start: 651, end: 700, title: 'Solar Prism Forger', badge: '🌈 Prismatic Sunbeams', primaryColor: '#FFCC80', secondaryColor: '#FFA726', color: '#F57F17' },
+      { tier: 15, start: 701, end: 750, title: 'Chrono Graphite Hero', badge: '⚙️ Clock Gear & Pendulum', primaryColor: '#D7CCC8', secondaryColor: '#8D6E63', color: '#5D4037' },
+      { tier: 16, start: 751, end: 800, title: 'Ether Sketch Warden', badge: '👻 Ghostly Blue Flame', primaryColor: '#80CBC4', secondaryColor: '#26A69A', color: '#0097A7' },
+      { tier: 17, start: 801, end: 850, title: 'Titanium Ink Berserker', badge: '⚔️ Metallic Sparks', primaryColor: '#B0BEC5', secondaryColor: '#EF5350', color: '#C62828' },
+      { tier: 18, start: 851, end: 900, title: 'Astral Paper Sovereign', badge: '🌟 Golden Runes & Stars', primaryColor: '#FFF176', secondaryColor: '#FBC02D', color: '#F9A825' },
+      { tier: 19, start: 901, end: 950, title: 'Omniscient Doodle Sage', badge: '👁️ Ancient Scroll Aura', primaryColor: '#C5E1A5', secondaryColor: '#7CB342', color: '#4527A0' },
+      { tier: 20, start: 951, end: 1000, title: 'The Supreme Doodle God', badge: '👑 Gold & Rainbow Cosmos', primaryColor: '#FFD700', secondaryColor: '#FF4081', color: '#FFD600' }
     ];
 
     function getRankForLevel(lvlNum) {
@@ -1648,6 +1657,7 @@
 
     let menuPerilPreviewIdx = null;
     let menuTierPreviewIdx = null;
+    let gamePerilOverrideIdx = null;
 
     function cycleMenuPerilPreview() {
       const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
@@ -1687,10 +1697,27 @@
       return getRankForLevel(lvlNum);
     }
 
+    function getActiveGamePeril() {
+      if (gamePerilOverrideIdx !== null) {
+        return PERIL_ORDER[gamePerilOverrideIdx % PERIL_ORDER.length];
+      }
+      return getPerilForLevel(activeLevel.number);
+    }
+
+    function cycleGameplayPeril() {
+      const currentPeril = getActiveGamePeril();
+      const curIdx = PERIL_ORDER.indexOf(currentPeril);
+      gamePerilOverrideIdx = (curIdx + 1) % PERIL_ORDER.length;
+      playProceduralSound('pop');
+      renderGameplayUI();
+      const gc = document.getElementById('gameCanvas');
+      if (gc) {
+        renderPerilScene(gc, getActiveGamePeril(), lives, smoothLives, false, performance.now() / 1000, 0.016);
+      }
+    }
+
     function updateMenuUI() {
       const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
-      const actualPeril = getPerilForLevel(lvlNum);
-      const actualRank = getRankForLevel(lvlNum);
       const displayPeril = getActiveMenuPeril(lvlNum);
       const displayRank = getActiveMenuRank(lvlNum);
       const perilIdx = PERIL_ORDER.indexOf(displayPeril) + 1;
@@ -1722,14 +1749,14 @@
       document.getElementById('menuCampaignProgressText').textContent = `${doneCount}/${totalLevels} ★`;
       const fillEl = document.getElementById('menuCampaignProgressFill');
       fillEl.style.width = `${tierPct}%`;
-      fillEl.style.background = displayRank.color;
+      fillEl.style.background = `linear-gradient(90deg, ${displayRank.primaryColor || displayRank.color}, ${displayRank.secondaryColor || displayRank.color}, ${displayRank.color})`;
       const cardEl = document.getElementById('tierProgressionCard');
       if (cardEl) {
-        cardEl.style.boxShadow = `0 0 16px ${displayRank.color}66, 3px 3.5px 0px rgba(30, 30, 30, 0.22)`;
+        cardEl.style.boxShadow = `0 0 18px ${displayRank.color}77, 3px 3.5px 0px rgba(30, 30, 30, 0.22)`;
       }
       document.getElementById('menuLevelBtnText').textContent =
         (lvlNum % 5 === 0) ? `Level ${lvlNum} (BOSS 💣)` : `Level ${lvlNum}`;
-      document.getElementById('menuPerilSubText').textContent = `${actualPeril.name} • ${actualRank.title}`;
+      document.getElementById('menuPerilSubText').textContent = `${displayPeril.name} • ${displayRank.title}`;
     }
 
     function isBoss(level) {
@@ -1747,6 +1774,7 @@
       particles = [];
       floatingHits = [];
       shakeTimer = 0;
+      gamePerilOverrideIdx = menuPerilPreviewIdx;
 
       if (isBoss(level)) {
         const targetSet = new Set(level.word.toUpperCase().split(''));
@@ -1774,6 +1802,7 @@
         return;
       }
       campaignIdx = lvlNum - 1;
+      menuPerilPreviewIdx = null;
       saveState();
       closeAllModals();
       startCampaign();
@@ -1905,6 +1934,20 @@
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.getElementById(id).classList.add('active');
       updateMenuUI();
+      const renderActiveCanvasesNow = () => {
+        const nowSec = performance.now() / 1000;
+        if (id === 'gameScreen') {
+          const gc = document.getElementById('gameCanvas');
+          if (gc) renderPerilScene(gc, getActiveGamePeril(), lives, smoothLives, false, nowSec, 0.016);
+        } else if (id === 'menuScreen') {
+          const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
+          const mc = document.getElementById('menuCanvas');
+          if (mc) renderPerilScene(mc, getActiveMenuPeril(curLvl), 6, 6, true, nowSec, 0.016);
+          renderRankAuraCanvas(getActiveMenuRank(curLvl), nowSec);
+        }
+      };
+      renderActiveCanvasesNow();
+      requestAnimationFrame(renderActiveCanvasesNow);
     }
 
     function goMainMenu() {
@@ -1913,7 +1956,7 @@
     }
 
     function renderGameplayUI() {
-      const peril = getPerilForLevel(activeLevel.number);
+      const peril = getActiveGamePeril();
       const boss = isBoss(activeLevel);
       const vowelsFrozen = areVowelsCurrentlyFrozen();
 
@@ -1921,7 +1964,7 @@
       document.getElementById('gameHeaderTitle').textContent =
         activeLevel.isAdventure ? `Adventure ${activeLevel.number}` : `Level ${activeLevel.number}`;
       const sub = document.getElementById('gameHeaderSub');
-      sub.textContent = boss ? `${peril.name} • 💣 BOSS (-2 ❤️)` : peril.name;
+      sub.textContent = boss ? `${peril.name} ↻ • 💣 BOSS (-2 ❤️)` : `${peril.name} ↻`;
       sub.style.color = boss ? 'var(--wrong-red)' : 'var(--ink-blue)';
 
       document.getElementById('bossBadge').style.display = boss ? 'block' : 'none';
@@ -2030,7 +2073,7 @@
       }
 
       const word = activeLevel.word.toUpperCase();
-      const peril = getPerilForLevel(activeLevel.number);
+      const peril = getActiveGamePeril();
       const wasFrozen = areVowelsCurrentlyFrozen();
 
       if (word.includes(ch)) {
@@ -2187,6 +2230,7 @@
       document.getElementById('victoryCheerText').textContent = style.cheer;
       spawnVictoryConfetti();
       playProceduralSound('pop');
+      renderVictoryCelebration(performance.now() / 1000, 0.016);
     }
 
     // Modals
@@ -2204,6 +2248,8 @@
       document.getElementById('nextLevelBtn').textContent = `NEXT (+${reward} Coins) →`;
       selectRandomVictoryCelebration();
       document.getElementById('victoryModal').classList.add('active');
+      renderVictoryCelebration(performance.now() / 1000, 0.016);
+      requestAnimationFrame(() => renderVictoryCelebration(performance.now() / 1000, 0.016));
     }
 
     function nextLevelAfterVictory() {
@@ -2222,7 +2268,7 @@
     }
 
     function showGameOverModal() {
-      const peril = getPerilForLevel(activeLevel.number);
+      const peril = getActiveGamePeril();
       document.getElementById('gameOverTitle').textContent = peril.overTitle;
       document.getElementById('gameOverDesc').textContent = peril.overDesc;
       document.getElementById('gameOverClue').textContent = `Clue: ${activeLevel.clue}`;
@@ -2313,6 +2359,10 @@
       const ctx = canvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       return { ctx, w: cssW, h: cssH };
+    }
+
+    function setupHiDPICanvas(canvas, fallbackW = 360, fallbackH = 86) {
+      return syncCanvasHD(canvas, fallbackW, fallbackH).ctx;
     }
 
     function drawStickman(ctx, x, handY, scale, panicking, handsUp, t) {
@@ -2407,8 +2457,8 @@
 
     function drawSculptedDinoPeril(ctx, w, h, livesCount, smoothL, isPreview, t) {
       const groundY = h * 0.85;
-      const noise = 6 - livesCount;
-      const smoothDanger = Math.min(1, Math.max(0, (6 - smoothL) / 6));
+      const noise = isPreview ? (1 + Math.floor((Math.sin(t * 1.8) + 1) * 1.5)) : (6 - livesCount);
+      const smoothDanger = isPreview ? (Math.sin(t * 1.8) + 1) * 0.24 : Math.min(1, Math.max(0, (6 - smoothL) / 6));
       const DinoGreen = '#689F38';
       const DinoLightGreen = '#9CCC65';
       const DinoDarkScale = '#33691E';
@@ -3044,9 +3094,11 @@
           ctx.fill();
         }
 
-        for (let i = 0; i < livesCount; i++) {
+        const effCrates = isPreview ? 5 : livesCount;
+        const effSmoothL = isPreview ? (5.2 - danger * 1.6) : smoothL;
+        for (let i = 0; i < effCrates; i++) {
           const topY = lavaY - (i + 1) * crateH;
-          const wobble = (!isPreview && livesCount <= 2) ? Math.sin(t * 14 + i) * 2.2 : 0;
+          const wobble = (isPreview || livesCount <= 2) ? Math.sin(t * (isPreview ? 5 : 14) + i) * (isPreview ? 1.4 : 2.2) : 0;
           const cxBox = cx - crateW * 0.5 + wobble;
           ctx.fillStyle = (i % 2 === 0) ? '#D7CCC8' : '#A1887F';
           ctx.strokeStyle = '#1E1E1E';
@@ -3065,8 +3117,8 @@
           ctx.stroke();
         }
 
-        const platformY = lavaY - smoothL * crateH;
-        const hotFootHop = (!isPreview && livesCount > 0 && livesCount <= 2) ? Math.abs(Math.sin(t * 14)) * 9 : 0;
+        const platformY = lavaY - effSmoothL * crateH;
+        const hotFootHop = (!isPreview && livesCount > 0 && livesCount <= 2) ? Math.abs(Math.sin(t * 14)) * 9 : (isPreview ? Math.abs(Math.sin(t * 4.5)) * 4 : 0);
         const stickY = (!isPreview && livesCount <= 0)
           ? lavaY - 38 + Math.sin(t * 10) * 4
           : platformY - 64 - hotFootHop + bob * 0.35;
@@ -3246,8 +3298,8 @@
         ctx.roundRect(tankLeft, tankTop, tankW, tankH, 14);
         ctx.fill();
 
-        // Rising water level (1/6th per wrong guess)
-        const waterFillFrac = isPreview ? 0.25 : Math.min(1, Math.max(0.06, (6 - smoothL) / 6));
+        // Rising water level (1/6th per wrong guess, or animated slosh in preview)
+        const waterFillFrac = isPreview ? (0.24 + danger * 0.42) : Math.min(1, Math.max(0.06, (6 - smoothL) / 6));
         const waterH = tankH * waterFillFrac;
         const waterTopY = tankBottom - waterH;
 
@@ -3905,8 +3957,9 @@
       }
     });
 
-    // Main 60fps delta-time animation loop
+    // Main 60fps delta-time animation loop (crash-resilient: schedules next frame first)
     function animate(nowMs) {
+      requestAnimationFrame(animate);
       const now = nowMs || performance.now();
       const dt = Math.min(0.05, Math.max(0.001, (now - lastFrameMs) / 1000));
       lastFrameMs = now;
@@ -3916,70 +3969,217 @@
       smoothLives += (lives - smoothLives) * Math.min(1, dt * 10);
       if (shakeTimer > 0) shakeTimer = Math.max(0, shakeTimer - dt);
 
-      const menuCanvas = document.getElementById('menuCanvas');
-      if (menuCanvas && document.getElementById('menuScreen').classList.contains('active')) {
-        const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
-        renderPerilScene(menuCanvas, getPerilForLevel(curLvl), 6, 6, true, t, dt);
-        renderRankAuraCanvas(getRankForLevel(curLvl), t);
+      try {
+        const menuScreenEl = document.getElementById('menuScreen');
+        const menuCanvas = document.getElementById('menuCanvas');
+        if (menuCanvas && menuScreenEl && menuScreenEl.classList.contains('active')) {
+          const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
+          renderPerilScene(menuCanvas, getActiveMenuPeril(curLvl), 6, 6, true, t, dt);
+          renderRankAuraCanvas(getActiveMenuRank(curLvl), t);
+        }
+      } catch (err) {
+        console.error('Menu canvas render error:', err);
       }
-      const gameCanvas = document.getElementById('gameCanvas');
-      if (gameCanvas && document.getElementById('gameScreen').classList.contains('active')) {
-        renderPerilScene(gameCanvas, getPerilForLevel(activeLevel.number), lives, smoothLives, false, t, dt);
+
+      try {
+        const gameScreenEl = document.getElementById('gameScreen');
+        const gameCanvas = document.getElementById('gameCanvas');
+        if (gameCanvas && gameScreenEl && gameScreenEl.classList.contains('active')) {
+          renderPerilScene(gameCanvas, getActiveGamePeril(), lives, smoothLives, false, t, dt);
+        }
+      } catch (err) {
+        console.error('Game canvas render error:', err);
       }
-      if (document.getElementById('victoryModal').classList.contains('active')) {
-        renderVictoryCelebration(t, dt);
+
+      try {
+        const victoryModalEl = document.getElementById('victoryModal');
+        if (victoryModalEl && victoryModalEl.classList.contains('active')) {
+          renderVictoryCelebration(t, dt);
+        }
+      } catch (err) {
+        console.error('Victory canvas render error:', err);
       }
-      requestAnimationFrame(animate);
     }
 
     function renderRankAuraCanvas(rank, t) {
       const canvas = document.getElementById('rankAuraCanvas');
-      if (!canvas) return;
-      const ctx = setupHiDPICanvas(canvas);
-      const w = canvas.clientWidth || 340;
-      const h = canvas.clientHeight || 72;
+      if (!canvas || !rank) return;
+      const { ctx, w, h } = syncCanvasHD(canvas, 360, 86);
       ctx.clearRect(0, 0, w, h);
 
-      const pulse = 0.94 + Math.sin(t * 2.6) * 0.08;
+      const primary = rank.primaryColor || rank.color || '#FFC107';
+      const secondary = rank.secondaryColor || '#FF6D00';
+      const pulse = 0.88 + Math.sin(t * 3.8) * 0.16;
+
       ctx.save();
-      ctx.fillStyle = rank.color;
-      ctx.globalAlpha = 0.22;
+
+      // 1. Vivid multi-stop animated gradient background wash
+      const bgGrad = ctx.createLinearGradient(0, 0, w, h);
+      bgGrad.addColorStop(0, primary);
+      bgGrad.addColorStop(0.5, secondary);
+      bgGrad.addColorStop(1, primary);
+      ctx.globalAlpha = 0.28 + Math.sin(t * 3.2) * 0.08;
+      ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, w, h);
 
-      ctx.globalAlpha = 0.45;
-      ctx.strokeStyle = rank.color;
-      ctx.lineWidth = 2;
+      // 2. Pulsing radial energy core behind the badge/title
+      const coreX = w * 0.25 + Math.sin(t * 2.2) * (w * 0.12);
+      const coreY = h * 0.5;
+      const radGrad = ctx.createRadialGradient(coreX, coreY, 4, coreX, coreY, Math.max(w, h) * 0.65);
+      radGrad.addColorStop(0, secondary);
+      radGrad.addColorStop(0.55, primary);
+      radGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.globalAlpha = 0.34 * pulse;
+      ctx.fillStyle = radGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      // 3. Tier-specific procedural animated patterns that POP!
+      ctx.globalAlpha = 0.72;
+      ctx.strokeStyle = secondary;
+      ctx.fillStyle = primary;
+      ctx.lineCap = 'round';
+
       if (rank.tier === 1) {
-        for (let x = -h; x < w + h; x += 15) {
-          const shift = Math.sin(t * 2 + x * 0.03) * 4;
+        // Tier 1: Golden Sunburst Hatching + Rising Sparkle Stars
+        ctx.lineWidth = 2.4;
+        const step = 16;
+        const scroll = (t * 32) % step;
+        for (let x = -h + scroll; x < w + h; x += step) {
           ctx.beginPath();
-          ctx.moveTo(x + shift, h);
-          ctx.lineTo(x + h * 0.7 + shift, 0);
+          ctx.moveTo(x, h);
+          ctx.lineTo(x + h * 0.75, 0);
+          ctx.stroke();
+        }
+        // Rotating sunburst in right corner
+        const sunX = w * 0.86;
+        const sunY = h * 0.5;
+        for (let r = 0; r < 12; r++) {
+          const ang = t * 1.8 + (r * Math.PI * 2) / 12;
+          const rIn = 8 * pulse;
+          const rOut = (r % 2 === 0 ? 28 : 18) * pulse;
+          ctx.beginPath();
+          ctx.moveTo(sunX + Math.cos(ang) * rIn, sunY + Math.sin(ang) * rIn);
+          ctx.lineTo(sunX + Math.cos(ang) * rOut, sunY + Math.sin(ang) * rOut);
           ctx.stroke();
         }
       } else if (rank.tier === 2) {
-        for (let i = 0; i < 4; i++) {
+        // Tier 2: Flowing Blue Ink Ripples & Bubbles
+        ctx.lineWidth = 2.5;
+        for (let i = 0; i < 5; i++) {
+          const prog = ((t * 0.65 + i * 0.2) % 1);
+          const rx = w * (0.15 + i * 0.18);
+          const ry = h * 0.5 + Math.sin(t * 2.5 + i) * 6;
+          ctx.globalAlpha = (1 - prog) * 0.85;
           ctx.beginPath();
-          ctx.arc(w * (0.18 + i * 0.2) + Math.cos(t * 2 + i) * 5, h * 0.5, (12 + i * 10) * pulse, 0, Math.PI * 2);
+          ctx.arc(rx, ry, 6 + prog * 34, 0, Math.PI * 2);
           ctx.stroke();
         }
       } else if (rank.tier === 3) {
-        for (let i = 0; i < 10; i++) {
-          const ang = t * 1.6 + (i * Math.PI * 2) / 10;
+        // Tier 3: Rotating Emerald Starburst Rays
+        ctx.lineWidth = 2.4;
+        [w * 0.18, w * 0.82].forEach((cxStar, idx) => {
+          for (let i = 0; i < 12; i++) {
+            const ang = (idx === 0 ? 1 : -1) * t * 2.1 + (i * Math.PI * 2) / 12;
+            const len = (i % 2 === 0 ? 32 : 18) * pulse;
+            ctx.beginPath();
+            ctx.moveTo(cxStar, h * 0.5);
+            ctx.lineTo(cxStar + Math.cos(ang) * len, h * 0.5 + Math.sin(ang) * len);
+            ctx.stroke();
+          }
+        });
+      } else if (rank.tier === 4 || rank.tier === 7) {
+        // Tier 4 & 7: Shimmering Coordinate Grid & Matrix Nodes
+        ctx.lineWidth = 1.8;
+        const sp = 20;
+        const ox = (t * 28) % sp;
+        for (let x = ox; x < w; x += sp) {
           ctx.beginPath();
-          ctx.moveTo(w * 0.78, h * 0.5);
-          ctx.lineTo(w * 0.78 + Math.cos(ang) * 28 * pulse, h * 0.5 + Math.sin(ang) * 28 * pulse);
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, h);
+          ctx.stroke();
+        }
+        for (let y = (t * 18) % sp; y < h; y += sp) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+      } else if (rank.tier === 5 || rank.tier === 15) {
+        // Tier 5 & 15: Radiant Flame Waves & Rising Embers
+        ctx.lineWidth = 2.6;
+        for (let i = 0; i < 10; i++) {
+          const fx = w * ((i + 0.5) / 10);
+          const wave = Math.sin(t * 5 + i * 0.9) * 8;
+          ctx.beginPath();
+          ctx.moveTo(fx, h);
+          ctx.quadraticCurveTo(fx + wave, h * 0.45, fx - wave * 0.6, 6);
+          ctx.stroke();
+        }
+      } else if (rank.tier === 6 || rank.tier === 20) {
+        // Tier 6 & 20: Mythic Rainbow / Supreme God Lightning Aura
+        for (let i = 0; i < 7; i++) {
+          ctx.strokeStyle = `hsl(${(t * 120 + i * 50) % 360}, 90%, 55%)`;
+          ctx.lineWidth = 2.8;
+          const lx = w * (0.08 + i * 0.14);
+          ctx.beginPath();
+          ctx.moveTo(lx, 0);
+          ctx.lineTo(lx + Math.sin(t * 10 + i) * 10, h * 0.5);
+          ctx.lineTo(lx - Math.cos(t * 10 + i) * 8, h);
           ctx.stroke();
         }
       } else {
-        for (let i = 0; i < 6; i++) {
-          const px = w * (0.12 + i * 0.15) + Math.cos(t * 2.2 + i) * 6;
-          const py = h * 0.5 + Math.sin(t * 2.5 + i * 1.1) * (h * 0.28);
+        // Tiers 8..19: Cosmic Orbiting Rings, Vortex Spirals & Quantum Harmonics
+        ctx.lineWidth = 2.4;
+        for (let i = 0; i < 5; i++) {
+          const px = w * (0.12 + i * 0.19) + Math.cos(t * 2.6 + i) * 8;
+          const py = h * 0.5 + Math.sin(t * 2.8 + i * 1.1) * (h * 0.24);
           ctx.beginPath();
-          ctx.arc(px, py, 5 * pulse, 0, Math.PI * 2);
+          ctx.ellipse(px, py, (16 + i * 3) * pulse, (8 + i * 1.5) * pulse, t * 1.4 + i, 0, Math.PI * 2);
           ctx.stroke();
         }
       }
+
+      // 4. Sweeping diagonal shimmer highlight wave across the card
+      const sweepPos = ((t * 0.55) % 1.4) - 0.2;
+      const sweepX = w * sweepPos;
+      const shimmerGrad = ctx.createLinearGradient(sweepX - 45, 0, sweepX + 45, h);
+      shimmerGrad.addColorStop(0, 'rgba(255,255,255,0)');
+      shimmerGrad.addColorStop(0.5, 'rgba(255,255,255,0.65)');
+      shimmerGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = shimmerGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      // 5. Four Corner Rotating 4-Point Sparkle Stars
+      const corners = [
+        [16, 16], [w - 16, 16], [16, h - 16], [w - 16, h - 16],
+        [w * 0.52, 14], [w * 0.68, h - 14]
+      ];
+      corners.forEach(([sx, sy], idx) => {
+        const spScale = (0.65 + Math.sin(t * 4.5 + idx * 1.3) * 0.35) * 7.5;
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(t * 2.2 + idx);
+        ctx.globalAlpha = 0.88;
+        ctx.fillStyle = idx % 2 === 0 ? secondary : primary;
+        ctx.beginPath();
+        for (let p = 0; p < 8; p++) {
+          const r = p % 2 === 0 ? spScale : spScale * 0.32;
+          const a = (p * Math.PI) / 4;
+          if (p === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+          else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // 6. Glowing pulsing inner border halo
+      ctx.globalAlpha = 0.78;
+      ctx.strokeStyle = secondary;
+      ctx.lineWidth = 3.2 * pulse;
+      ctx.strokeRect(2, 2, w - 4, h - 4);
+
       ctx.restore();
     }
 
