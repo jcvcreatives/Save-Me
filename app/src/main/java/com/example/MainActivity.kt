@@ -101,7 +101,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.Brush
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.delay
@@ -2012,8 +2016,28 @@ fun MainMenuScreen(
     onOpenSettings: () -> Unit,
     onOpenCoinShop: () -> Unit
 ) {
-    val upcomingPeril = PerilType.forLevel(levelNumber)
-    val activeRank = RankTier.forLevel(levelNumber)
+    val defaultPeril = PerilType.forLevel(levelNumber)
+    val defaultRank = RankTier.forLevel(levelNumber)
+
+    var previewPerilOverride by remember(levelNumber) { mutableStateOf<PerilType?>(null) }
+    var previewRankOverride by remember(levelNumber) { mutableStateOf<RankTier?>(null) }
+
+    val activePeril = previewPerilOverride ?: defaultPeril
+    val activeRank = previewRankOverride ?: defaultRank
+
+    val cyclePerilPreview = {
+        val allPerils = PerilType.entries
+        val nextIndex = (allPerils.indexOf(activePeril) + 1) % allPerils.size
+        previewPerilOverride = allPerils[nextIndex]
+        ProceduralSoundEngine.play(DoodleSoundEffect.POP)
+    }
+
+    val cycleTierPreview = {
+        val allTiers = RankTier.entries
+        val nextIndex = (allTiers.indexOf(activeRank) + 1) % allTiers.size
+        previewRankOverride = allTiers[nextIndex]
+        ProceduralSoundEngine.play(DoodleSoundEffect.CHIME)
+    }
 
     Column(
         modifier = Modifier
@@ -2045,7 +2069,7 @@ fun MainMenuScreen(
             )
         }
 
-        // Center Hero: Animated Peril Scene + "W O R D" title
+        // Center Hero: Animated Peril Scene + Interactive Peril Pill + "W O R D" title
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -2057,11 +2081,17 @@ fun MainMenuScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(vertical = 2.dp),
+                    .heightIn(min = 185.dp)
+                    .padding(vertical = 2.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = cyclePerilPreview
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 DynamicPerilSceneCanvas(
-                    perilType = upcomingPeril,
+                    perilType = activePeril,
                     livesRemaining = 6,
                     lastPoppedIndex = -1,
                     popTrigger = 0,
@@ -2070,8 +2100,34 @@ fun MainMenuScreen(
                     showSpeechBubble = false,
                     isMenuPreview = true,
                     fontFamily = fontFamily,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("menu_peril_canvas")
                 )
+
+                // Interactive Peril Scenario Badge Pill (tap to preview all 15 Peril Scenarios)
+                val perilNumber = PerilType.entries.indexOf(activePeril) + 1
+                SketchyContainer(
+                    fillColor = DoodleColors.PaperOffWhite.copy(alpha = 0.94f),
+                    cornerRadius = 16.dp,
+                    strokeWidth = 1.6.dp,
+                    shadowOffset = 1.5.dp,
+                    onClick = cyclePerilPreview,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 2.dp)
+                        .height(26.dp)
+                        .testTag("peril_preview_pill")
+                ) {
+                    Text(
+                        text = "🎬 Peril $perilNumber/${PerilType.entries.size}: ${activePeril.displayName} ↻",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp,
+                        color = DoodleColors.InkBlack,
+                        modifier = Modifier.padding(horizontal = 10.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -2081,13 +2137,15 @@ fun MainMenuScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Dynamic Tier Progression Card (Current Rank Title, Tier Progress Bar & Animated Canvas Aura)
+        // Dynamic Tier Progression Card (Current Rank Title, Tier Progress Bar & Vivid Animated Canvas Aura)
+        val previewLevelForCard = if (previewRankOverride != null) activeRank.levelRange.first else levelNumber
         TierProgressionCard(
             rankTier = activeRank,
-            levelNumber = levelNumber,
+            levelNumber = previewLevelForCard,
             completedLevels = completedLevels,
             totalLevels = totalCampaignLevels,
             fontFamily = fontFamily,
+            onClick = cycleTierPreview,
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 360.dp)
@@ -2122,7 +2180,7 @@ fun MainMenuScreen(
                         color = DoodleColors.InkBlack
                     )
                     Text(
-                        text = "${upcomingPeril.displayName} • ${activeRank.title}",
+                        text = "${defaultPeril.displayName} • ${defaultRank.title}",
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
@@ -2160,6 +2218,7 @@ fun TierProgressionCard(
     completedLevels: Int,
     totalLevels: Int,
     fontFamily: FontFamily,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val safeTotal = totalLevels.coerceAtLeast(1)
@@ -2170,16 +2229,16 @@ fun TierProgressionCard(
         initialValue = 0f,
         targetValue = (2f * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3200, easing = LinearEasing),
+            animation = tween(durationMillis = 2400, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "auraPhase"
     )
     val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.93f,
-        targetValue = 1.07f,
+        initialValue = 0.90f,
+        targetValue = 1.12f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 850, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "auraPulse"
@@ -2199,8 +2258,9 @@ fun TierProgressionCard(
         fillColor = DoodleColors.PaperOffWhite,
         borderColor = DoodleColors.InkBlack,
         cornerRadius = 18.dp,
-        strokeWidth = 2.dp,
-        shadowOffset = 2.5.dp,
+        strokeWidth = 2.2.dp,
+        shadowOffset = 3.dp,
+        onClick = onClick,
         modifier = modifier
             .testTag("tier_progression_card")
             .semantics {
@@ -2213,7 +2273,7 @@ fun TierProgressionCard(
                 .clip(RoundedCornerShape(16.dp))
                 .testTag("campaign_progress_indicator")
         ) {
-            // Animated Infinite Transition Canvas Aura Effect (Background + Glowing Border Halo)
+            // Vivid 60fps Animated Canvas Aura Effect (Multi-layer Glow + Sweeping Shimmer + Sparkles + Border Halo)
             Canvas(
                 modifier = Modifier
                     .matchParentSize()
@@ -2225,14 +2285,21 @@ fun TierProgressionCard(
                     pulse = pulse
                 )
 
-                // Animated inner aura border pulse inside the 2.dp black sketch frame
+                // Outer & inner glowing neon/ink aura border rings inside the 2.dp black sketch frame
                 val borderRadius = 15.dp.toPx()
                 drawRoundRect(
-                    color = rankTier.accentColor.copy(alpha = (0.24f * pulse).coerceIn(0.1f, 0.45f)),
+                    color = rankTier.primaryColor.copy(alpha = (0.55f * pulse).coerceIn(0.25f, 0.78f)),
                     topLeft = Offset(2.dp.toPx(), 2.dp.toPx()),
                     size = Size(size.width - 4.dp.toPx(), size.height - 4.dp.toPx()),
                     cornerRadius = CornerRadius(borderRadius, borderRadius),
-                    style = Stroke(width = (2.4.dp.toPx() * pulse))
+                    style = Stroke(width = (3.4.dp.toPx() * pulse))
+                )
+                drawRoundRect(
+                    color = rankTier.accentColor.copy(alpha = (0.45f * pulse).coerceIn(0.20f, 0.70f)),
+                    topLeft = Offset(4.dp.toPx(), 4.dp.toPx()),
+                    size = Size(size.width - 8.dp.toPx(), size.height - 8.dp.toPx()),
+                    cornerRadius = CornerRadius(borderRadius - 2.dp.toPx(), borderRadius - 2.dp.toPx()),
+                    style = Stroke(width = 1.6.dp.toPx())
                 )
             }
 
@@ -2274,20 +2341,31 @@ fun TierProgressionCard(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        // Animated Rank Emblem Medallion
+                        // Animated Rank Emblem Medallion with rotating aura rays
                         Canvas(
                             modifier = Modifier
-                                .size(30.dp)
+                                .size(32.dp)
                                 .scale(pulse)
                         ) {
+                            val r = size.minDimension * 0.48f
                             drawCircle(
-                                color = rankTier.primaryColor.copy(alpha = 0.45f),
-                                radius = size.minDimension * 0.48f
+                                color = rankTier.primaryColor.copy(alpha = 0.75f),
+                                radius = r
                             )
+                            for (k in 0 until 8) {
+                                val a = auraPhase + (k * PI / 4.0).toFloat()
+                                drawLine(
+                                    color = rankTier.secondaryColor.copy(alpha = 0.75f),
+                                    start = Offset(center.x + cos(a) * r * 0.65f, center.y + sin(a) * r * 0.65f),
+                                    end = Offset(center.x + cos(a) * r * 1.08f, center.y + sin(a) * r * 1.08f),
+                                    strokeWidth = 1.6.dp.toPx(),
+                                    cap = StrokeCap.Round
+                                )
+                            }
                             drawCircle(
                                 color = rankTier.accentColor,
                                 radius = size.minDimension * 0.44f,
-                                style = Stroke(width = 1.8.dp.toPx())
+                                style = Stroke(width = 2.dp.toPx())
                             )
                             drawDoodleMiniStar(filled = true)
                         }
@@ -2296,7 +2374,7 @@ fun TierProgressionCard(
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Black,
                             fontSize = 9.sp,
-                            color = DoodleColors.InkBlack.copy(alpha = 0.72f),
+                            color = DoodleColors.InkBlack.copy(alpha = 0.80f),
                             modifier = Modifier.testTag("campaign_progress_text")
                         )
                     }
@@ -2328,13 +2406,19 @@ fun TierProgressionCard(
                                 .coerceAtMost(size.width)
 
                             drawRoundRect(
-                                color = rankTier.primaryColor,
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        rankTier.primaryColor,
+                                        rankTier.secondaryColor,
+                                        rankTier.primaryColor
+                                    )
+                                ),
                                 size = Size(fillW, size.height),
                                 cornerRadius = CornerRadius(r, r)
                             )
 
                             // Animated diagonal hand-drawn hatch lines clipped to the fill bar
-                            val hatchStep = 9.dp.toPx()
+                            val hatchStep = 8.dp.toPx()
                             val hatchOffset = (auraPhase / (2f * PI).toFloat()) * hatchStep
                             var hx = -size.height + hatchOffset
                             while (hx < fillW) {
@@ -2342,10 +2426,10 @@ fun TierProgressionCard(
                                 val endX = (hx + size.height * 0.65f).coerceIn(4f, fillW - 4f)
                                 if (endX > startX) {
                                     drawLine(
-                                        color = rankTier.accentColor.copy(alpha = 0.48f),
+                                        color = rankTier.accentColor.copy(alpha = 0.62f),
                                         start = Offset(startX, size.height - 2.dp.toPx()),
                                         end = Offset(endX, 2.dp.toPx()),
-                                        strokeWidth = 1.5.dp.toPx(),
+                                        strokeWidth = 1.7.dp.toPx(),
                                         cap = StrokeCap.Round
                                     )
                                 }
@@ -2355,8 +2439,8 @@ fun TierProgressionCard(
                             // Glowing pulse highlight at the leading tip of the progress bar
                             val tipX = (fillW - r).coerceAtLeast(r)
                             drawCircle(
-                                color = Color.White.copy(alpha = 0.75f),
-                                radius = (r * 0.45f) * pulse,
+                                color = Color.White.copy(alpha = 0.88f),
+                                radius = (r * 0.52f) * pulse,
                                 center = Offset(tipX, size.height * 0.5f)
                             )
                         }
@@ -2381,6 +2465,29 @@ fun TierProgressionCard(
     }
 }
 
+private fun DrawScope.drawDoodleSparkleStar(
+    center: Offset,
+    radius: Float,
+    color: Color,
+    rotationRad: Float = 0f
+) {
+    val path = Path()
+    for (i in 0 until 8) {
+        val r = if (i % 2 == 0) radius else radius * 0.34f
+        val angle = rotationRad + (i * PI / 4.0).toFloat()
+        val px = center.x + cos(angle) * r
+        val py = center.y + sin(angle) * r
+        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+    }
+    path.close()
+    drawPath(path = path, color = color)
+    drawPath(
+        path = path,
+        color = DoodleColors.InkBlack.copy(alpha = 0.55f),
+        style = Stroke(width = 1.dp.toPx())
+    )
+}
+
 private fun DrawScope.drawRankTierAura(
     rankTier: RankTier,
     phase: Float,
@@ -2391,104 +2498,183 @@ private fun DrawScope.drawRankTierAura(
     val cx = w * 0.5f
     val cy = h * 0.5f
 
-    // Base soft pastel wash matching current tier
+    // 1. Vivid multi-stop animated gradient background wash so the Tier Aura immediately pops
+    val shiftX = sin(phase) * (w * 0.25f)
     drawRect(
-        color = rankTier.primaryColor.copy(alpha = 0.18f)
+        brush = Brush.linearGradient(
+            colors = listOf(
+                rankTier.primaryColor.copy(alpha = 0.42f),
+                rankTier.secondaryColor.copy(alpha = 0.28f),
+                rankTier.primaryColor.copy(alpha = 0.46f)
+            ),
+            start = Offset(shiftX, 0f),
+            end = Offset(w + shiftX, h)
+        )
     )
 
+    // 2. Pulsing radial energy core behind the card
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                rankTier.primaryColor.copy(alpha = 0.48f * pulse),
+                rankTier.secondaryColor.copy(alpha = 0.22f * pulse),
+                Color.Transparent
+            ),
+            center = Offset(cx + cos(phase) * (w * 0.18f), cy),
+            radius = (w * 0.55f) * pulse
+        ),
+        center = Offset(cx + cos(phase) * (w * 0.18f), cy),
+        radius = (w * 0.55f) * pulse
+    )
+
+    // 3. Tier-specific high-contrast hand-drawn animations across all 20 tiers
     when (rankTier.tierIndex) {
         1 -> {
-            // Tier 1 (Doodle Novice): Soft pale-yellow hand-drawn hatching lines pulse
-            val step = 15.dp.toPx()
-            var x = -h
+            // Tier 1 (Doodle Novice): Vivid golden-yellow cross-hatch lines + rising doodle stars
+            val step = 13.dp.toPx()
+            val flow = (phase / (2f * PI).toFloat()) * step
+            var x = -h + flow
             while (x < w + h) {
-                val shift = sin(phase + x * 0.03f) * 4.dp.toPx()
+                val wobble = sin(phase * 2f + x * 0.04f) * 3.dp.toPx()
                 drawLine(
-                    color = rankTier.secondaryColor.copy(alpha = 0.36f),
-                    start = Offset(x + shift, h),
-                    end = Offset(x + h * 0.72f + shift, 0f),
-                    strokeWidth = 2.dp.toPx(),
+                    color = rankTier.secondaryColor.copy(alpha = 0.62f),
+                    start = Offset(x + wobble, h),
+                    end = Offset(x + h * 0.75f + wobble, 0f),
+                    strokeWidth = 2.4.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = rankTier.accentColor.copy(alpha = 0.30f),
+                    start = Offset(x - wobble, 0f),
+                    end = Offset(x + h * 0.55f - wobble, h),
+                    strokeWidth = 1.4.dp.toPx(),
                     cap = StrokeCap.Round
                 )
                 x += step
             }
+            for (i in 0..5) {
+                val sx = w * (0.10f + i * 0.16f) + sin(phase * 2f + i) * 5.dp.toPx()
+                val sy = h - ((phase * 18f + i * 15f) % h)
+                drawDoodleSparkleStar(
+                    center = Offset(sx, sy),
+                    radius = (4.5.dp.toPx() + (i % 2) * 1.5.dp.toPx()) * pulse,
+                    color = rankTier.primaryColor,
+                    rotationRad = phase + i
+                )
+            }
         }
         2 -> {
-            // Tier 2 (Ink Apprentice): Gentle flowing blue ink-splash rings
-            for (i in 0..4) {
-                val r = (12.dp.toPx() + i * 16.dp.toPx()) * pulse
-                val ringX = w * (0.15f + i * 0.18f) + cos(phase + i) * 6.dp.toPx()
-                val ringY = cy + sin(phase * 1.3f + i) * 4.dp.toPx()
+            // Tier 2 (Ink Apprentice): Flowing cobalt & cyan ink-splash rings + orbiting droplets
+            for (i in 0..5) {
+                val progress = ((phase / (2f * PI).toFloat()) + i * 0.18f) % 1f
+                val r = (8.dp.toPx() + progress * 34.dp.toPx()) * pulse
+                val ringX = w * (0.12f + i * 0.15f) + cos(phase + i) * 6.dp.toPx()
+                val ringY = cy + sin(phase * 1.5f + i) * 6.dp.toPx()
+                val alpha = (1f - progress * 0.65f).coerceIn(0.22f, 0.78f)
                 drawCircle(
-                    color = rankTier.primaryColor.copy(alpha = 0.36f),
+                    color = rankTier.secondaryColor.copy(alpha = alpha),
                     radius = r,
                     center = Offset(ringX, ringY),
-                    style = Stroke(width = 2.dp.toPx())
+                    style = Stroke(width = 2.5.dp.toPx())
                 )
+                val dropAngle = phase * 2f + i * 1.1f
                 drawCircle(
-                    color = rankTier.secondaryColor.copy(alpha = 0.25f),
-                    radius = 3.dp.toPx() * pulse,
-                    center = Offset(ringX + r * 0.6f, ringY - r * 0.4f)
+                    color = rankTier.accentColor.copy(alpha = 0.70f),
+                    radius = 3.6.dp.toPx() * pulse,
+                    center = Offset(ringX + cos(dropAngle) * (r + 4.dp.toPx()), ringY + sin(dropAngle) * (r + 4.dp.toPx()))
                 )
             }
         }
         3 -> {
-            // Tier 3 (Sketch Master): Rotating green sketchy cross-hatch starburst rays
-            val rayCount = 12
-            val origins = listOf(Offset(w * 0.22f, cy), Offset(w * 0.78f, cy))
+            // Tier 3 (Sketch Master): Twin counter-rotating emerald starburst rays
+            val rayCount = 16
+            val origins = listOf(Offset(w * 0.20f, cy), Offset(w * 0.80f, cy))
             origins.forEachIndexed { idx, origin ->
-                val dir = if (idx == 0) 1f else -1f
+                val dir = if (idx == 0) 1.4f else -1.4f
                 for (i in 0 until rayCount) {
                     val angle = phase * dir + (i * 2.0 * PI / rayCount).toFloat()
-                    val rOuter = 28.dp.toPx() * pulse
+                    val rOuter = (if (i % 2 == 0) 36.dp.toPx() else 22.dp.toPx()) * pulse
                     drawLine(
-                        color = rankTier.secondaryColor.copy(alpha = 0.28f),
+                        color = if (i % 2 == 0) rankTier.secondaryColor.copy(alpha = 0.65f) else rankTier.accentColor.copy(alpha = 0.45f),
                         start = origin,
                         end = Offset(origin.x + cos(angle) * rOuter, origin.y + sin(angle) * rOuter),
-                        strokeWidth = 1.8.dp.toPx(),
+                        strokeWidth = 2.2.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                 }
+                drawDoodleSparkleStar(
+                    center = origin,
+                    radius = 7.dp.toPx() * pulse,
+                    color = rankTier.primaryColor,
+                    rotationRad = -phase * dir
+                )
             }
         }
         4 -> {
-            // Tier 4 (Graph Paper Wizard): Shimmering purple geometric coordinate grid pulse
-            val step = 16.dp.toPx()
-            var gx = (phase * 7f) % step
+            // Tier 4 (Graph Paper Wizard): Shimmering purple geometric coordinate grid + arcane nodes
+            val step = 14.dp.toPx()
+            val offset = (phase / (2f * PI).toFloat()) * step
+            var gx = offset
             while (gx < w) {
                 drawLine(
-                    color = rankTier.secondaryColor.copy(alpha = 0.24f),
+                    color = rankTier.secondaryColor.copy(alpha = 0.52f),
                     start = Offset(gx, 0f),
                     end = Offset(gx, h),
-                    strokeWidth = 1.4.dp.toPx()
+                    strokeWidth = 1.8.dp.toPx()
                 )
                 gx += step
             }
-            var gy = (phase * 5f) % step
+            var gy = offset
             while (gy < h) {
                 drawLine(
-                    color = rankTier.primaryColor.copy(alpha = 0.32f),
+                    color = rankTier.accentColor.copy(alpha = 0.42f),
                     start = Offset(0f, gy),
                     end = Offset(w, gy),
-                    strokeWidth = 1.4.dp.toPx()
+                    strokeWidth = 1.8.dp.toPx()
                 )
                 gy += step
             }
+            for (i in 0..4) {
+                val nx = w * (0.15f + i * 0.175f)
+                val ny = cy + sin(phase * 2f + i) * (h * 0.25f)
+                drawDoodleSparkleStar(
+                    center = Offset(nx, ny),
+                    radius = 6.dp.toPx() * pulse,
+                    color = rankTier.secondaryColor,
+                    rotationRad = phase * 1.5f + i
+                )
+            }
         }
         5 -> {
-            // Tier 5 (Epic Doodle Legend): Radiant golden flame aura with floating doodle sparks
-            for (i in 0..8) {
-                val fx = w * (0.08f + i * 0.105f) + sin(phase * 2f + i) * 4.dp.toPx()
-                val fy = h - ((phase * 14f + i * 13f) % h)
+            // Tier 5 (Epic Doodle Legend): Roaring golden-orange flame tongues + rising embers
+            val flameCount = 14
+            for (i in 0 until flameCount) {
+                val baseX = (w / flameCount) * (i + 0.5f)
+                val flameH = (16.dp.toPx() + abs(sin(phase * 2.5f + i * 0.7f)) * 22.dp.toPx()) * pulse
+                val tipX = baseX + sin(phase * 3f + i) * 6.dp.toPx()
+                val flamePath = Path().apply {
+                    moveTo(baseX - 9.dp.toPx(), h)
+                    quadraticTo(baseX - 3.dp.toPx(), h - flameH * 0.6f, tipX, h - flameH)
+                    quadraticTo(baseX + 3.dp.toPx(), h - flameH * 0.6f, baseX + 9.dp.toPx(), h)
+                    close()
+                }
+                drawPath(
+                    path = flamePath,
+                    color = if (i % 2 == 0) rankTier.secondaryColor.copy(alpha = 0.55f) else rankTier.primaryColor.copy(alpha = 0.65f)
+                )
+            }
+            for (i in 0..9) {
+                val fx = w * (0.06f + i * 0.095f) + sin(phase * 2.5f + i) * 5.dp.toPx()
+                val fy = h - ((phase * 22f + i * 13f) % h)
                 drawCircle(
-                    color = if (i % 2 == 0) rankTier.primaryColor.copy(alpha = 0.55f) else rankTier.secondaryColor.copy(alpha = 0.45f),
-                    radius = (3.5.dp.toPx() + (i % 3).dp.toPx()) * pulse,
+                    color = if (i % 2 == 0) Color(0xFFFFEA00) else Color(0xFFFF6D00),
+                    radius = (3.8.dp.toPx() + (i % 3).dp.toPx()) * pulse,
                     center = Offset(fx, fy)
                 )
             }
         }
         6, 20 -> {
-            // Tier 6 (Mythic Ink God) & Tier 20 (Supreme Doodle God): Multi-colored rainbow pulsating doodle aura with lightning
+            // Tier 6 (Mythic Ink God) & Tier 20 (Supreme Doodle God): Vivid 6-color rainbow waves + crackling lightning bolts
             val rainbow = listOf(
                 Color(0xFFFF1744),
                 Color(0xFFFF9100),
@@ -2498,75 +2684,147 @@ private fun DrawScope.drawRankTierAura(
                 Color(0xFFD500F9)
             )
             rainbow.forEachIndexed { idx, col ->
-                val yOff = cy + sin(phase + idx * 0.7f) * (h * 0.34f)
-                drawLine(
-                    color = col.copy(alpha = 0.28f),
-                    start = Offset(0f, yOff),
-                    end = Offset(w, h - yOff),
-                    strokeWidth = 2.8.dp.toPx(),
-                    cap = StrokeCap.Round
+                val path = Path()
+                val segments = 16
+                for (s in 0..segments) {
+                    val px = (w / segments) * s
+                    val py = cy + sin(phase * 2f + idx * 0.55f + s * 0.45f) * (h * 0.36f)
+                    if (s == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                drawPath(
+                    path = path,
+                    color = col.copy(alpha = 0.55f),
+                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
+            // Crackling zig-zag lightning bolts
+            for (b in 0..2) {
+                val bx = w * (0.22f + b * 0.28f) + sin(phase * 3f + b) * 10.dp.toPx()
+                val bolt = Path().apply {
+                    moveTo(bx, 2.dp.toPx())
+                    lineTo(bx - 7.dp.toPx(), h * 0.36f)
+                    lineTo(bx + 5.dp.toPx(), h * 0.48f)
+                    lineTo(bx - 5.dp.toPx(), h - 2.dp.toPx())
+                }
+                drawPath(
+                    path = bolt,
+                    color = Color(0xFFFFEA00).copy(alpha = 0.88f),
+                    style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
                 )
             }
         }
         7 -> {
-            // Tier 7 (Dimension Sketcher): Matrix Green Code-Doodle Grid
-            for (i in 0..9) {
-                val colX = w * (0.06f + i * 0.095f)
-                val dropY = ((phase * 22f + i * 19f) % h)
+            // Tier 7 (Dimension Sketcher): Matrix Neon-Green Code Rain + Binary Grid
+            for (i in 0..11) {
+                val colX = w * (0.04f + i * 0.084f)
+                val speed = 26f + (i % 4) * 7f
+                val dropY = ((phase * speed + i * 19f) % (h + 18.dp.toPx()))
+                val tailTop = (dropY - 22.dp.toPx()).coerceAtLeast(0f)
                 drawLine(
-                    color = rankTier.secondaryColor.copy(alpha = 0.42f),
-                    start = Offset(colX, (dropY - 14.dp.toPx()).coerceAtLeast(0f)),
-                    end = Offset(colX, dropY),
-                    strokeWidth = 2.4.dp.toPx(),
+                    color = rankTier.primaryColor.copy(alpha = 0.72f),
+                    start = Offset(colX, tailTop),
+                    end = Offset(colX, dropY.coerceAtMost(h)),
+                    strokeWidth = 3.dp.toPx(),
                     cap = StrokeCap.Round
+                )
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.9f),
+                    radius = 2.6.dp.toPx() * pulse,
+                    center = Offset(colX, dropY.coerceIn(0f, h))
                 )
             }
         }
         8, 10, 11, 12 -> {
-            // Tiers 8, 10, 11, 12: Cosmic / Galaxy / Constellation / Nebula swirling stars & orbits
-            for (i in 0..6) {
-                val angle = phase + i * 0.95f
-                val px = cx + cos(angle) * (w * 0.38f)
-                val py = cy + sin(angle * 2f) * (h * 0.34f)
-                drawCircle(
-                    color = rankTier.secondaryColor.copy(alpha = 0.52f),
-                    radius = 3.2.dp.toPx() * pulse,
-                    center = Offset(px, py)
-                )
+            // Tiers 8, 10, 11, 12: Cosmic / Galaxy / Constellation / Nebula orbiting ringed planets & star web
+            for (i in 0..7) {
+                val angle = phase * 1.3f + i * 0.82f
+                val px = cx + cos(angle) * (w * 0.40f)
+                val py = cy + sin(angle * 2f) * (h * 0.35f)
                 if (i > 0) {
-                    val prevAngle = phase + (i - 1) * 0.95f
-                    val ppx = cx + cos(prevAngle) * (w * 0.38f)
-                    val ppy = cy + sin(prevAngle * 2f) * (h * 0.34f)
+                    val prevAngle = phase * 1.3f + (i - 1) * 0.82f
+                    val ppx = cx + cos(prevAngle) * (w * 0.40f)
+                    val ppy = cy + sin(prevAngle * 2f) * (h * 0.35f)
                     drawLine(
-                        color = rankTier.primaryColor.copy(alpha = 0.34f),
+                        color = rankTier.secondaryColor.copy(alpha = 0.58f),
                         start = Offset(ppx, ppy),
                         end = Offset(px, py),
-                        strokeWidth = 1.6.dp.toPx()
+                        strokeWidth = 2.dp.toPx()
                     )
                 }
+                val planetR = (3.8.dp.toPx() + (i % 2) * 2.dp.toPx()) * pulse
+                drawCircle(
+                    color = rankTier.primaryColor.copy(alpha = 0.85f),
+                    radius = planetR,
+                    center = Offset(px, py)
+                )
+                drawCircle(
+                    color = rankTier.accentColor.copy(alpha = 0.75f),
+                    radius = planetR * 1.65f,
+                    center = Offset(px, py),
+                    style = Stroke(width = 1.4.dp.toPx())
+                )
             }
         }
         else -> {
-            // Tiers 9, 13, 14, 15, 16, 17, 18, 19: Pulsing Atomic / Vortex / Prism / Chrono / Rune Sketch Rings
+            // Tiers 9, 13..19: Quantum / Vortex / Chrono / Prism / Runic counter-rotating sacred rings
             for (i in 0..4) {
-                val rx = w * (0.14f + i * 0.18f)
-                val ry = cy + sin(phase + i * 1.1f) * 6.dp.toPx()
-                val rad = 11.dp.toPx() * pulse
+                val rx = w * (0.12f + i * 0.19f)
+                val ry = cy + sin(phase * 1.6f + i * 1.1f) * 6.dp.toPx()
+                val rad = 14.dp.toPx() * pulse
                 drawCircle(
-                    color = rankTier.primaryColor.copy(alpha = 0.38f),
+                    color = rankTier.secondaryColor.copy(alpha = 0.65f),
                     radius = rad,
                     center = Offset(rx, ry),
-                    style = Stroke(width = 1.8.dp.toPx())
+                    style = Stroke(width = 2.2.dp.toPx())
                 )
+                val rot = phase * (if (i % 2 == 0) 1.8f else -1.8f) + i
                 drawLine(
-                    color = rankTier.secondaryColor.copy(alpha = 0.38f),
-                    start = Offset(rx - rad * 0.6f, ry - rad * 0.6f),
-                    end = Offset(rx + rad * 0.6f, ry + rad * 0.6f),
-                    strokeWidth = 1.6.dp.toPx(),
+                    color = rankTier.accentColor.copy(alpha = 0.65f),
+                    start = Offset(rx - cos(rot) * rad, ry - sin(rot) * rad),
+                    end = Offset(rx + cos(rot) * rad, ry + sin(rot) * rad),
+                    strokeWidth = 1.8.dp.toPx(),
                     cap = StrokeCap.Round
+                )
+                drawDoodleSparkleStar(
+                    center = Offset(rx, ry),
+                    radius = 4.5.dp.toPx() * pulse,
+                    color = rankTier.primaryColor,
+                    rotationRad = -rot
                 )
             }
         }
+    }
+
+    // 4. Sweeping diagonal shimmer highlight wave across the card
+    val sweepProgress = (phase / (2f * PI).toFloat())
+    val sweepX = -w * 0.35f + sweepProgress * (w * 1.7f)
+    val shimmerPath = Path().apply {
+        moveTo(sweepX, 0f)
+        lineTo(sweepX + 28.dp.toPx(), 0f)
+        lineTo(sweepX - 18.dp.toPx(), h)
+        lineTo(sweepX - 46.dp.toPx(), h)
+        close()
+    }
+    drawPath(
+        path = shimmerPath,
+        color = Color.White.copy(alpha = 0.32f * pulse)
+    )
+
+    // 5. Four corner animated 4-point doodle sparkle stars so the card visibly shimmers
+    val cornerOffsets = listOf(
+        Offset(12.dp.toPx(), 12.dp.toPx()),
+        Offset(w - 12.dp.toPx(), 12.dp.toPx()),
+        Offset(12.dp.toPx(), h - 12.dp.toPx()),
+        Offset(w - 12.dp.toPx(), h - 12.dp.toPx())
+    )
+    cornerOffsets.forEachIndexed { idx, corner ->
+        val starScale = 0.75f + 0.35f * abs(sin(phase + idx * 0.8f))
+        drawDoodleSparkleStar(
+            center = corner,
+            radius = 5.2.dp.toPx() * starScale,
+            color = rankTier.secondaryColor.copy(alpha = 0.85f),
+            rotationRad = phase + idx * 0.5f
+        )
     }
 }
 
@@ -3850,6 +4108,19 @@ fun DynamicPerilSceneCanvas(
         label = "animatedLives"
     )
 
+    // Continuous 60fps hazard motion wave on Menu Preview so all 15 Peril Scenarios visibly animate
+    val previewWave = (sin(wavePhase) + 1f) * 0.5f
+    val effectiveDangerProgress = if (isMenuPreview && !isGameOver) {
+        0.10f + previewWave * 0.42f
+    } else {
+        dangerProgress
+    }
+    val effectiveAnimatedLives = if (isMenuPreview && !isGameOver) {
+        6f - effectiveDangerProgress * 3.2f
+    } else {
+        animatedLives
+    }
+
     val popProgress = remember { Animatable(1f) }
     LaunchedEffect(popTrigger) {
         if (popTrigger > 0) {
@@ -3877,7 +4148,7 @@ fun DynamicPerilSceneCanvas(
                     lastPoppedIndex = lastPoppedIndex,
                     popTrigger = popTrigger,
                     popProgress = popProgress.value,
-                    dangerProgress = dangerProgress,
+                    dangerProgress = effectiveDangerProgress,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     sharkPatrol = patrolPhase,
@@ -3889,7 +4160,7 @@ fun DynamicPerilSceneCanvas(
                     livesRemaining = livesRemaining,
                     popTrigger = popTrigger,
                     popProgress = popProgress.value,
-                    dangerProgress = dangerProgress,
+                    dangerProgress = effectiveDangerProgress,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     ufoSway = patrolPhase,
@@ -3898,7 +4169,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.VOLCANO_BLOCKS -> drawVolcanoBlocksPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     popTrigger = popTrigger,
                     popProgress = popProgress.value,
                     bobOffset = bobOffset,
@@ -3908,7 +4179,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.GIANT_VENUS_FLYTRAP -> drawVenusFlytrapPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     popTrigger = popTrigger,
                     popProgress = popProgress.value,
                     bobOffset = bobOffset,
@@ -3918,7 +4189,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.DINO_STEALTH -> drawDinoStealthPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     popTrigger = popTrigger,
                     popProgress = popProgress.value,
                     bobOffset = bobOffset,
@@ -3928,7 +4199,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.LEAKY_SUBMARINE -> drawLeakySubmarinePeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     popTrigger = popTrigger,
                     popProgress = popProgress.value,
                     bobOffset = bobOffset,
@@ -3938,7 +4209,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.TIGHTROPE_SAW -> drawTightropeSawPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     isGameOver = isGameOver
@@ -3946,7 +4217,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.METEOR_SHOWER -> drawMeteorShowerPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     isGameOver = isGameOver
@@ -3954,7 +4225,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.MAD_SCIENTIST_POTION -> drawMadScientistPotionPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     isGameOver = isGameOver
@@ -3962,7 +4233,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.PIRATE_PLANK -> drawPiratePlankPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     isGameOver = isGameOver
@@ -3970,7 +4241,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.SPIDER_WEB -> drawSpiderWebPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     isGameOver = isGameOver
@@ -3978,7 +4249,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.QUICKSAND_PIT -> drawQuicksandPitPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     isGameOver = isGameOver
@@ -3986,7 +4257,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.GHOST_MANOR -> drawGhostManorPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     isGameOver = isGameOver
@@ -3994,7 +4265,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.TICKING_TIME_BOMB -> drawTickingTimeBombPeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     isGameOver = isGameOver
@@ -4002,7 +4273,7 @@ fun DynamicPerilSceneCanvas(
 
                 PerilType.DRAGON_CAVE -> drawDragonCavePeril(
                     livesRemaining = livesRemaining,
-                    animatedLives = animatedLives,
+                    animatedLives = effectiveAnimatedLives,
                     bobOffset = bobOffset,
                     wavePhase = wavePhase,
                     isGameOver = isGameOver
