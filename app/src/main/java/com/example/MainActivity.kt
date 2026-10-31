@@ -100,15 +100,34 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.Brush
+import com.example.data.PlayerAccount
+import com.example.data.PlayerAccountRepository
+import com.example.ui.RegistrationAuthScreen
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
+
 
 // ============================================================================
 // 1. COLOR PALETTE & THEME DEFINITIONS ("GRAPH PAPER DOODLE")
@@ -578,6 +597,7 @@ data class WordLevel(
 }
 
 enum class ScreenState {
+    REGISTRATION,
     MAIN_MENU,
     WORLD_MAP,
     GAMEPLAY,
@@ -1199,9 +1219,30 @@ class WordGameViewModel : ViewModel() {
     }
 
     private var appContext: Context? = null
+    private var playerAccountRepo: PlayerAccountRepository? = null
+    private var authInstance: FirebaseAuth? = null
+    private var authStateListener: FirebaseAuth.AuthStateListener? = null
+    private var accountSnapshotJob: Job? = null
+    private var stateChangeWatcherJob: Job? = null
+    private var isApplyingRemoteSnapshot: Boolean = false
 
-    var currentScreen by mutableStateOf(ScreenState.MAIN_MENU)
+    var currentScreen by mutableStateOf(ScreenState.REGISTRATION)
         private set
+
+    // Firebase Auth & Cloud Profile State (Spark Plan)
+    var currentUser by mutableStateOf<FirebaseUser?>(null)
+        private set
+    var cloudAccount by mutableStateOf<PlayerAccount?>(null)
+        private set
+    var isGuestSession by mutableStateOf(false)
+        private set
+    var isSyncingCloud by mutableStateOf(false)
+        private set
+    var lastCloudSyncEpochMs by mutableStateOf(0L)
+        private set
+    var authErrorMessage by mutableStateOf<String?>(null)
+        private set
+
 
     // Player economy & 100-level progression
     var coins by mutableIntStateOf(1231)
@@ -1357,10 +1398,304 @@ class WordGameViewModel : ViewModel() {
         chestsRaw.split(",").mapNotNull { it.trim().toIntOrNull() }.forEach { c ->
             if (!claimedMilestoneChests.contains(c)) claimedMilestoneChests.add(c)
         }
+
+        // Also hydrate from canonical localStorage JSON snapshot if present and newer
+        val localJsonRaw = prefs.getString("doodle_word_shark_1000_v1", null)
+        if (!localJsonRaw.isNullOrBlank()) {
+            runCatching {
+                val obj = JSONObject(localJsonRaw)
+                coins = obj.optInt("coins", coins)
+                campaignLevelIndex = obj.optInt("campaignIdx", campaignLevelIndex).coerceIn(0, CAMPAIGN_LEVELS.lastIndex)
+                perfectCount = obj.optInt("perfectCount", perfectCount)
+                currentStreak = obj.optInt("streak", currentStreak)
+                maxStreak = obj.optInt("maxStreak", maxStreak)
+                freeShieldPotions = obj.optInt("freePotions", freeShieldPotions)
+                unlockAllMapLevels = obj.optBoolean("freePlayAll", unlockAllMapLevels)
+            }
+        }
+
+        startAutomaticStateChangeSyncWatcher()
+        initFirebaseSync(context.applicationContext)
     }
 
-    private fun saveStateToPrefs() {
+    /**
+     * Reactive state-change watcher: triggers whenever ANY game state property changes,
+     * keeping localStorage and Firestore in strict parity when signed in via Registration.
+     */
+    private fun startAutomaticStateChangeSyncWatcher() {
+        stateChangeWatcherJob?.cancel()
+        stateChangeWatcherJob = viewModelScope.launch {
+            snapshotFlow {
+                listOf(
+                    coins,
+                    campaignLevelIndex,
+                    perfectCount,
+                    currentStreak,
+                    maxStreak,
+                    completedCampaignLevels.size,
+                    freeShieldPotions,
+                    chestProgress,
+                    themeProgress,
+                    if (unlockAllMapLevels) 1 else 0,
+                    claimedMilestoneChests.size,
+                    levelStarRatings.size
+                )
+            }
+                .distinctUntilChanged()
+                .drop(1) // Skip initial baseline emission on startup
+                .collect {
+                    if (!isApplyingRemoteSnapshot) {
+                        saveStateToPrefs()
+                    }
+                }
+        }
+    }
+
+    private fun initFirebaseSync(context: Context) {
+        runCatching {
+            val databaseId = context.getString(R.string.firestore_database_id)
+            val db = FirebaseFirestore.getInstance(databaseId)
+            playerAccountRepo = PlayerAccountRepository(db)
+            val auth = Firebase.auth
+            authInstance = auth
+            val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+                val user = firebaseAuth.currentUser
+                currentUser = user
+                if (user != null) {
+                    isGuestSession = false
+                    startObservingCloudAccount(user)
+                    if (currentScreen == ScreenState.REGISTRATION) {
+                        currentScreen = ScreenState.MAIN_MENU
+                    }
+                } else {
+                    accountSnapshotJob?.cancel()
+                    accountSnapshotJob = null
+                    cloudAccount = null
+                }
+            }
+            authStateListener = listener
+            auth.addAuthStateListener(listener)
+        }.onFailure {
+            // Firebase not initialized in standalone JVM unit test environment
+        }
+    }
+
+    private fun startObservingCloudAccount(user: FirebaseUser) {
+        val repo = playerAccountRepo ?: return
+        accountSnapshotJob?.cancel()
+        accountSnapshotJob = viewModelScope.launch {
+            repo.observePlayerAccount(user.uid)
+                .catch { e ->
+                    authErrorMessage = e.localizedMessage ?: "Failed to sync cloud profile"
+                }
+                .collect { account ->
+                    if (account != null) {
+                        cloudAccount = account
+                        val reconciledLevelIdx = maxOf(campaignLevelIndex, account.campaignLevelIndex.toInt())
+                            .coerceIn(0, CAMPAIGN_LEVELS.lastIndex)
+                        val reconciledCoins = maxOf(coins, account.coins.toInt())
+                        val reconciledPerfect = maxOf(perfectCount, account.perfectCount.toInt())
+                        val reconciledMaxStreak = maxOf(maxStreak, account.maxStreak.toInt())
+                        val reconciledStreak = maxOf(currentStreak, account.currentStreak.toInt())
+
+                        isApplyingRemoteSnapshot = true
+                        try {
+                            campaignLevelIndex = reconciledLevelIdx
+                            coins = reconciledCoins
+                            perfectCount = reconciledPerfect
+                            maxStreak = reconciledMaxStreak
+                            currentStreak = reconciledStreak
+                            // Ensure completedCampaignLevels reflects at least remote completedLevelsCount
+                            val remoteCompletedCount = account.completedLevelsCount.toInt().coerceIn(0, CAMPAIGN_LEVELS.size)
+                            if (completedCampaignLevels.size < remoteCompletedCount) {
+                                for (lvl in 1..remoteCompletedCount) {
+                                    if (!completedCampaignLevels.contains(lvl)) {
+                                        completedCampaignLevels.add(lvl)
+                                    }
+                                }
+                            }
+                            writeLocalStorageOnly()
+                        } finally {
+                            isApplyingRemoteSnapshot = false
+                        }
+
+                        // If local state had higher progress than Firestore, push reconciled state back so Firestore & localStorage stay in strict parity
+                        val needsPushToFirestore =
+                            account.campaignLevelIndex.toInt() != campaignLevelIndex ||
+                                account.coins.toInt() != coins ||
+                                account.perfectCount.toInt() != perfectCount ||
+                                account.maxStreak.toInt() != maxStreak ||
+                                account.completedLevelsCount.toInt() != completedCampaignLevels.size
+
+                        if (needsPushToFirestore) {
+                            syncCurrentStateToFirestore()
+                        } else {
+                            lastCloudSyncEpochMs = System.currentTimeMillis()
+                        }
+                    } else {
+                        // First time this authenticated user connects: create their cloud document & mirror to localStorage
+                        val createRes = repo.createOrSyncPlayerAccount(
+                            displayName = user.displayName?.takeIf { it.isNotBlank() } ?: "Doodle Player",
+                            email = user.email,
+                            authMethod = "gmail",
+                            campaignLevelIndex = campaignLevelIndex,
+                            coins = coins,
+                            perfectCount = perfectCount,
+                            currentStreak = currentStreak,
+                            maxStreak = maxStreak,
+                            completedLevelsCount = completedCampaignLevels.size
+                        )
+                        createRes.onSuccess { created ->
+                            cloudAccount = created
+                            lastCloudSyncEpochMs = System.currentTimeMillis()
+                            writeLocalStorageOnly()
+                        }
+                    }
+                }
+        }
+    }
+
+    fun openRegistrationScreen() {
+        authErrorMessage = null
+        currentScreen = ScreenState.REGISTRATION
+    }
+
+    fun continueAsGuest() {
+        isGuestSession = true
+        authErrorMessage = null
+        currentScreen = ScreenState.MAIN_MENU
+        statusBannerMessage = "🕵️ Logged in as Guest (Local Device Save)"
+    }
+
+    fun setAuthError(message: String?) {
+        authErrorMessage = message
+    }
+
+    fun signInWithGoogleIdToken(
+        idToken: String,
+        preferredNickname: String?,
+        preferredEmail: String?,
+        authMethod: String
+    ) {
+        val auth = authInstance ?: runCatching { Firebase.auth }.getOrNull()
+        if (auth == null) {
+            authErrorMessage = "Firebase Auth is not initialized."
+            return
+        }
+        isSyncingCloud = true
+        authErrorMessage = null
+        val credential = GoogleAuthProvider.getCredential(idToken, null)
+        auth.signInWithCredential(credential)
+            .addOnSuccessListener { authResult ->
+                val user = authResult.user
+                currentUser = user
+                isGuestSession = false
+                viewModelScope.launch {
+                    val repo = playerAccountRepo
+                    if (user != null && repo != null) {
+                        val syncRes = repo.createOrSyncPlayerAccount(
+                            displayName = preferredNickname?.takeIf { it.isNotBlank() }
+                                ?: user.displayName?.takeIf { it.isNotBlank() }
+                                ?: "Doodle Player",
+                            email = preferredEmail?.takeIf { it.isNotBlank() } ?: user.email,
+                            authMethod = authMethod,
+                            campaignLevelIndex = campaignLevelIndex,
+                            coins = coins,
+                            perfectCount = perfectCount,
+                            currentStreak = currentStreak,
+                            maxStreak = maxStreak,
+                            completedLevelsCount = completedCampaignLevels.size
+                        )
+                        syncRes.onSuccess { synced ->
+                            cloudAccount = synced
+                            statusBannerMessage = "☁️ Welcome, ${synced.displayName}! Cloud Sync Active."
+                            currentScreen = ScreenState.MAIN_MENU
+                        }.onFailure { err ->
+                            authErrorMessage = err.localizedMessage ?: "Failed to save cloud profile."
+                        }
+                    } else {
+                        currentScreen = ScreenState.MAIN_MENU
+                    }
+                    isSyncingCloud = false
+                }
+            }
+            .addOnFailureListener { e ->
+                isSyncingCloud = false
+                authErrorMessage = e.localizedMessage ?: "Google Sign-In with Firebase failed."
+            }
+    }
+
+    fun updateCloudProfile(nickname: String, email: String?, authMethod: String) {
+        val repo = playerAccountRepo ?: return
+        if (currentUser == null) return
+        isSyncingCloud = true
+        authErrorMessage = null
+        viewModelScope.launch {
+            val res = repo.createOrSyncPlayerAccount(
+                displayName = nickname,
+                email = email,
+                authMethod = authMethod,
+                campaignLevelIndex = campaignLevelIndex,
+                coins = coins,
+                perfectCount = perfectCount,
+                currentStreak = currentStreak,
+                maxStreak = maxStreak,
+                completedLevelsCount = completedCampaignLevels.size
+            )
+            isSyncingCloud = false
+            res.onSuccess { updated ->
+                cloudAccount = updated
+                statusBannerMessage = "☁️ Saved profile for ${updated.displayName}!"
+            }.onFailure { err ->
+                authErrorMessage = err.localizedMessage ?: "Could not update cloud profile."
+            }
+        }
+    }
+
+    fun signOutFirebase() {
+        accountSnapshotJob?.cancel()
+        accountSnapshotJob = null
+        authInstance?.signOut()
+        currentUser = null
+        cloudAccount = null
+        isGuestSession = false
+        authErrorMessage = null
+        currentScreen = ScreenState.REGISTRATION
+        statusBannerMessage = "Signed out of cloud account"
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        authStateListener?.let { authInstance?.removeAuthStateListener(it) }
+        accountSnapshotJob?.cancel()
+        stateChangeWatcherJob?.cancel()
+    }
+
+    /**
+     * Writes canonical game state to local storage (both SharedPreferences keys and
+     * the localStorage-compatible JSON snapshot `doodle_word_shark_1000_v1`).
+     */
+    private fun writeLocalStorageOnly() {
         val prefs = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) ?: return
+        val starsJson = JSONObject()
+        levelStarRatings.forEach { (lvl, st) -> starsJson.put(lvl.toString(), st) }
+        val canonicalJson = JSONObject().apply {
+            put("coins", coins)
+            put("campaignIdx", campaignLevelIndex)
+            put("completed", JSONArray(completedCampaignLevels.toList()))
+            put("completedLevelsCount", completedCampaignLevels.size)
+            put("stars", starsJson)
+            put("chests", JSONArray(claimedMilestoneChests.toList()))
+            put("freePlayAll", unlockAllMapLevels)
+            put("freePotions", freeShieldPotions)
+            put("perfectCount", perfectCount)
+            put("streak", currentStreak)
+            put("maxStreak", maxStreak)
+            put("chestProg", chestProgress)
+            put("themeProg", themeProgress)
+            put("updatedAt", System.currentTimeMillis())
+        }.toString()
+
         prefs.edit()
             .putInt("coins", coins)
             .putInt("campaignLevelIndex", campaignLevelIndex)
@@ -1373,7 +1708,47 @@ class WordGameViewModel : ViewModel() {
             .putString("completedLevels", completedCampaignLevels.joinToString(","))
             .putString("levelStars", levelStarRatings.entries.joinToString(",") { "${it.key}:${it.value}" })
             .putString("claimedChests", claimedMilestoneChests.joinToString(","))
+            .putString("doodle_word_shark_1000_v1", canonicalJson)
             .apply()
+    }
+
+    /**
+     * Pushes the current canonical game state to Firestore when signed in via the Registration screen.
+     */
+    private fun syncCurrentStateToFirestore() {
+        val user = currentUser
+        val repo = playerAccountRepo
+        if (user != null && repo != null && !isGuestSession) {
+            isSyncingCloud = true
+            viewModelScope.launch {
+                val res = repo.updateProgress(
+                    displayName = cloudAccount?.displayName
+                        ?: user.displayName?.takeIf { it.isNotBlank() }
+                        ?: "Doodle Player",
+                    email = cloudAccount?.email ?: user.email,
+                    authMethod = cloudAccount?.authMethod ?: "gmail",
+                    campaignLevelIndex = campaignLevelIndex,
+                    coins = coins,
+                    perfectCount = perfectCount,
+                    currentStreak = currentStreak,
+                    maxStreak = maxStreak,
+                    completedLevelsCount = completedCampaignLevels.size,
+                    userId = user.uid
+                )
+                isSyncingCloud = false
+                res.onSuccess { syncedAccount ->
+                    cloudAccount = syncedAccount
+                    lastCloudSyncEpochMs = System.currentTimeMillis()
+                }.onFailure { err ->
+                    authErrorMessage = err.localizedMessage ?: "Cloud sync failed"
+                }
+            }
+        }
+    }
+
+    private fun saveStateToPrefs() {
+        writeLocalStorageOnly()
+        syncCurrentStateToFirestore()
     }
 
     fun openWorldMap() {
@@ -1387,6 +1762,7 @@ class WordGameViewModel : ViewModel() {
         } else {
             "🔒 Sequential Campaign Progression Active"
         }
+        saveStateToPrefs()
     }
 
     fun isLevelUnlocked(levelNumber: Int): Boolean {
@@ -1452,6 +1828,7 @@ class WordGameViewModel : ViewModel() {
     /** Allows jumping directly to a specific level number (great for World Map & testing perils) */
     fun selectCampaignLevelNumber(levelNumber: Int) {
         campaignLevelIndex = (levelNumber - 1).coerceIn(0, CAMPAIGN_LEVELS.lastIndex)
+        saveStateToPrefs()
         startCampaignLevel()
     }
 
@@ -1655,6 +2032,7 @@ class WordGameViewModel : ViewModel() {
 
         if (activeLevel.isAdventure) {
             adventureLevelIndex++
+            saveStateToPrefs()
             startAdventureLevel()
         } else {
             campaignLevelIndex = (campaignLevelIndex + 1) % CAMPAIGN_LEVELS.size
@@ -1757,12 +2135,48 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                 .windowInsetsPadding(WindowInsets.safeDrawing)
         ) {
             when (viewModel.currentScreen) {
+                ScreenState.REGISTRATION -> {
+                    BackHandler(enabled = viewModel.currentUser != null || viewModel.isGuestSession) {
+                        viewModel.navigateToMainMenu()
+                    }
+                    RegistrationAuthScreen(
+                        currentUser = viewModel.currentUser,
+                        cloudAccount = viewModel.cloudAccount,
+                        isSyncing = viewModel.isSyncingCloud,
+                        authErrorMessage = viewModel.authErrorMessage,
+                        localLevelNumber = viewModel.currentCampaignLevelNumber,
+                        localCoins = viewModel.coins,
+                        fontFamily = activeFontFamily,
+                        onGoogleIdTokenReceived = { idToken, nickname, email, method ->
+                            viewModel.signInWithGoogleIdToken(idToken, nickname, email, method)
+                        },
+                        onUpdateCloudProfile = { nickname, email, method ->
+                            viewModel.updateCloudProfile(nickname, email, method)
+                        },
+                        onContinueAsGuest = { viewModel.continueAsGuest() },
+                        onContinueToGame = { viewModel.navigateToMainMenu() },
+                        onSignOut = { viewModel.signOutFirebase() },
+                        onSetAuthError = { viewModel.setAuthError(it) }
+                    )
+                }
+
                 ScreenState.MAIN_MENU -> {
+                    val accountLabel = when {
+                        viewModel.currentUser != null -> {
+                            val name = viewModel.cloudAccount?.displayName
+                                ?: viewModel.currentUser?.displayName
+                                ?: "Cloud"
+                            "☁️ ${name.take(10)}"
+                        }
+                        viewModel.isGuestSession -> "🕵️ Guest"
+                        else -> "👤 Register"
+                    }
                     MainMenuScreen(
                         levelNumber = viewModel.currentCampaignLevelNumber,
                         completedLevels = viewModel.completedCampaignCount,
                         totalCampaignLevels = viewModel.totalCampaignCount,
                         coins = viewModel.coins,
+                        accountBadgeLabel = accountLabel,
                         fontFamily = activeFontFamily,
                         onPlayCampaign = { chosenPeril ->
                             viewModel.setPerilOverride(chosenPeril)
@@ -1773,7 +2187,8 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                         onPlayTwoPlayer = { viewModel.openTwoPlayerSetup() },
                         onSelectPerilLevel = { lvl -> viewModel.selectCampaignLevelNumber(lvl) },
                         onOpenSettings = { viewModel.showSettingsDialog = true },
-                        onOpenCoinShop = { viewModel.showCoinShopDialog = true }
+                        onOpenCoinShop = { viewModel.showCoinShopDialog = true },
+                        onOpenRegistration = { viewModel.openRegistrationScreen() }
                     )
                 }
 
@@ -2026,6 +2441,7 @@ fun MainMenuScreen(
     completedLevels: Int,
     totalCampaignLevels: Int,
     coins: Int,
+    accountBadgeLabel: String = "👤 Register",
     fontFamily: FontFamily,
     onPlayCampaign: (PerilType?) -> Unit,
     onOpenWorldMap: () -> Unit,
@@ -2033,7 +2449,8 @@ fun MainMenuScreen(
     onPlayTwoPlayer: () -> Unit,
     onSelectPerilLevel: (Int) -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenCoinShop: () -> Unit
+    onOpenCoinShop: () -> Unit,
+    onOpenRegistration: () -> Unit = {}
 ) {
     val activePeril = PerilType.forLevel(levelNumber)
     val activeRank = RankTier.forLevel(levelNumber)
@@ -2072,6 +2489,24 @@ fun MainMenuScreen(
                     Text(
                         text = "🗺️",
                         fontSize = 18.sp
+                    )
+                }
+
+                SketchyContainer(
+                    fillColor = Color(0xFFE3F2FD),
+                    cornerRadius = 14.dp,
+                    onClick = onOpenRegistration,
+                    modifier = Modifier
+                        .height(44.dp)
+                        .testTag("account_status_button")
+                ) {
+                    Text(
+                        text = accountBadgeLabel,
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 12.sp,
+                        color = DoodleColors.InkBlack,
+                        modifier = Modifier.padding(horizontal = 10.dp)
                     )
                 }
             }

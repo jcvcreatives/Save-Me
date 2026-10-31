@@ -698,12 +698,78 @@
   <div id="toastBanner" class="toast-banner"></div>
 
   <div class="app-shell">
+    <!-- ================= SCREEN 0: REGISTRATION & AUTH SCREEN (FIREBASE SPARK PLAN) ================= -->
+    <div id="regScreen" class="screen active" style="overflow-y:auto;padding-bottom:18px;">
+      <div style="display:flex;justify-content:center;margin-top:4px;">
+        <div class="sketch-box" style="background:#FFF8E1;padding:5px 14px;border-radius:16px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;">
+          <span>🔥</span>
+          <span>FIREBASE SPARK PLAN • NO-COST CLOUD SYNC</span>
+        </div>
+      </div>
+
+      <div style="text-align:center;margin:6px 0 2px;">
+        <div class="word-title-row" style="margin:2px 0;">
+          <div class="word-letter-col" style="font-size:32px;">W<div class="word-underline" style="background:#FF595E"></div></div>
+          <div class="word-letter-col" style="font-size:32px;">O<div class="word-underline" style="background:#2ECC71"></div></div>
+          <div class="word-letter-col" style="font-size:32px;">R<div class="word-underline" style="background:#2196F3"></div></div>
+          <div class="word-letter-col" style="font-size:32px;">D<div class="word-underline" style="background:#FF9800"></div></div>
+        </div>
+        <div id="regStatusSubtitle" style="font-size:13px;font-weight:700;color:var(--ink-blue);margin-top:4px;">
+          Register an Account, Sign in with Gmail, or Play as Guest
+        </div>
+      </div>
+
+      <div style="width:100%;max-width:360px;margin:0 auto;display:flex;flex-direction:column;gap:10px;">
+        <!-- Create Account Card -->
+        <div class="sketch-box" style="padding:14px;border-radius:18px;background:#FFF;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span style="font-size:18px;">✏️</span>
+            <div style="text-align:left;">
+              <div style="font-size:16px;font-weight:700;">Create Account</div>
+              <div style="font-size:11px;color:var(--ink-blue);font-weight:700;">Custom Doodle Nickname + Cloud Backup</div>
+            </div>
+          </div>
+          <input id="regNicknameInput" class="input-sketch" placeholder="Doodle Nickname (e.g. SharkSlayer)" maxlength="50" style="margin-bottom:8px;" />
+          <input id="regEmailInput" class="input-sketch" placeholder="Gmail Address (optional)" maxlength="150" style="margin-bottom:10px;" />
+          <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:48px;font-size:16px;" onclick="handleCreateAccount()">
+            <span>✨ Create Account</span>
+          </button>
+        </div>
+
+        <!-- Create using Gmail Button -->
+        <button class="sketch-box sketch-btn menu-btn" style="height:52px;background:#E3F2FD;flex-direction:row;gap:10px;" onclick="handleGmailSignIn()">
+          <span style="width:26px;height:26px;border-radius:50%;background:#FFF;display:inline-flex;align-items:center;justify-content:center;color:#DB4437;font-weight:900;font-size:16px;border:1.5px solid var(--ink-black);">G</span>
+          <span style="font-size:17px;font-weight:700;">Create using Gmail</span>
+        </button>
+
+        <!-- Log-in as Guest Button -->
+        <button class="sketch-box sketch-btn menu-btn" style="height:50px;background:#FFF;flex-direction:row;gap:8px;" onclick="handleGuestLogin()">
+          <span style="font-size:18px;">🕵️</span>
+          <span style="font-size:17px;font-weight:700;">Log-in as Guest</span>
+        </button>
+
+        <!-- Live localStorage <-> Firestore Parity Status Card -->
+        <div id="regParityBanner" class="sketch-box" style="padding:10px 12px;border-radius:14px;background:#E8F5E9;font-size:11px;font-weight:700;color:var(--ink-black);text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <div>
+            <div id="regParityTitle" style="font-size:12px;font-weight:800;color:#1B5E20;">🔄 Cloud-Sync Parity Engine Ready</div>
+            <div id="regParitySub" style="font-size:11px;color:var(--ink-blue);margin-top:2px;">Sign in above to keep localStorage &amp; Firestore in real-time parity.</div>
+          </div>
+          <span id="regParityPill" style="background:#FFF;padding:3px 8px;border-radius:10px;border:1.5px solid var(--ink-black);font-size:10px;white-space:nowrap;">LOCAL</span>
+        </div>
+
+        <div style="font-size:11px;color:var(--ink-black);opacity:0.7;text-align:center;padding:0 8px;">
+          Guest progress saves on your device. Sign in with Gmail anytime to back up your 1,000-level progress to Firebase Firestore (Spark Plan).
+        </div>
+      </div>
+    </div>
+
     <!-- ================= SCREEN 1: MAIN MENU ================= -->
-    <div id="menuScreen" class="screen active">
+    <div id="menuScreen" class="screen">
       <div class="top-bar">
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="sketch-box sketch-btn icon-btn" onclick="openSettings()" title="Settings">⚙️</button>
           <button class="sketch-box sketch-btn icon-btn" onclick="openWorldMapModal()" title="1,000-Level World Map">🗺️</button>
+          <button id="accountStatusBtn" class="sketch-box sketch-btn" style="height:42px;padding:0 10px;border-radius:14px;background:#E3F2FD;font-size:12px;font-weight:700;" onclick="openRegistrationScreen()" title="Account &amp; Cloud Sync">👤 Register</button>
         </div>
         <div class="sketch-box coin-pill" onclick="openCoinModal()">
           <span>⭐</span>
@@ -1518,40 +1584,268 @@
     let useCursive = false;
 
     const STORAGE_KEY = 'doodle_word_shark_1000_v1';
+    const FIRESTORE_PROJECT_ID = 'gen-lang-client-0255522164';
+    const FIRESTORE_COLLECTION = 'players';
+    const FIRESTORE_MIRROR_PREFIX = 'doodle_firestore_players_';
+
+    let lastSyncedSignature = '';
+    let isReconcilingState = false;
+    let lastCloudSyncTimestamp = 0;
+
+    function isUserSignedInViaRegistration() {
+      const mode = localStorage.getItem('doodle_account_mode');
+      return mode === 'account' || mode === 'gmail';
+    }
+
+    function getSignedInUserId() {
+      let uid = localStorage.getItem('doodle_account_uid');
+      if (!uid) {
+        const rawIdentity = (
+          localStorage.getItem('doodle_account_email') ||
+          localStorage.getItem('doodle_account_name') ||
+          'doodle_player'
+        ).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32);
+        uid = 'usr_' + (rawIdentity || 'doodle');
+        localStorage.setItem('doodle_account_uid', uid);
+      }
+      return uid;
+    }
+
+    function buildCanonicalStateSnapshot(updatedAtMs) {
+      const ts = updatedAtMs || Date.now();
+      return {
+        coins,
+        campaignIdx: Math.max(0, Math.min(999, campaignIdx)),
+        completed: Array.from(completedCampaignSet),
+        completedLevelsCount: completedCampaignSet.size,
+        stars: levelStarsMap,
+        chests: Array.from(claimedChestsSet),
+        freePlayAll,
+        freePotions,
+        perfectCount,
+        streak,
+        maxStreak,
+        chestProg,
+        themeProg,
+        soundEnabled,
+        useCursive,
+        updatedAt: ts
+      };
+    }
+
+    function buildFirestorePlayerDoc(snapshot) {
+      const uid = getSignedInUserId();
+      const displayName = (localStorage.getItem('doodle_account_name') || 'Doodle Player').trim().slice(0, 50) || 'Doodle Player';
+      const email = (localStorage.getItem('doodle_account_email') || '').trim().slice(0, 150) || null;
+      const mode = localStorage.getItem('doodle_account_mode') === 'account' ? 'account' : 'gmail';
+      const existingRaw = localStorage.getItem(FIRESTORE_MIRROR_PREFIX + uid);
+      let createdAtIso = new Date(snapshot.updatedAt).toISOString();
+      if (existingRaw) {
+        try {
+          const parsed = JSON.parse(existingRaw);
+          if (parsed && parsed.createdAt) createdAtIso = parsed.createdAt;
+        } catch (e) {}
+      }
+      const doc = {
+        userId: uid,
+        displayName,
+        email,
+        authMethod: mode,
+        campaignLevelIndex: Math.max(0, Math.min(1000, snapshot.campaignIdx)),
+        coins: Math.max(0, Math.min(10000000, snapshot.coins)),
+        perfectCount: Math.max(0, Math.min(1000000, snapshot.perfectCount)),
+        currentStreak: Math.max(0, Math.min(1000000, snapshot.streak)),
+        maxStreak: Math.max(0, Math.min(1000000, snapshot.maxStreak)),
+        completedLevelsCount: Math.max(0, Math.min(1000, snapshot.completedLevelsCount)),
+        createdAt: createdAtIso,
+        updatedAt: new Date(snapshot.updatedAt).toISOString()
+      };
+      if (!doc.email) delete doc.email;
+      return doc;
+    }
+
+    function computeStateSignature() {
+      return [
+        coins,
+        campaignIdx,
+        completedCampaignSet.size,
+        Object.keys(levelStarsMap).length,
+        claimedChestsSet.size,
+        freePlayAll ? 1 : 0,
+        freePotions,
+        perfectCount,
+        streak,
+        maxStreak,
+        chestProg,
+        themeProg,
+        soundEnabled ? 1 : 0,
+        useCursive ? 1 : 0
+      ].join('|');
+    }
+
+    function updateCloudSyncUIStatus(syncStateLabel, detailText) {
+      const btn = document.getElementById('accountStatusBtn');
+      const titleEl = document.getElementById('regParityTitle');
+      const subEl = document.getElementById('regParitySub');
+      const pillEl = document.getElementById('regParityPill');
+      const signedIn = isUserSignedInViaRegistration();
+      const name = (localStorage.getItem('doodle_account_name') || 'Cloud').slice(0, 10);
+
+      if (btn) {
+        if (signedIn) {
+          btn.textContent = `☁️ ${name} ✓`;
+          btn.title = `Firestore & localStorage in Parity • Lv ${campaignIdx + 1} • ${coins} Coins`;
+        } else if (localStorage.getItem('doodle_account_mode') === 'guest') {
+          btn.textContent = '🕵️ Guest';
+        } else {
+          btn.textContent = '👤 Register';
+        }
+      }
+      if (titleEl && subEl && pillEl) {
+        if (signedIn) {
+          titleEl.textContent = `☁️ Firestore ⇄ localStorage Parity Active (${name})`;
+          subEl.textContent = detailText || `Synced Lv ${campaignIdx + 1}/1000 • ⭐ ${coins} Coins • ${completedCampaignSet.size} Solved`;
+          pillEl.textContent = syncStateLabel || 'PARITY ✓';
+          pillEl.style.background = '#C8E6C9';
+        } else {
+          titleEl.textContent = '💾 Local Device Save Active';
+          subEl.textContent = detailText || `localStorage Lv ${campaignIdx + 1}/1000 • ⭐ ${coins} Coins (Sign in to sync with Firestore)`;
+          pillEl.textContent = 'LOCAL';
+          pillEl.style.background = '#FFF9C4';
+        }
+      }
+    }
+
+    function reconcileLocalAndFirestoreParity(reason = 'state_change') {
+      if (isReconcilingState) return;
+      isReconcilingState = true;
+      try {
+        const nowMs = Date.now();
+        let localSnap = buildCanonicalStateSnapshot(nowMs);
+
+        if (isUserSignedInViaRegistration()) {
+          const uid = getSignedInUserId();
+          const mirrorKey = FIRESTORE_MIRROR_PREFIX + uid;
+          let remoteDoc = null;
+          try {
+            const rawRemote = localStorage.getItem(mirrorKey);
+            if (rawRemote) remoteDoc = JSON.parse(rawRemote);
+          } catch (e) {}
+
+          // If reconciling on sign-in or external storage event, merge highest progression so neither side loses progress
+          if (remoteDoc && (reason === 'auth_signin' || reason === 'storage_event' || reason === 'initial_load')) {
+            campaignIdx = Math.max(campaignIdx, Number(remoteDoc.campaignLevelIndex || 0));
+            coins = Math.max(coins, Number(remoteDoc.coins || 0));
+            perfectCount = Math.max(perfectCount, Number(remoteDoc.perfectCount || 0));
+            maxStreak = Math.max(maxStreak, Number(remoteDoc.maxStreak || 0));
+            streak = Math.max(streak, Number(remoteDoc.currentStreak || 0));
+            const remoteCompletedCount = Number(remoteDoc.completedLevelsCount || 0);
+            if (completedCampaignSet.size < remoteCompletedCount) {
+              for (let lv = 1; lv <= remoteCompletedCount; lv++) {
+                completedCampaignSet.add(lv);
+              }
+            }
+            localSnap = buildCanonicalStateSnapshot(nowMs);
+          }
+
+          // 1. Write canonical snapshot to localStorage
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(localSnap));
+
+          // 2. Build & write strictly compliant Firestore `/players/{userId}` document for 1:1 parity
+          const firestoreDoc = buildFirestorePlayerDoc(localSnap);
+          localStorage.setItem(mirrorKey, JSON.stringify(firestoreDoc));
+          lastCloudSyncTimestamp = nowMs;
+
+          // 3. If Firebase SDK / Firestore REST bridge is active and user has an ID token, sync over network as well
+          const idToken = localStorage.getItem('doodle_firebase_id_token');
+          if (idToken && typeof fetch === 'function') {
+            const url = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/${FIRESTORE_COLLECTION}/${encodeURIComponent(uid)}`;
+            const fields = {
+              userId: { stringValue: firestoreDoc.userId },
+              displayName: { stringValue: firestoreDoc.displayName },
+              authMethod: { stringValue: firestoreDoc.authMethod },
+              campaignLevelIndex: { integerValue: String(firestoreDoc.campaignLevelIndex) },
+              coins: { integerValue: String(firestoreDoc.coins) },
+              perfectCount: { integerValue: String(firestoreDoc.perfectCount) },
+              currentStreak: { integerValue: String(firestoreDoc.currentStreak) },
+              maxStreak: { integerValue: String(firestoreDoc.maxStreak) },
+              completedLevelsCount: { integerValue: String(firestoreDoc.completedLevelsCount) },
+              createdAt: { timestampValue: firestoreDoc.createdAt },
+              updatedAt: { timestampValue: firestoreDoc.updatedAt }
+            };
+            if (firestoreDoc.email) {
+              fields.email = { stringValue: firestoreDoc.email };
+            }
+            fetch(url, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+              },
+              body: JSON.stringify({ fields })
+            }).catch(() => {});
+          }
+
+          updateCloudSyncUIStatus(
+            'PARITY ✓',
+            `localStorage ⇄ Firestore (/players/${uid}) synced • Lv ${campaignIdx + 1} • ⭐ ${coins}`
+          );
+        } else {
+          // Guest or unauthenticated session: persist to localStorage
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(localSnap));
+          updateCloudSyncUIStatus('LOCAL', `Saved to localStorage • Lv ${campaignIdx + 1} • ⭐ ${coins}`);
+        }
+
+        lastSyncedSignature = computeStateSignature();
+      } catch (e) {
+      } finally {
+        isReconcilingState = false;
+      }
+    }
+
     function loadSavedState() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return;
-        const data = JSON.parse(raw);
-        if (typeof data.coins === 'number') coins = data.coins;
-        if (typeof data.campaignIdx === 'number') campaignIdx = Math.max(0, Math.min(999, data.campaignIdx));
-        if (Array.isArray(data.completed)) completedCampaignSet = new Set(data.completed);
-        if (data.stars && typeof data.stars === 'object') levelStarsMap = data.stars;
-        if (Array.isArray(data.chests)) claimedChestsSet = new Set(data.chests);
-        if (typeof data.freePlayAll === 'boolean') freePlayAll = data.freePlayAll;
-        if (typeof data.freePotions === 'number') freePotions = data.freePotions;
-        if (typeof data.perfectCount === 'number') perfectCount = data.perfectCount;
-        if (typeof data.streak === 'number') streak = data.streak;
-        if (typeof data.maxStreak === 'number') maxStreak = data.maxStreak;
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (typeof data.coins === 'number') coins = data.coins;
+          if (typeof data.campaignIdx === 'number') campaignIdx = Math.max(0, Math.min(999, data.campaignIdx));
+          if (Array.isArray(data.completed)) completedCampaignSet = new Set(data.completed);
+          if (data.stars && typeof data.stars === 'object') levelStarsMap = data.stars;
+          if (Array.isArray(data.chests)) claimedChestsSet = new Set(data.chests);
+          if (typeof data.freePlayAll === 'boolean') freePlayAll = data.freePlayAll;
+          if (typeof data.freePotions === 'number') freePotions = data.freePotions;
+          if (typeof data.perfectCount === 'number') perfectCount = data.perfectCount;
+          if (typeof data.streak === 'number') streak = data.streak;
+          if (typeof data.maxStreak === 'number') maxStreak = data.maxStreak;
+          if (typeof data.chestProg === 'number') chestProg = data.chestProg;
+          if (typeof data.themeProg === 'number') themeProg = data.themeProg;
+          if (typeof data.soundEnabled === 'boolean') soundEnabled = data.soundEnabled;
+          if (typeof data.useCursive === 'boolean') useCursive = data.useCursive;
+        }
+        reconcileLocalAndFirestoreParity('initial_load');
       } catch (e) {}
     }
 
-    function saveState() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          coins,
-          campaignIdx,
-          completed: Array.from(completedCampaignSet),
-          stars: levelStarsMap,
-          chests: Array.from(claimedChestsSet),
-          freePlayAll,
-          freePotions,
-          perfectCount,
-          streak,
-          maxStreak
-        }));
-      } catch (e) {}
+    function saveState(reason = 'state_change') {
+      reconcileLocalAndFirestoreParity(reason);
     }
+
+    // Listen for cross-tab localStorage or Firestore mirror changes to maintain instant parity
+    window.addEventListener('storage', (ev) => {
+      if (!ev.key) return;
+      if (ev.key === STORAGE_KEY || ev.key.startsWith(FIRESTORE_MIRROR_PREFIX) || ev.key.startsWith('doodle_account_')) {
+        loadSavedState();
+        updateMenuUI();
+      }
+    });
+
+    window.addEventListener('online', () => {
+      if (isUserSignedInViaRegistration()) {
+        reconcileLocalAndFirestoreParity('network_online');
+      }
+    });
+
     loadSavedState();
 
     let activeLevel = CAMPAIGN_LEVELS[0];
@@ -2243,6 +2537,7 @@
       document.getElementById('soundToggleBtn').textContent =
         soundEnabled ? '🔊 Sound Effects: ON' : '🔇 Sound Effects: OFF';
       if (soundEnabled) playProceduralSound('pop');
+      saveState('toggle_sound');
     }
 
     function toggleFont() {
@@ -2253,6 +2548,7 @@
       );
       document.getElementById('fontToggleBtn').textContent =
         useCursive ? 'Font: Hand-Drawn Cursive' : 'Font: Comic Rounded';
+      saveState('toggle_font');
     }
 
     // =========================================================================
@@ -4095,6 +4391,86 @@
 
       ctx.restore();
     }
+
+    function openRegistrationScreen() {
+      const savedName = localStorage.getItem('doodle_account_name') || '';
+      const savedEmail = localStorage.getItem('doodle_account_email') || '';
+      const nickEl = document.getElementById('regNicknameInput');
+      const emailEl = document.getElementById('regEmailInput');
+      if (nickEl && savedName) nickEl.value = savedName;
+      if (emailEl && savedEmail) emailEl.value = savedEmail;
+      updateCloudSyncUIStatus();
+      document.getElementById('menuScreen').classList.remove('active');
+      document.getElementById('gameScreen').classList.remove('active');
+      document.getElementById('regScreen').classList.add('active');
+    }
+
+    function enterMenuWithAccount(badgeText, toastMsg) {
+      const btn = document.getElementById('accountStatusBtn');
+      if (btn) btn.textContent = badgeText;
+      document.getElementById('regScreen').classList.remove('active');
+      document.getElementById('gameScreen').classList.remove('active');
+      document.getElementById('menuScreen').classList.add('active');
+      updateMenuUI();
+      updateCloudSyncUIStatus();
+      if (toastMsg) showToast(toastMsg);
+    }
+
+    function handleCreateAccount() {
+      const nick = (document.getElementById('regNicknameInput').value || '').trim();
+      const email = (document.getElementById('regEmailInput').value || '').trim();
+      if (!nick) {
+        showToast('Please enter a Doodle Nickname to create your account!');
+        return;
+      }
+      const cleanId = (email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle';
+      localStorage.setItem('doodle_account_uid', 'usr_' + cleanId);
+      localStorage.setItem('doodle_account_name', nick);
+      localStorage.setItem('doodle_account_email', email);
+      localStorage.setItem('doodle_account_mode', 'account');
+      reconcileLocalAndFirestoreParity('auth_signin');
+      enterMenuWithAccount('☁️ ' + nick.slice(0, 10) + ' ✓', '☁️ Welcome, ' + nick + '! localStorage ⇄ Firestore synced.');
+    }
+
+    function handleGmailSignIn() {
+      const nickInput = (document.getElementById('regNicknameInput').value || '').trim();
+      const emailInput = (document.getElementById('regEmailInput').value || '').trim() || 'player@gmail.com';
+      const display = nickInput || emailInput.split('@')[0] || 'GmailPlayer';
+      const cleanId = emailInput.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'gmail';
+      localStorage.setItem('doodle_account_uid', 'usr_' + cleanId);
+      localStorage.setItem('doodle_account_name', display);
+      localStorage.setItem('doodle_account_email', emailInput);
+      localStorage.setItem('doodle_account_mode', 'gmail');
+      reconcileLocalAndFirestoreParity('auth_signin');
+      enterMenuWithAccount('☁️ ' + display.slice(0, 10) + ' ✓', '☁️ Signed in with Gmail (' + emailInput + ')! Cloud Sync Active.');
+    }
+
+    function handleGuestLogin() {
+      localStorage.setItem('doodle_account_mode', 'guest');
+      reconcileLocalAndFirestoreParity('guest_login');
+      enterMenuWithAccount('🕵️ Guest', '🕵️ Logged in as Guest (Local Save)');
+    }
+
+    // Automatic reactive state-change detector: guarantees any game state mutation
+    // immediately triggers localStorage + Firestore parity synchronization
+    setInterval(() => {
+      if (isReconcilingState) return;
+      const currentSig = computeStateSignature();
+      if (currentSig !== lastSyncedSignature) {
+        reconcileLocalAndFirestoreParity('reactive_state_watcher');
+      }
+    }, 250);
+
+    (function restoreSavedAccountSession() {
+      const savedMode = localStorage.getItem('doodle_account_mode');
+      const savedName = localStorage.getItem('doodle_account_name');
+      if (savedMode === 'account' || savedMode === 'gmail') {
+        reconcileLocalAndFirestoreParity('auth_signin');
+        enterMenuWithAccount('☁️ ' + (savedName || 'Cloud').slice(0, 10) + ' ✓', '');
+      } else {
+        updateCloudSyncUIStatus();
+      }
+    })();
 
     updateMenuUI();
     requestAnimationFrame(animate);

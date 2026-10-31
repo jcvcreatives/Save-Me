@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "PlayerAccount": {
+      "title": "PlayerAccount",
+      "description": "Cloud-synced player account and campaign progression profile on the Firebase Spark plan.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The authenticated Firebase Auth UID owning this account."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Player's chosen doodle nickname or Gmail display name (1 to 50 chars)."
+        },
+        "email": {
+          "type": "string",
+          "description": "Optional Gmail address associated with the account (up to 150 chars)."
+        },
+        "authMethod": {
+          "type": "string",
+          "enum": ["gmail", "account"],
+          "description": "How the account profile was registered ('gmail' or 'account')."
+        },
+        "campaignLevelIndex": {
+          "type": "integer",
+          "description": "Current 0-based campaign level index (0 to 999)."
+        },
+        "coins": {
+          "type": "integer",
+          "description": "Player's Doodle Coin balance."
+        },
+        "perfectCount": {
+          "type": "integer",
+          "description": "Total number of flawless rounds completed."
+        },
+        "currentStreak": {
+          "type": "integer",
+          "description": "Current consecutive win streak."
+        },
+        "maxStreak": {
+          "type": "integer",
+          "description": "All-time highest win streak."
+        },
+        "completedLevelsCount": {
+          "type": "integer",
+          "description": "Total number of campaign levels completed (0 to 1000)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the account was first created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the account was last synced (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "authMethod",
+        "campaignLevelIndex",
+        "coins",
+        "perfectCount",
+        "currentStreak",
+        "maxStreak",
+        "completedLevelsCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/players/{userId}": {
+      "schema": {
+        "$ref": "#/entities/PlayerAccount"
+      },
+      "description": "Per-user cloud profile and game progression document keyed by Firebase Auth UID."
+    }
+  }
+}
