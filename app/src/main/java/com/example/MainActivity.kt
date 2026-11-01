@@ -1,6 +1,9 @@
 package com.example
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,6 +15,10 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import kotlin.math.exp
+import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sqrt
 import kotlin.random.Random
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -32,6 +39,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -67,12 +75,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,7 +99,12 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -96,6 +113,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -117,14 +135,17 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -2669,8 +2690,31 @@ fun SketchyContainer(
 }
 
 // ============================================================================
-// 6. SCREEN 1: MAIN MENU SCREEN (WITH 20-TIER RANK AURA & 1,000-LEVEL PROGRESS)
+// 6. SCREEN 1: HOME SCREEN (DRAGON BALL CHARGING STICKMAN & 20-TIER AURA)
 // ============================================================================
+
+private data class KiBurstParticle(
+    val id: Long,
+    val startX: Float,
+    val startY: Float,
+    val vx: Float,
+    val vy: Float,
+    val color: Color,
+    val radiusDp: Float,
+    val isSparkStar: Boolean,
+    val createdAtMs: Long,
+    val durationMs: Long = 750L
+)
+
+private data class ComicSurgePopup(
+    val id: Long,
+    val text: String,
+    val xFraction: Float,
+    val yFraction: Float,
+    val tiltDeg: Float,
+    val createdAtMs: Long,
+    val durationMs: Long = 850L
+)
 
 @Composable
 fun MainMenuScreen(
@@ -2689,8 +2733,44 @@ fun MainMenuScreen(
     onOpenCoinShop: () -> Unit,
     onOpenRegistration: () -> Unit = {}
 ) {
+    HomeScreen(
+        levelNumber = levelNumber,
+        completedLevels = completedLevels,
+        totalCampaignLevels = totalCampaignLevels,
+        coins = coins,
+        accountBadgeLabel = accountBadgeLabel,
+        fontFamily = fontFamily,
+        onPlayCampaign = onPlayCampaign,
+        onOpenWorldMap = onOpenWorldMap,
+        onPlayAdventure = onPlayAdventure,
+        onPlayTwoPlayer = onPlayTwoPlayer,
+        onSelectPerilLevel = onSelectPerilLevel,
+        onOpenSettings = onOpenSettings,
+        onOpenCoinShop = onOpenCoinShop,
+        onOpenRegistration = onOpenRegistration
+    )
+}
+
+@Composable
+fun HomeScreen(
+    levelNumber: Int,
+    completedLevels: Int,
+    totalCampaignLevels: Int,
+    coins: Int,
+    accountBadgeLabel: String = "👤 Register",
+    fontFamily: FontFamily,
+    onPlayCampaign: (PerilType?) -> Unit,
+    onOpenWorldMap: () -> Unit,
+    onPlayAdventure: () -> Unit,
+    onPlayTwoPlayer: () -> Unit,
+    onSelectPerilLevel: (Int) -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenCoinShop: () -> Unit,
+    onOpenRegistration: () -> Unit = {}
+) {
     val activePeril = PerilType.forLevel(levelNumber)
     val activeRank = RankTier.forLevel(levelNumber)
+    val currentTier = ((levelNumber - 1) / 50 + 1).coerceIn(1, 20)
 
     Column(
         modifier = Modifier
@@ -2700,7 +2780,7 @@ fun MainMenuScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top Bar
+        // Top Bar (Settings, Map, Cloud Status, Star/Coin counter)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2756,7 +2836,7 @@ fun MainMenuScreen(
             )
         }
 
-        // Center Hero: Animated Peril Scene + "W O R D" title
+        // Center Hero: Evolving Dragon Ball Charging Stickman + Synchronized 20-Tier Aura + "W O R D" title
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -2772,15 +2852,10 @@ fun MainMenuScreen(
                     .padding(vertical = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
-                DynamicPerilSceneCanvas(
-                    perilType = activePeril,
-                    livesRemaining = 6,
-                    lastPoppedIndex = -1,
-                    popTrigger = 0,
-                    lastDamageAmount = 1,
-                    isGameOver = false,
-                    showSpeechBubble = false,
-                    isMenuPreview = true,
+                HomeChargingStickmanCenterpiece(
+                    currentLevel = levelNumber,
+                    currentTier = currentTier,
+                    rankTier = activeRank,
                     fontFamily = fontFamily,
                     modifier = Modifier
                         .fillMaxSize()
@@ -2818,7 +2893,7 @@ fun MainMenuScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Level X (Yellow fill, primary action -> launches Level X directly!)
+            // 1. Level X (Yellow fill, primary action -> launches Level X directly, keeping upcoming peril name in subtitle!)
             SketchyContainer(
                 fillColor = DoodleColors.DoodleYellow,
                 cornerRadius = 28.dp,
@@ -2862,6 +2937,1569 @@ fun MainMenuScreen(
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 21.sp,
                     color = DoodleColors.InkBlack
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Interactive Home Screen Centerpiece featuring:
+ * - 3-Stage Evolving Dragon Ball Stickman Stance (Tiers 1–5 Grounded Ki Charge, Tiers 6–12 Ascendant Hover, Tiers 13–20 Transcendent Cosmic Float)
+ * - Double-layered jagged flickering Dragon Ball Energy Shell + upward-rising wind/ki lines
+ * - 20 distinct Tier-synchronized aura visual themes matching the Tier Progress Card below it
+ * - Tap-to-Power-Up Surge (`surgeMultiplier` 1.0f -> 2.5f decaying over 800ms, doubled pulse speed/scale,
+ *   canvas micro-shake, radial burst particles, floating comic text, haptics, and procedural AudioTrack Ki Burst).
+ */
+@Composable
+fun HomeChargingStickmanCenterpiece(
+    currentLevel: Int,
+    currentTier: Int = ((currentLevel - 1) / 50 + 1).coerceIn(1, 20),
+    rankTier: RankTier = RankTier.forLevel(currentLevel),
+    fontFamily: FontFamily,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+
+    // Surge multiplier spikes from 1.0f to 2.5f on tap and decays smoothly over 800ms
+    val surgeAnim = remember { Animatable(1.0f) }
+    val surgeMultiplier = surgeAnim.value
+
+    // Rapid tap combo tracking for rising AudioTrack Ki Burst pitch
+    var rapidTapCombo by remember { mutableIntStateOf(0) }
+    var lastTapTimestampMs by remember { mutableLongStateOf(0L) }
+    var frameClockMs by remember { mutableLongStateOf(0L) }
+    var accumulatedTimeSec by remember { mutableFloatStateOf(0f) }
+
+    val burstParticles = remember { mutableStateListOf<KiBurstParticle>() }
+    val comicPopups = remember { mutableStateListOf<ComicSurgePopup>() }
+
+    // Continuous infinite transitions for Dragon Ball shell pulsing and aura cycles
+    val infiniteTransition = rememberInfiniteTransition(label = "stickmanKiInfinite")
+    val rawAuraPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "stickmanAuraPhase"
+    )
+    val baseShellPulse by infiniteTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.14f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 360, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "stickmanShellPulse"
+    )
+    val fastFlicker by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 190, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "stickmanFastFlicker"
+    )
+
+    // 60fps frame loop that accelerates time when surging and cleans up expired burst particles/popups
+    LaunchedEffect(Unit) {
+        var prevNanos = 0L
+        while (true) {
+            withFrameNanos { nanos ->
+                val dtSec = if (prevNanos == 0L) 0.016f else ((nanos - prevNanos) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
+                prevNanos = nanos
+                // Double the aura pulse/animation speed during a surge
+                val speedFactor = if (surgeAnim.value > 1.05f) {
+                    1f + (surgeAnim.value - 1f) * 0.95f
+                } else {
+                    1f
+                }
+                accumulatedTimeSec += dtSec * speedFactor
+                val nowMs = nanos / 1_000_000L
+                frameClockMs = nowMs
+
+                burstParticles.removeAll { nowMs - it.createdAtMs > it.durationMs }
+                comicPopups.removeAll { nowMs - it.createdAtMs > it.durationMs }
+            }
+        }
+    }
+
+    val comicPhrases = remember {
+        listOf("SURGE!", "+KI!", "MAX INK!", "POWER UP!", "OVERDRIVE!", "ULTRA DOODLE!")
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .pointerInput(currentTier, rankTier) {
+                detectTapGestures { tapOffset ->
+                    val now = System.currentTimeMillis()
+                    rapidTapCombo = if (now - lastTapTimestampMs < 950L) {
+                        (rapidTapCombo + 1).coerceAtMost(12)
+                    } else {
+                        1
+                    }
+                    lastTapTimestampMs = now
+
+                    // 1. Haptic feedback
+                    runCatching {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    }
+
+                    // 2. Procedural Dragon Ball Ki Burst / Power Hum AudioTrack synthesis (pitch rises with rapid taps)
+                    coroutineScope.launch {
+                        playProceduralKiBurstAudioTrack(
+                            comboStep = rapidTapCombo,
+                            tierIndex = currentTier
+                        )
+                    }
+
+                    // 3. Spike surgeMultiplier to 2.5f and decay smoothly over 800ms
+                    coroutineScope.launch {
+                        surgeAnim.snapTo(2.5f)
+                        surgeAnim.animateTo(
+                            targetValue = 1.0f,
+                            animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
+                        )
+                    }
+
+                    // 4. Spawn 20 radial burst particles matching the current Tier's color palette
+                    val canvasW = size.width.toFloat().coerceAtLeast(1f)
+                    val canvasH = size.height.toFloat().coerceAtLeast(1f)
+                    val originX = if (tapOffset.x in (canvasW * 0.15f)..(canvasW * 0.85f)) {
+                        tapOffset.x
+                    } else {
+                        canvasW * 0.5f
+                    }
+                    val originY = if (tapOffset.y in (canvasH * 0.15f)..(canvasH * 0.85f)) {
+                        tapOffset.y
+                    } else {
+                        canvasH * 0.52f
+                    }
+
+                    val particleCount = Random.nextInt(18, 25)
+                    val createdTime = frameClockMs.takeIf { it > 0L } ?: System.currentTimeMillis()
+                    val palette = listOf(
+                        rankTier.primaryColor,
+                        rankTier.accentColor,
+                        DoodleColors.DoodleYellow,
+                        Color.White
+                    )
+                    for (i in 0 until particleCount) {
+                        val baseAngle = (2.0 * PI * i / particleCount).toFloat() +
+                            (Random.nextFloat() - 0.5f) * 0.28f
+                        val speed = 135f + Random.nextFloat() * 210f
+                        burstParticles.add(
+                            KiBurstParticle(
+                                id = createdTime * 100L + i + Random.nextInt(1000),
+                                startX = originX,
+                                startY = originY,
+                                vx = cos(baseAngle) * speed,
+                                vy = sin(baseAngle) * speed - 35f,
+                                color = palette[i % palette.size],
+                                radiusDp = 3.2f + Random.nextFloat() * 4.5f,
+                                isSparkStar = i % 2 == 0,
+                                createdAtMs = createdTime,
+                                durationMs = 650L + Random.nextLong(220L)
+                            )
+                        )
+                    }
+
+                    // 5. Spawn floating sketchy comic text popup ("SURGE!", "+KI!", "MAX INK!")
+                    val phrase = comicPhrases[(rapidTapCombo - 1 + Random.nextInt(comicPhrases.size)) % comicPhrases.size]
+                    val xFrac = ((originX / canvasW) + (Random.nextFloat() - 0.5f) * 0.24f).coerceIn(0.20f, 0.80f)
+                    val yFrac = ((originY / canvasH) - 0.12f + (Random.nextFloat() - 0.5f) * 0.10f).coerceIn(0.18f, 0.62f)
+                    comicPopups.add(
+                        ComicSurgePopup(
+                            id = createdTime + Random.nextLong(9999L),
+                            text = phrase,
+                            xFraction = xFrac,
+                            yFraction = yFrac,
+                            tiltDeg = (Random.nextFloat() - 0.5f) * 18f,
+                            createdAtMs = createdTime
+                        )
+                    )
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        val boxWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+        val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("home_charging_stickman_canvas")
+        ) {
+            val w = size.width
+            val h = size.height
+            val time = accumulatedTimeSec
+            val surgeBoost = (surgeMultiplier - 1f).coerceAtLeast(0f) // 0.0f .. 1.5f
+            val effectivePulse = baseShellPulse * (1f + surgeBoost * 0.38f)
+            val effectivePhase = (rawAuraPhase + time * 1.9f) % (2f * PI).toFloat()
+
+            // Canvas micro-shake when surging
+            val shakeAmp = if (surgeBoost > 0.04f) (surgeBoost * 4.2.dp.toPx()) else 0f
+            val shakeX = sin(time * 68f) * shakeAmp
+            val shakeY = cos(time * 79f) * shakeAmp
+
+            val groundY = h * 0.84f
+            val centerX = w * 0.5f
+
+            // Compute stickman vertical levitation offset based on 3-stage Dragon Ball evolution:
+            // Tiers 1–5: Grounded Ki Charge (planted firmly on groundY)
+            // Tiers 6–12: Ascendant Hover (levitating 25.dp above ground line + sin(time * 4f) * 8f)
+            // Tiers 13–20: Transcendent Cosmic Float (levitating 40.dp above ground line + Zen float)
+            val hoverOffsetPx = when {
+                currentTier in 1..5 -> 0f
+                currentTier in 6..12 -> 25.dp.toPx() + sin(time * 4f) * 8.dp.toPx() + surgeBoost * 6.dp.toPx()
+                else -> 40.dp.toPx() + sin(time * 3.2f) * 10.dp.toPx() + surgeBoost * 9.dp.toPx()
+            }
+
+            val stickmanFootY = groundY - hoverOffsetPx
+            val stickmanCoreY = stickmanFootY - 46.dp.toPx()
+
+            withTransform({
+                translate(left = shakeX, top = shakeY)
+            }) {
+                // 1. Draw Tier-Synchronized Background & Midground Aura (Tiers 1 to 20)
+                drawStickmanTierAura(
+                    currentTier = currentTier,
+                    rankTier = rankTier,
+                    center = Offset(centerX, stickmanCoreY),
+                    groundY = groundY,
+                    time = time,
+                    phase = effectivePhase,
+                    pulse = effectivePulse,
+                    surgeMultiplier = surgeMultiplier
+                )
+
+                // 2. Draw Double-Layered Jagged Dragon Ball Energy Shell + Upward Wind/Ki Lines
+                drawDragonBallEnergyShell(
+                    center = Offset(centerX, stickmanCoreY),
+                    footY = stickmanFootY,
+                    groundY = groundY,
+                    rankTier = rankTier,
+                    time = time,
+                    pulse = effectivePulse,
+                    flicker = fastFlicker,
+                    surgeMultiplier = surgeMultiplier
+                )
+
+                // 3. Draw Horizontal Sketchy Ground Line, Stage Shadows, Floating Pebbles & Shockwave Rings
+                drawHomeGroundAndStageEffects(
+                    currentTier = currentTier,
+                    rankTier = rankTier,
+                    centerX = centerX,
+                    groundY = groundY,
+                    hoverOffsetPx = hoverOffsetPx,
+                    time = time,
+                    surgeMultiplier = surgeMultiplier
+                )
+
+                // 4. Draw 3-Stage Evolving Dragon Ball Black Doodle Stickman
+                drawEvolvingKiStickman(
+                    currentTier = currentTier,
+                    rankTier = rankTier,
+                    centerX = centerX,
+                    footY = stickmanFootY,
+                    time = time,
+                    surgeMultiplier = surgeMultiplier
+                )
+
+                // 5. Draw Interactive Tap-to-Surge Radial Burst Particles
+                val nowMs = frameClockMs
+                burstParticles.forEach { pt ->
+                    val elapsedSec = ((nowMs - pt.createdAtMs).coerceAtLeast(0L)) / 1000f
+                    val progress = ((nowMs - pt.createdAtMs).toFloat() / pt.durationMs.toFloat()).coerceIn(0f, 1f)
+                    val alpha = (1f - progress).coerceIn(0f, 1f)
+                    val px = pt.startX + pt.vx * elapsedSec
+                    val py = pt.startY + pt.vy * elapsedSec + 110f * elapsedSec * elapsedSec
+                    val rPx = pt.radiusDp.dp.toPx() * (1f + (1f - progress) * 0.45f)
+
+                    if (pt.isSparkStar) {
+                        drawDoodleSparkleStar(
+                            center = Offset(px, py),
+                            radius = rPx * 1.45f,
+                            color = pt.color.copy(alpha = alpha),
+                            rotationRad = elapsedSec * 9f
+                        )
+                    } else {
+                        drawCircle(
+                            color = pt.color.copy(alpha = alpha),
+                            radius = rPx,
+                            center = Offset(px, py)
+                        )
+                        drawCircle(
+                            color = DoodleColors.InkBlack.copy(alpha = alpha * 0.7f),
+                            radius = rPx,
+                            center = Offset(px, py),
+                            style = Stroke(width = 1.3.dp.toPx())
+                        )
+                    }
+                }
+            }
+        }
+
+        // 6. Floating Sketchy Comic Text Popups ("SURGE!", "+KI!", "MAX INK!")
+        val nowMs = frameClockMs
+        comicPopups.forEach { popup ->
+            val progress = ((nowMs - popup.createdAtMs).toFloat() / popup.durationMs.toFloat()).coerceIn(0f, 1f)
+            val riseOffsetPx = -progress * 54.dp.value
+            val popupScale = if (progress < 0.2f) {
+                0.7f + (progress / 0.2f) * 0.45f
+            } else {
+                1.15f - ((progress - 0.2f) / 0.8f) * 0.25f
+            }
+            val targetX = ((popup.xFraction - 0.5f) * boxWidthPx).roundToInt()
+            val targetY = ((popup.yFraction - 0.5f) * boxHeightPx + with(LocalDensity.current) { riseOffsetPx.dp.toPx() }).roundToInt()
+
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset(targetX, targetY) }
+                    .scale(popupScale)
+            ) {
+                SketchyContainer(
+                    fillColor = rankTier.primaryColor,
+                    borderColor = DoodleColors.InkBlack,
+                    cornerRadius = 12.dp,
+                    strokeWidth = 2.dp,
+                    shadowOffset = 2.dp
+                ) {
+                    Text(
+                        text = popup.text,
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 14.sp,
+                        color = DoodleColors.InkBlack,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Zero-asset procedural Dragon Ball-style "Ki Burst / Power Hum" frequency sweep
+ * using Android's [AudioTrack] (16-bit PCM sine + sub-octave + filtered ki whoosh noise)
+ * whose pitch rises with rapid consecutive taps.
+ */
+private suspend fun playProceduralKiBurstAudioTrack(
+    comboStep: Int,
+    tierIndex: Int
+) {
+    if (!ProceduralSoundEngine.soundEnabled) return
+    withContext(Dispatchers.Default) {
+        runCatching {
+            val sampleRate = 22050
+            val durationSec = 0.26
+            val numSamples = (sampleRate * durationSec).toInt()
+            val samples = ShortArray(numSamples)
+
+            // Base frequency rises with both rapid tap combo and player's tier
+            val pitchMultiplier = 1.0 + (comboStep.coerceIn(1, 12) - 1) * 0.085 + (tierIndex * 0.012)
+            val startFreq = 115.0 * pitchMultiplier
+            val peakFreq = 310.0 * pitchMultiplier
+            val rng = Random(System.nanoTime())
+
+            var phaseMain = 0.0
+            var phaseSub = 0.0
+            var phaseHarm = 0.0
+            var lpNoise = 0.0
+
+            for (i in 0 until numSamples) {
+                val progress = i.toDouble() / numSamples
+                val t = i.toDouble() / sampleRate
+
+                // Frequency sweep: fast upward surge in first 35%, resonant power hum decay after
+                val sweepFrac = if (progress < 0.35) {
+                    progress / 0.35
+                } else {
+                    1.0 - (progress - 0.35) * 0.45
+                }
+                // Rapid Dragon Ball vibrato warble (28 Hz)
+                val vibrato = sin(2.0 * PI * 28.0 * t) * 18.0 * pitchMultiplier
+                val instFreq = startFreq + (peakFreq - startFreq) * sweepFrac + vibrato
+
+                phaseMain += (2.0 * PI * instFreq) / sampleRate
+                phaseSub += (2.0 * PI * (instFreq * 0.5)) / sampleRate
+                phaseHarm += (2.0 * PI * (instFreq * 1.5)) / sampleRate
+
+                // Filtered aura wind/flame roar noise
+                val white = rng.nextDouble() * 2.0 - 1.0
+                val cutoff = (0.18 + 0.25 * sin(progress * PI)).coerceIn(0.05, 0.55)
+                lpNoise += cutoff * (white - lpNoise)
+
+                val env = when {
+                    progress < 0.08 -> progress / 0.08
+                    else -> exp(-(progress - 0.08) * 3.4)
+                }
+
+                val kiWave = (
+                    sin(phaseMain) * 0.46 +
+                        sin(phaseSub) * 0.28 +
+                        sin(phaseHarm) * 0.12 +
+                        lpNoise * 0.34
+                    ) * env
+
+                samples[i] = (kiWave.coerceIn(-1.0, 1.0) * Short.MAX_VALUE * 0.82).toInt().toShort()
+            }
+
+            val bufferBytes = numSamples * 2
+            val minBuf = AudioTrack.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            ).coerceAtLeast(bufferBytes)
+
+            val audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_GAME)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(minBuf)
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
+
+            audioTrack.write(samples, 0, samples.size)
+            audioTrack.play()
+            delay((durationSec * 1000).toLong() + 60L)
+            runCatching {
+                audioTrack.stop()
+                audioTrack.release()
+            }
+        }
+    }
+}
+
+/**
+ * Draws the double-layered, jagged, flickering Dragon Ball outer energy shell (`Path`)
+ * around the stickman along with upward-rising sketchy wind/ki lines.
+ */
+private fun DrawScope.drawDragonBallEnergyShell(
+    center: Offset,
+    footY: Float,
+    groundY: Float,
+    rankTier: RankTier,
+    time: Float,
+    pulse: Float,
+    flicker: Float,
+    surgeMultiplier: Float
+) {
+    val surgeScale = 1f + (surgeMultiplier - 1f) * 0.35f
+    val outerWidth = 58.dp.toPx() * pulse * surgeScale
+    val outerHeight = 76.dp.toPx() * pulse * surgeScale
+    val baseBottomY = max(footY + 6.dp.toPx(), groundY - 4.dp.toPx())
+    val crownTopY = center.y - outerHeight * 0.88f
+
+    // Soft radial core glow behind the energy shell
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                rankTier.primaryColor.copy(alpha = (0.48f * surgeScale).coerceIn(0f, 0.82f)),
+                rankTier.accentColor.copy(alpha = (0.24f * surgeScale).coerceIn(0f, 0.55f)),
+                Color.Transparent
+            ),
+            center = center,
+            radius = outerHeight * 1.15f
+        ),
+        center = center,
+        radius = outerHeight * 1.15f
+    )
+
+    // Helper to build a jagged flame-like Dragon Ball aura shell Path
+    fun buildJaggedKiShell(scaleX: Float, scaleY: Float, phaseShift: Float, spikes: Int): Path {
+        val path = Path()
+        val halfW = outerWidth * scaleX
+        val totalH = (baseBottomY - crownTopY) * scaleY
+        val topY = baseBottomY - totalH
+
+        path.moveTo(center.x - halfW * 0.62f, baseBottomY)
+
+        // Left side jagged upward spikes
+        for (i in 1..spikes) {
+            val frac = i.toFloat() / spikes
+            val y = baseBottomY - totalH * frac
+            val profile = sin(frac * PI).toFloat()
+            val jag = sin(time * 24f + i * 1.7f + phaseShift) * (6.dp.toPx() * surgeScale)
+            val x = center.x - halfW * (0.45f + 0.65f * profile) + jag
+
+            val ctrlY = y + (totalH / spikes) * 0.45f
+            val ctrlX = x - 7.dp.toPx() * (0.6f + flicker * 0.5f)
+            path.quadraticTo(ctrlX, ctrlY, x, y)
+        }
+
+        // Sharp flickering apex crown
+        val apexX = center.x + sin(time * 30f + phaseShift) * 5.dp.toPx()
+        val apexY = topY - (8.dp.toPx() * (0.7f + flicker * 0.6f) * surgeScale)
+        path.lineTo(apexX, apexY)
+
+        // Right side jagged downward spikes
+        for (i in spikes downTo 1) {
+            val frac = i.toFloat() / spikes
+            val y = baseBottomY - totalH * frac
+            val profile = sin(frac * PI).toFloat()
+            val jag = cos(time * 24f + i * 1.9f + phaseShift) * (6.dp.toPx() * surgeScale)
+            val x = center.x + halfW * (0.45f + 0.65f * profile) + jag
+
+            val ctrlY = y - (totalH / spikes) * 0.35f
+            val ctrlX = x + 7.dp.toPx() * (0.6f + flicker * 0.5f)
+            path.quadraticTo(ctrlX, ctrlY, x, y)
+        }
+
+        path.lineTo(center.x + halfW * 0.62f, baseBottomY)
+        path.close()
+        return path
+    }
+
+    val outerShellPath = buildJaggedKiShell(scaleX = 1.05f, scaleY = 1.04f, phaseShift = 0f, spikes = 7)
+    val innerShellPath = buildJaggedKiShell(scaleX = 0.74f, scaleY = 0.82f, phaseShift = 1.6f, spikes = 6)
+
+    // Layer 1: Outer jagged aura fill & sketchy border
+    drawPath(
+        path = outerShellPath,
+        brush = Brush.verticalGradient(
+            colors = listOf(
+                rankTier.accentColor.copy(alpha = 0.30f),
+                rankTier.primaryColor.copy(alpha = 0.46f),
+                rankTier.accentColor.copy(alpha = 0.22f)
+            ),
+            startY = crownTopY,
+            endY = baseBottomY
+        )
+    )
+    drawPath(
+        path = outerShellPath,
+        color = rankTier.accentColor.copy(alpha = 0.82f),
+        style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+    drawPath(
+        path = outerShellPath,
+        color = DoodleColors.InkBlack.copy(alpha = 0.55f),
+        style = Stroke(width = 1.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+
+    // Layer 2: Inner intense core aura shell
+    drawPath(
+        path = innerShellPath,
+        brush = Brush.verticalGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.58f),
+                rankTier.primaryColor.copy(alpha = 0.55f),
+                Color.White.copy(alpha = 0.32f)
+            ),
+            startY = crownTopY,
+            endY = baseBottomY
+        )
+    )
+    drawPath(
+        path = innerShellPath,
+        color = rankTier.primaryColor.copy(alpha = 0.92f),
+        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
+
+    // Upward-rising sketchy wind / ki lines around the stickman
+    val windLineCount = if (surgeMultiplier > 1.2f) 14 else 9
+    for (i in 0 until windLineCount) {
+        val side = if (i % 2 == 0) -1f else 1f
+        val lane = (i / 2) + 1
+        val xSpread = (16.dp.toPx() + lane * 11.dp.toPx()) * side +
+            sin(time * 9f + i) * 3.dp.toPx()
+        val cycle = ((time * (2.4f + (i % 3) * 0.45f) + i * 0.21f) % 1f)
+        val startY = baseBottomY - cycle * (outerHeight * 1.28f)
+        val lineLen = (14.dp.toPx() + (i % 3) * 6.dp.toPx()) * surgeScale
+        val alpha = sin(cycle * PI).toFloat().coerceIn(0f, 1f) * 0.78f
+
+        drawLine(
+            color = if (i % 3 == 0) DoodleColors.InkBlack.copy(alpha = alpha * 0.55f) else rankTier.accentColor.copy(alpha = alpha),
+            start = Offset(center.x + xSpread, startY),
+            end = Offset(center.x + xSpread * 0.94f, startY - lineLen),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+/**
+ * Draws the horizontal ground line, stage-specific ground shadow, levitating pebbles (Tiers 6–12),
+ * and rhythmic downward shockwave rings (Tiers 13–20).
+ */
+private fun DrawScope.drawHomeGroundAndStageEffects(
+    currentTier: Int,
+    rankTier: RankTier,
+    centerX: Float,
+    groundY: Float,
+    hoverOffsetPx: Float,
+    time: Float,
+    surgeMultiplier: Float
+) {
+    val w = size.width
+    val lineMargin = w * 0.08f
+
+    // Sketchy double-stroked horizontal ground line
+    drawLine(
+        color = DoodleColors.InkBlack,
+        start = Offset(lineMargin, groundY),
+        end = Offset(w - lineMargin, groundY),
+        strokeWidth = 3.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = DoodleColors.InkBlack.copy(alpha = 0.45f),
+        start = Offset(lineMargin + 8.dp.toPx(), groundY + 3.dp.toPx()),
+        end = Offset(w - lineMargin - 6.dp.toPx(), groundY + 2.dp.toPx()),
+        strokeWidth = 1.4.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+
+    // Hand-drawn ground hatching ticks under the line
+    val tickCount = 14
+    val span = w - lineMargin * 2f
+    for (i in 0..tickCount) {
+        val tx = lineMargin + (span / tickCount) * i
+        drawLine(
+            color = DoodleColors.InkBlack.copy(alpha = 0.35f),
+            start = Offset(tx, groundY + 1.dp.toPx()),
+            end = Offset(tx - 5.dp.toPx(), groundY + 7.dp.toPx()),
+            strokeWidth = 1.4.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
+
+    // Scaling sketchy oval shadow on the ground line
+    val shadowScale = (1f - (hoverOffsetPx / 95.dp.toPx()).coerceIn(0f, 0.58f)) *
+        (1f + (surgeMultiplier - 1f) * 0.18f)
+    val shadowW = 54.dp.toPx() * shadowScale
+    val shadowH = 10.dp.toPx() * shadowScale
+    drawOval(
+        color = DoodleColors.InkBlack.copy(alpha = 0.22f),
+        topLeft = Offset(centerX - shadowW * 0.5f, groundY - shadowH * 0.5f),
+        size = Size(shadowW, shadowH)
+    )
+    drawOval(
+        color = DoodleColors.InkBlack.copy(alpha = 0.55f),
+        topLeft = Offset(centerX - shadowW * 0.5f, groundY - shadowH * 0.5f),
+        size = Size(shadowW, shadowH),
+        style = Stroke(width = 1.4.dp.toPx())
+    )
+
+    // Tiers 6–12 (Ascendant Hover): Small pebble doodles floating upward off the ground line
+    if (currentTier in 6..20) {
+        val pebbleCount = if (currentTier >= 13) 10 else 7
+        for (i in 0 until pebbleCount) {
+            val side = if (i % 2 == 0) -1f else 1f
+            val dist = 26.dp.toPx() + (i * 11.dp.toPx())
+            val liftProgress = ((time * (0.65f + (i % 3) * 0.22f) + i * 0.17f) % 1f)
+            val px = centerX + side * dist + sin(time * 3f + i) * 3.dp.toPx()
+            val py = groundY - 4.dp.toPx() - liftProgress * 46.dp.toPx()
+            val pRadius = (2.4.dp.toPx() + (i % 3) * 1.1.dp.toPx()) * (1f - liftProgress * 0.35f)
+
+            drawCircle(
+                color = DoodleColors.CrateStone,
+                radius = pRadius,
+                center = Offset(px, py)
+            )
+            drawCircle(
+                color = DoodleColors.InkBlack,
+                radius = pRadius,
+                center = Offset(px, py),
+                style = Stroke(width = 1.3.dp.toPx())
+            )
+        }
+    }
+
+    // Tiers 13–20 (Transcendent Cosmic Float) or active surge: Rhythmic downward shockwave rings rippling across the ground line
+    if (currentTier >= 13 || surgeMultiplier > 1.15f) {
+        val ringCount = 3
+        for (r in 0 until ringCount) {
+            val prog = ((time * 1.35f + r * (1f / ringCount)) % 1f)
+            val ringW = (36.dp.toPx() + prog * 155.dp.toPx()) * (1f + (surgeMultiplier - 1f) * 0.3f)
+            val ringH = (6.dp.toPx() + prog * 18.dp.toPx())
+            val ringAlpha = (1f - prog).coerceIn(0f, 1f) * 0.78f
+
+            drawOval(
+                color = rankTier.accentColor.copy(alpha = ringAlpha),
+                topLeft = Offset(centerX - ringW * 0.5f, groundY - ringH * 0.5f),
+                size = Size(ringW, ringH),
+                style = Stroke(width = 2.2.dp.toPx())
+            )
+            drawOval(
+                color = DoodleColors.InkBlack.copy(alpha = ringAlpha * 0.5f),
+                topLeft = Offset(centerX - ringW * 0.52f, groundY - ringH * 0.52f),
+                size = Size(ringW * 1.04f, ringH * 1.04f),
+                style = Stroke(width = 1.dp.toPx())
+            )
+        }
+    }
+}
+
+/**
+ * Draws the 3-Stage Evolving Dragon Ball Black Doodle Stickman:
+ * - Tiers 1–5 (Lv 1–250 — Grounded Ki Charge): Wide bent knees planted firmly on the horizontal ground line,
+ *   bent elbows with clenched fists at waist level, angled determined eyebrows, and high-frequency body vibration (`sin(time * 35f) * 2f`).
+ * - Tiers 6–12 (Lv 251–600 — Ascendant Hover): Levitating 25.dp above the ground line with smooth hover,
+ *   one knee raised, and energy crackling around the hands.
+ * - Tiers 13–20 (Lv 601–1,000 — Transcendent Cosmic Float): High mid-air levitation (40.dp above the ground line)
+ *   in an omnipotent arms-crossed Zen float pose with glowing eyes.
+ */
+private fun DrawScope.drawEvolvingKiStickman(
+    currentTier: Int,
+    rankTier: RankTier,
+    centerX: Float,
+    footY: Float,
+    time: Float,
+    surgeMultiplier: Float
+) {
+    val strokeW = 3.6.dp.toPx()
+    val headRadius = 13.5.dp.toPx()
+
+    // Stage 1 subtle high-frequency body vibration (`sin(time * 35f) * 2f`), amplified on surge
+    val vibX = if (currentTier in 1..5 || surgeMultiplier > 1.1f) {
+        sin(time * 35f) * 2f * surgeMultiplier
+    } else {
+        sin(time * 12f) * 0.8f
+    }
+
+    val cx = centerX + vibX
+
+    when {
+        currentTier in 1..5 -> {
+            // ====================================================================
+            // STAGE 1: TIERS 1–5 (GROUNDED KI CHARGE — HORSE STANCE & CLENCHED FISTS)
+            // ====================================================================
+            val hipY = footY - 26.dp.toPx()
+            val shoulderY = hipY - 28.dp.toPx()
+            val headCenter = Offset(cx, shoulderY - headRadius - 4.dp.toPx())
+
+            // Wide bent knees planted firmly on the horizontal ground line
+            val leftKnee = Offset(cx - 17.dp.toPx(), hipY + 12.dp.toPx())
+            val leftFoot = Offset(cx - 22.dp.toPx(), footY)
+            val rightKnee = Offset(cx + 17.dp.toPx(), hipY + 12.dp.toPx())
+            val rightFoot = Offset(cx + 22.dp.toPx(), footY)
+
+            // Torso
+            drawLine(
+                color = DoodleColors.InkBlack,
+                start = Offset(cx, shoulderY),
+                end = Offset(cx, hipY),
+                strokeWidth = strokeW,
+                cap = StrokeCap.Round
+            )
+
+            // Left & right bent legs
+            drawLine(DoodleColors.InkBlack, Offset(cx, hipY), leftKnee, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, leftKnee, leftFoot, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, Offset(cx, hipY), rightKnee, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, rightKnee, rightFoot, strokeW, StrokeCap.Round)
+
+            // Bent elbows with clenched fists at waist level
+            val leftElbow = Offset(cx - 21.dp.toPx(), shoulderY + 13.dp.toPx())
+            val leftFist = Offset(cx - 13.dp.toPx(), hipY - 3.dp.toPx())
+            val rightElbow = Offset(cx + 21.dp.toPx(), shoulderY + 13.dp.toPx())
+            val rightFist = Offset(cx + 13.dp.toPx(), hipY - 3.dp.toPx())
+
+            drawLine(DoodleColors.InkBlack, Offset(cx, shoulderY + 3.dp.toPx()), leftElbow, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, leftElbow, leftFist, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, Offset(cx, shoulderY + 3.dp.toPx()), rightElbow, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, rightElbow, rightFist, strokeW, StrokeCap.Round)
+
+            // Clenched fists with glowing ki aura knuckles
+            listOf(leftFist, rightFist).forEach { fist ->
+                drawCircle(
+                    color = rankTier.primaryColor.copy(alpha = 0.78f),
+                    radius = 6.2.dp.toPx() * (1f + (surgeMultiplier - 1f) * 0.3f),
+                    center = fist
+                )
+                drawCircle(
+                    color = DoodleColors.InkBlack,
+                    radius = 4.2.dp.toPx(),
+                    center = fist
+                )
+            }
+
+            // Doodle Head (off-white fill + black ink outline)
+            drawCircle(color = DoodleColors.PaperOffWhite, radius = headRadius, center = headCenter)
+            drawCircle(
+                color = DoodleColors.InkBlack,
+                radius = headRadius,
+                center = headCenter,
+                style = Stroke(width = strokeW)
+            )
+
+            // Angled determined eyebrows & gritted charging mouth
+            val eyeY = headCenter.y - 1.dp.toPx()
+            drawCircle(DoodleColors.InkBlack, radius = 2.1.dp.toPx(), center = Offset(headCenter.x - 4.5.dp.toPx(), eyeY))
+            drawCircle(DoodleColors.InkBlack, radius = 2.1.dp.toPx(), center = Offset(headCenter.x + 4.5.dp.toPx(), eyeY))
+
+            // Sharp angled determined eyebrows
+            drawLine(
+                color = DoodleColors.InkBlack,
+                start = Offset(headCenter.x - 8.dp.toPx(), eyeY - 4.5.dp.toPx()),
+                end = Offset(headCenter.x - 1.8.dp.toPx(), eyeY - 1.8.dp.toPx()),
+                strokeWidth = 2.2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = DoodleColors.InkBlack,
+                start = Offset(headCenter.x + 8.dp.toPx(), eyeY - 4.5.dp.toPx()),
+                end = Offset(headCenter.x + 1.8.dp.toPx(), eyeY - 1.8.dp.toPx()),
+                strokeWidth = 2.2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+
+            // Fierce charging mouth line
+            drawLine(
+                color = DoodleColors.InkBlack,
+                start = Offset(headCenter.x - 4.dp.toPx(), headCenter.y + 5.5.dp.toPx()),
+                end = Offset(headCenter.x + 4.dp.toPx(), headCenter.y + 4.8.dp.toPx()),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        }
+
+        currentTier in 6..12 -> {
+            // ====================================================================
+            // STAGE 2: TIERS 6–12 (ASCENDANT HOVER — ONE KNEE RAISED & HAND CRACKLE)
+            // ====================================================================
+            val hipY = footY - 30.dp.toPx()
+            val shoulderY = hipY - 28.dp.toPx()
+            val headCenter = Offset(cx, shoulderY - headRadius - 4.dp.toPx())
+
+            // Torso
+            drawLine(DoodleColors.InkBlack, Offset(cx, shoulderY), Offset(cx, hipY), strokeW, StrokeCap.Round)
+
+            // Left leg extended downward, Right knee raised in ascendant martial hover
+            val leftKnee = Offset(cx - 10.dp.toPx(), hipY + 15.dp.toPx())
+            val leftFoot = Offset(cx - 13.dp.toPx(), footY)
+            val rightKnee = Offset(cx + 15.dp.toPx(), hipY + 3.dp.toPx())
+            val rightFoot = Offset(cx + 9.dp.toPx(), hipY + 16.dp.toPx())
+
+            drawLine(DoodleColors.InkBlack, Offset(cx, hipY), leftKnee, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, leftKnee, leftFoot, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, Offset(cx, hipY), rightKnee, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, rightKnee, rightFoot, strokeW, StrokeCap.Round)
+
+            // Outstretched energy-channeling arms
+            val leftElbow = Offset(cx - 19.dp.toPx(), shoulderY + 10.dp.toPx())
+            val leftHand = Offset(cx - 26.dp.toPx(), shoulderY + 2.dp.toPx())
+            val rightElbow = Offset(cx + 19.dp.toPx(), shoulderY + 10.dp.toPx())
+            val rightHand = Offset(cx + 26.dp.toPx(), shoulderY + 2.dp.toPx())
+
+            drawLine(DoodleColors.InkBlack, Offset(cx, shoulderY + 3.dp.toPx()), leftElbow, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, leftElbow, leftHand, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, Offset(cx, shoulderY + 3.dp.toPx()), rightElbow, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, rightElbow, rightHand, strokeW, StrokeCap.Round)
+
+            // Energy crackling around both hands
+            listOf(leftHand, rightHand).forEachIndexed { idx, hand ->
+                val orbR = (6.5.dp.toPx() + sin(time * 16f + idx) * 2.dp.toPx()) * surgeMultiplier.coerceAtMost(1.8f)
+                drawCircle(
+                    color = rankTier.primaryColor.copy(alpha = 0.75f),
+                    radius = orbR,
+                    center = hand
+                )
+                drawCircle(
+                    color = rankTier.accentColor,
+                    radius = orbR * 0.65f,
+                    center = hand,
+                    style = Stroke(width = 1.6.dp.toPx())
+                )
+                // Mini lightning arcs crackling around the hand
+                for (arc in 0..2) {
+                    val a = time * 14f + arc * 2.1f + idx
+                    val p1 = Offset(hand.x + cos(a) * orbR * 0.5f, hand.y + sin(a) * orbR * 0.5f)
+                    val p2 = Offset(hand.x + cos(a + 0.4f) * orbR * 1.45f, hand.y + sin(a + 0.4f) * orbR * 1.45f)
+                    drawLine(
+                        color = rankTier.accentColor,
+                        start = p1,
+                        end = p2,
+                        strokeWidth = 1.6.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+                drawCircle(DoodleColors.InkBlack, radius = 3.8.dp.toPx(), center = hand)
+            }
+
+            // Doodle Head
+            drawCircle(color = DoodleColors.PaperOffWhite, radius = headRadius, center = headCenter)
+            drawCircle(
+                color = DoodleColors.InkBlack,
+                radius = headRadius,
+                center = headCenter,
+                style = Stroke(width = strokeW)
+            )
+
+            // Confident ascendant eyes & eyebrows
+            val eyeY = headCenter.y - 1.dp.toPx()
+            drawCircle(rankTier.accentColor, radius = 2.8.dp.toPx(), center = Offset(headCenter.x - 4.5.dp.toPx(), eyeY))
+            drawCircle(rankTier.accentColor, radius = 2.8.dp.toPx(), center = Offset(headCenter.x + 4.5.dp.toPx(), eyeY))
+            drawCircle(DoodleColors.InkBlack, radius = 1.6.dp.toPx(), center = Offset(headCenter.x - 4.5.dp.toPx(), eyeY))
+            drawCircle(DoodleColors.InkBlack, radius = 1.6.dp.toPx(), center = Offset(headCenter.x + 4.5.dp.toPx(), eyeY))
+
+            drawLine(
+                color = DoodleColors.InkBlack,
+                start = Offset(headCenter.x - 8.dp.toPx(), eyeY - 4.5.dp.toPx()),
+                end = Offset(headCenter.x - 2.dp.toPx(), eyeY - 2.dp.toPx()),
+                strokeWidth = 2.2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = DoodleColors.InkBlack,
+                start = Offset(headCenter.x + 8.dp.toPx(), eyeY - 4.5.dp.toPx()),
+                end = Offset(headCenter.x + 2.dp.toPx(), eyeY - 2.dp.toPx()),
+                strokeWidth = 2.2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        }
+
+        else -> {
+            // ====================================================================
+            // STAGE 3: TIERS 13–20 (TRANSCENDENT COSMIC FLOAT — OMNIPOTENT ARMS-CROSSED ZEN POSE & GLOWING EYES)
+            // ====================================================================
+            val hipY = footY - 26.dp.toPx()
+            val shoulderY = hipY - 28.dp.toPx()
+            val headCenter = Offset(cx, shoulderY - headRadius - 5.dp.toPx())
+
+            // Cosmic Halo Ring behind head
+            drawCircle(
+                color = rankTier.primaryColor.copy(alpha = 0.85f),
+                radius = headRadius * 1.55f,
+                center = headCenter,
+                style = Stroke(width = 2.4.dp.toPx())
+            )
+
+            // Torso
+            drawLine(DoodleColors.InkBlack, Offset(cx, shoulderY), Offset(cx, hipY), strokeW, StrokeCap.Round)
+
+            // Zen lotus / transcendent float legs
+            val leftKnee = Offset(cx - 18.dp.toPx(), hipY + 9.dp.toPx())
+            val rightKnee = Offset(cx + 18.dp.toPx(), hipY + 9.dp.toPx())
+            val leftFoot = Offset(cx + 4.dp.toPx(), hipY + 15.dp.toPx())
+            val rightFoot = Offset(cx - 4.dp.toPx(), hipY + 15.dp.toPx())
+
+            drawLine(DoodleColors.InkBlack, Offset(cx, hipY), leftKnee, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, leftKnee, leftFoot, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, Offset(cx, hipY), rightKnee, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, rightKnee, rightFoot, strokeW, StrokeCap.Round)
+
+            // Omnipotent arms-crossed pose across the chest
+            val leftElbow = Offset(cx - 16.dp.toPx(), shoulderY + 11.dp.toPx())
+            val rightElbow = Offset(cx + 16.dp.toPx(), shoulderY + 11.dp.toPx())
+            val rightShoulderCross = Offset(cx + 8.dp.toPx(), shoulderY + 9.dp.toPx())
+            val leftShoulderCross = Offset(cx - 8.dp.toPx(), shoulderY + 9.dp.toPx())
+
+            drawLine(DoodleColors.InkBlack, Offset(cx - 4.dp.toPx(), shoulderY + 2.dp.toPx()), leftElbow, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, leftElbow, rightShoulderCross, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, Offset(cx + 4.dp.toPx(), shoulderY + 2.dp.toPx()), rightElbow, strokeW, StrokeCap.Round)
+            drawLine(DoodleColors.InkBlack, rightElbow, leftShoulderCross, strokeW, StrokeCap.Round)
+
+            // Doodle Head
+            drawCircle(color = DoodleColors.PaperOffWhite, radius = headRadius, center = headCenter)
+            drawCircle(
+                color = DoodleColors.InkBlack,
+                radius = headRadius,
+                center = headCenter,
+                style = Stroke(width = strokeW)
+            )
+
+            // Radiant Glowing Cosmic Eyes with horizontal & vertical star flares
+            val eyeY = headCenter.y - 0.5.dp.toPx()
+            val leftEye = Offset(headCenter.x - 4.8.dp.toPx(), eyeY)
+            val rightEye = Offset(headCenter.x + 4.8.dp.toPx(), eyeY)
+            val flareLen = (7.dp.toPx() + sin(time * 18f) * 2.5.dp.toPx()) * surgeMultiplier.coerceAtMost(1.9f)
+
+            listOf(leftEye, rightEye).forEach { eye ->
+                drawCircle(
+                    color = rankTier.primaryColor,
+                    radius = 4.2.dp.toPx(),
+                    center = eye
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 2.2.dp.toPx(),
+                    center = eye
+                )
+                drawLine(
+                    color = rankTier.accentColor,
+                    start = Offset(eye.x - flareLen, eye.y),
+                    end = Offset(eye.x + flareLen, eye.y),
+                    strokeWidth = 1.8.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = rankTier.primaryColor,
+                    start = Offset(eye.x, eye.y - flareLen * 0.7f),
+                    end = Offset(eye.x, eye.y + flareLen * 0.7f),
+                    strokeWidth = 1.5.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Renders the Stickman's synchronized 20-Tier Aura on the Home Screen Canvas so it matches
+ * the exact visual theme and color palette of the player's Tier Progress Card (Tiers 1 to 20).
+ */
+private fun DrawScope.drawStickmanTierAura(
+    currentTier: Int,
+    rankTier: RankTier,
+    center: Offset,
+    groundY: Float,
+    time: Float,
+    phase: Float,
+    pulse: Float,
+    surgeMultiplier: Float
+) {
+    val w = size.width
+    val h = size.height
+    val scale = pulse * (1f + (surgeMultiplier - 1f) * 0.28f)
+    val baseRadius = min(w, h) * 0.34f * scale
+
+    when (currentTier) {
+        1 -> {
+            // Tier 1 (Lv 1–50): Soft pale-yellow hatching lines & subtle golden ki pulse
+            drawCircle(
+                color = rankTier.primaryColor.copy(alpha = 0.34f),
+                radius = baseRadius * 1.1f,
+                center = center
+            )
+            val hatchCount = 12
+            for (i in -hatchCount..hatchCount) {
+                val offset = i * 9.dp.toPx() + sin(time * 3f + i) * 3.dp.toPx()
+                drawLine(
+                    color = rankTier.accentColor.copy(alpha = 0.48f),
+                    start = Offset(center.x + offset - 28.dp.toPx(), center.y + 48.dp.toPx()),
+                    end = Offset(center.x + offset + 28.dp.toPx(), center.y - 48.dp.toPx()),
+                    strokeWidth = 2.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
+            for (s in 0..4) {
+                val ang = phase + s * 1.25f
+                val r = baseRadius * (0.65f + (s % 2) * 0.25f)
+                drawDoodleSparkleStar(
+                    center = Offset(center.x + cos(ang) * r, center.y + sin(ang) * r),
+                    radius = 5.dp.toPx() * pulse,
+                    color = rankTier.accentColor,
+                    rotationRad = ang
+                )
+            }
+        }
+
+        2 -> {
+            // Tier 2 (Lv 51–100): Gentle flowing blue ink-splash rings
+            for (i in 0..4) {
+                val ringProg = ((time * 0.55f + i * 0.2f) % 1f)
+                val r = baseRadius * (0.35f + ringProg * 0.95f)
+                val alpha = (1f - ringProg).coerceIn(0.15f, 0.75f)
+                drawCircle(
+                    color = rankTier.primaryColor.copy(alpha = alpha),
+                    radius = r,
+                    center = center,
+                    style = Stroke(width = 3.dp.toPx())
+                )
+                val dropAng = phase * 1.6f + i * 1.3f
+                drawCircle(
+                    color = rankTier.accentColor.copy(alpha = 0.78f),
+                    radius = 4.2.dp.toPx() * pulse,
+                    center = Offset(center.x + cos(dropAng) * r, center.y + sin(dropAng) * r)
+                )
+            }
+        }
+
+        3 -> {
+            // Tier 3 (Lv 101–150): Rotating green sketchy cross-hatch starburst rays
+            val rayCount = 18
+            for (i in 0 until rayCount) {
+                val ang = phase * 1.2f + (i * 2.0 * PI / rayCount).toFloat()
+                val innerR = baseRadius * 0.28f
+                val outerR = baseRadius * (if (i % 2 == 0) 1.22f else 0.86f)
+                drawLine(
+                    color = if (i % 2 == 0) rankTier.accentColor.copy(alpha = 0.65f) else rankTier.primaryColor.copy(alpha = 0.75f),
+                    start = Offset(center.x + cos(ang) * innerR, center.y + sin(ang) * innerR),
+                    end = Offset(center.x + cos(ang) * outerR, center.y + sin(ang) * outerR),
+                    strokeWidth = 2.4.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+
+        4 -> {
+            // Tier 4 (Lv 151–200): Shimmering purple geometric coordinate grid pulse
+            val gridHalf = baseRadius * 1.15f
+            val step = 16.dp.toPx()
+            val shift = (time * 18f) % step
+            var d = -gridHalf + shift
+            while (d <= gridHalf) {
+                drawLine(
+                    color = rankTier.primaryColor.copy(alpha = 0.50f),
+                    start = Offset(center.x + d, center.y - gridHalf),
+                    end = Offset(center.x + d, center.y + gridHalf),
+                    strokeWidth = 1.6.dp.toPx()
+                )
+                drawLine(
+                    color = rankTier.accentColor.copy(alpha = 0.42f),
+                    start = Offset(center.x - gridHalf, center.y + d),
+                    end = Offset(center.x + gridHalf, center.y + d),
+                    strokeWidth = 1.6.dp.toPx()
+                )
+                d += step
+            }
+            for (k in 0..5) {
+                val a = phase + k * 1.05f
+                drawDoodleSparkleStar(
+                    center = Offset(center.x + cos(a) * baseRadius * 0.85f, center.y + sin(a) * baseRadius * 0.85f),
+                    radius = 5.5.dp.toPx() * pulse,
+                    color = rankTier.accentColor,
+                    rotationRad = -a
+                )
+            }
+        }
+
+        5 -> {
+            // Tier 5 (Lv 201–250): Radiant golden flame aura with floating doodle sparks
+            val flameCount = 12
+            for (i in 0 until flameCount) {
+                val baseX = center.x + (i - flameCount / 2f + 0.5f) * 14.dp.toPx()
+                val flameH = (32.dp.toPx() + abs(sin(time * 4f + i * 0.8f)) * 42.dp.toPx()) * scale
+                val tipX = baseX + sin(time * 5f + i) * 7.dp.toPx()
+                val path = Path().apply {
+                    moveTo(baseX - 9.dp.toPx(), groundY)
+                    quadraticTo(baseX - 4.dp.toPx(), groundY - flameH * 0.6f, tipX, groundY - flameH)
+                    quadraticTo(baseX + 4.dp.toPx(), groundY - flameH * 0.6f, baseX + 9.dp.toPx(), groundY)
+                    close()
+                }
+                drawPath(
+                    path = path,
+                    color = if (i % 2 == 0) rankTier.primaryColor.copy(alpha = 0.52f) else rankTier.accentColor.copy(alpha = 0.42f)
+                )
+            }
+            for (s in 0..9) {
+                val lift = ((time * 0.85f + s * 0.11f) % 1f)
+                val sx = center.x + sin(time * 2.5f + s * 1.7f) * (baseRadius * 0.95f)
+                val sy = groundY - lift * (baseRadius * 2.0f)
+                drawCircle(
+                    color = if (s % 2 == 0) Color(0xFFFFEA00) else Color(0xFFFF6D00),
+                    radius = 3.5.dp.toPx() * (1f - lift * 0.4f),
+                    center = Offset(sx, sy)
+                )
+            }
+        }
+
+        6 -> {
+            // Tier 6 (Lv 251–300): Multi-colored rainbow pulsating aura with crackling lightning doodles
+            val rainbow = listOf(
+                Color(0xFFFF1744),
+                Color(0xFFFF9100),
+                Color(0xFFFFEA00),
+                Color(0xFF00E676),
+                Color(0xFF2979FF),
+                Color(0xFFD500F9)
+            )
+            rainbow.forEachIndexed { idx, col ->
+                val r = baseRadius * (0.48f + idx * 0.12f)
+                drawCircle(
+                    color = col.copy(alpha = 0.52f),
+                    radius = r,
+                    center = center,
+                    style = Stroke(width = 3.2.dp.toPx())
+                )
+            }
+            // Crackling lightning bolts
+            for (b in 0..5) {
+                val ang = phase * 2f + b * (PI / 3.0).toFloat()
+                val r1 = baseRadius * 0.35f
+                val r2 = baseRadius * 0.75f
+                val r3 = baseRadius * 1.18f
+                val bolt = Path().apply {
+                    moveTo(center.x + cos(ang) * r1, center.y + sin(ang) * r1)
+                    lineTo(center.x + cos(ang + 0.18f) * r2, center.y + sin(ang + 0.18f) * r2)
+                    lineTo(center.x + cos(ang - 0.12f) * r3, center.y + sin(ang - 0.12f) * r3)
+                }
+                drawPath(
+                    path = bolt,
+                    color = Color(0xFFFFEA00),
+                    style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
+        }
+
+        7 -> {
+            // Tier 7 (Lv 301–350): Matrix green code-doodle grid raining down
+            val cols = 10
+            for (c in 0 until cols) {
+                val colX = center.x + (c - cols / 2f + 0.5f) * 18.dp.toPx()
+                val dropProg = ((time * (0.75f + (c % 3) * 0.25f) + c * 0.14f) % 1f)
+                val headY = (center.y - baseRadius * 1.15f) + dropProg * (baseRadius * 2.2f)
+                val tailTop = (headY - 28.dp.toPx()).coerceAtLeast(center.y - baseRadius * 1.2f)
+                drawLine(
+                    color = rankTier.accentColor.copy(alpha = 0.72f),
+                    start = Offset(colX, tailTop),
+                    end = Offset(colX, headY),
+                    strokeWidth = 3.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 2.8.dp.toPx(),
+                    center = Offset(colX, headY)
+                )
+            }
+        }
+
+        8 -> {
+            // Tier 8 (Lv 351–400): Orbiting mini planet doodles and twinkling star crosshairs
+            drawCircle(
+                color = rankTier.primaryColor.copy(alpha = 0.45f),
+                radius = baseRadius * 0.95f,
+                center = center,
+                style = Stroke(width = 1.8.dp.toPx())
+            )
+            for (p in 0..4) {
+                val ang = phase * (1.1f + p * 0.15f) + p * 1.25f
+                val orbitR = baseRadius * (0.55f + (p % 2) * 0.42f)
+                val px = center.x + cos(ang) * orbitR
+                val py = center.y + sin(ang) * (orbitR * 0.68f)
+                val pRad = (5.dp.toPx() + (p % 2) * 2.2.dp.toPx()) * pulse
+                drawCircle(color = rankTier.primaryColor, radius = pRad, center = Offset(px, py))
+                drawCircle(color = DoodleColors.InkBlack, radius = pRad, center = Offset(px, py), style = Stroke(width = 1.4.dp.toPx()))
+                // Planet ring
+                drawOval(
+                    color = rankTier.accentColor,
+                    topLeft = Offset(px - pRad * 1.7f, py - pRad * 0.5f),
+                    size = Size(pRad * 3.4f, pRad),
+                    style = Stroke(width = 1.5.dp.toPx())
+                )
+            }
+        }
+
+        9 -> {
+            // Tier 9 (Lv 401–450): Pulsing sketchy ink atomic electron rings
+            for (ring in 0..2) {
+                val tilt = ring * 60f + time * 25f
+                rotate(degrees = tilt, pivot = center) {
+                    val rx = baseRadius * 1.15f
+                    val ry = baseRadius * 0.42f
+                    drawOval(
+                        color = rankTier.accentColor.copy(alpha = 0.68f),
+                        topLeft = Offset(center.x - rx, center.y - ry),
+                        size = Size(rx * 2f, ry * 2f),
+                        style = Stroke(width = 2.2.dp.toPx())
+                    )
+                    val eAng = phase * 2.2f + ring * 2f
+                    val ex = center.x + cos(eAng) * rx
+                    val ey = center.y + sin(eAng) * ry
+                    drawCircle(color = rankTier.primaryColor, radius = 5.dp.toPx(), center = Offset(ex, ey))
+                    drawCircle(color = DoodleColors.InkBlack, radius = 5.dp.toPx(), center = Offset(ex, ey), style = Stroke(width = 1.4.dp.toPx()))
+                }
+            }
+        }
+
+        10 -> {
+            // Tier 10 (Lv 451–500): Shimmering spiral galaxy sketch rotating infinitely
+            val arms = 3
+            for (arm in 0 until arms) {
+                val path = Path()
+                val steps = 28
+                for (s in 0..steps) {
+                    val frac = s.toFloat() / steps
+                    val r = frac * baseRadius * 1.2f
+                    val ang = phase * 1.5f + arm * (2.0 * PI / arms).toFloat() + frac * 4.2f
+                    val px = center.x + cos(ang) * r
+                    val py = center.y + sin(ang) * r * 0.78f
+                    if (s == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                drawPath(
+                    path = path,
+                    color = rankTier.accentColor.copy(alpha = 0.65f),
+                    style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
+        }
+
+        11 -> {
+            // Tier 11 (Lv 501–550): Glowing constellation connecting-line star maps
+            val pts = (0..7).map { idx ->
+                val ang = phase * 0.55f + idx * (2.0 * PI / 8.0).toFloat()
+                val r = baseRadius * (if (idx % 2 == 0) 1.08f else 0.72f)
+                Offset(center.x + cos(ang) * r, center.y + sin(ang) * r)
+            }
+            for (i in pts.indices) {
+                val next = pts[(i + 1) % pts.size]
+                drawLine(
+                    color = rankTier.accentColor.copy(alpha = 0.58f),
+                    start = pts[i],
+                    end = next,
+                    strokeWidth = 1.8.dp.toPx()
+                )
+                drawDoodleSparkleStar(
+                    center = pts[i],
+                    radius = 5.5.dp.toPx() * pulse,
+                    color = rankTier.primaryColor,
+                    rotationRad = phase + i
+                )
+            }
+        }
+
+        12 -> {
+            // Tier 12 (Lv 551–600): Swirling purple and magenta cosmic dust clouds
+            for (cloud in 0..7) {
+                val ang = phase * 0.9f + cloud * (2.0 * PI / 8.0).toFloat()
+                val dist = baseRadius * (0.55f + 0.35f * sin(time * 2f + cloud))
+                val cxCloud = center.x + cos(ang) * dist
+                val cyCloud = center.y + sin(ang) * dist * 0.8f
+                drawCircle(
+                    color = if (cloud % 2 == 0) rankTier.primaryColor.copy(alpha = 0.42f) else rankTier.accentColor.copy(alpha = 0.35f),
+                    radius = 20.dp.toPx() * pulse,
+                    center = Offset(cxCloud, cyCloud)
+                )
+                drawCircle(
+                    color = rankTier.accentColor.copy(alpha = 0.6f),
+                    radius = 20.dp.toPx() * pulse,
+                    center = Offset(cxCloud, cyCloud),
+                    style = Stroke(width = 1.5.dp.toPx())
+                )
+            }
+        }
+
+        13 -> {
+            // Tier 13 (Lv 601–650): Spiraling blackhole doodle ring pulling ink particles inward
+            drawCircle(
+                color = rankTier.accentColor.copy(alpha = 0.75f),
+                radius = baseRadius * 0.52f,
+                center = center,
+                style = Stroke(width = 4.dp.toPx())
+            )
+            for (p in 0..11) {
+                val inwardProg = 1f - ((time * 0.75f + p * 0.083f) % 1f)
+                val r = baseRadius * (0.25f + inwardProg * 0.95f)
+                val ang = phase * 2.4f + p * 0.6f + (1f - inwardProg) * 3.5f
+                val px = center.x + cos(ang) * r
+                val py = center.y + sin(ang) * r
+                drawCircle(
+                    color = DoodleColors.InkBlack.copy(alpha = 0.75f),
+                    radius = 3.2.dp.toPx() * (0.5f + inwardProg * 0.7f),
+                    center = Offset(px, py)
+                )
+            }
+        }
+
+        14 -> {
+            // Tier 14 (Lv 651–700): Exploding orange and yellow radiant starburst shockwaves
+            val spikes = 20
+            val burstPath = Path()
+            for (i in 0 until spikes) {
+                val ang = phase * 1.4f + (i * 2.0 * PI / spikes).toFloat()
+                val r = baseRadius * (if (i % 2 == 0) 1.25f else 0.62f)
+                val px = center.x + cos(ang) * r
+                val py = center.y + sin(ang) * r
+                if (i == 0) burstPath.moveTo(px, py) else burstPath.lineTo(px, py)
+            }
+            burstPath.close()
+            drawPath(path = burstPath, color = rankTier.primaryColor.copy(alpha = 0.38f))
+            drawPath(
+                path = burstPath,
+                color = rankTier.accentColor.copy(alpha = 0.82f),
+                style = Stroke(width = 2.4.dp.toPx(), join = StrokeJoin.Round)
+            )
+        }
+
+        15 -> {
+            // Tier 15 (Lv 701–750): Ticking clock gear teeth and swinging pendulum sketches
+            val gearR = baseRadius * 0.92f
+            drawCircle(
+                color = rankTier.accentColor.copy(alpha = 0.68f),
+                radius = gearR,
+                center = center,
+                style = Stroke(width = 3.dp.toPx())
+            )
+            val teeth = 12
+            val discreteStep = ((time * 4f).toInt() * (PI / 12.0)).toFloat()
+            for (t in 0 until teeth) {
+                val ang = discreteStep + (t * 2.0 * PI / teeth).toFloat()
+                drawLine(
+                    color = rankTier.accentColor,
+                    start = Offset(center.x + cos(ang) * (gearR - 4.dp.toPx()), center.y + sin(ang) * (gearR - 4.dp.toPx())),
+                    end = Offset(center.x + cos(ang) * (gearR + 9.dp.toPx()), center.y + sin(ang) * (gearR + 9.dp.toPx())),
+                    strokeWidth = 4.dp.toPx(),
+                    cap = StrokeCap.Square
+                )
+            }
+            // Swinging pendulum sketch
+            val pendAng = (PI / 2.0 + sin(time * 3.5f) * 0.48f).toFloat()
+            val bobCenter = Offset(center.x + cos(pendAng) * gearR * 0.85f, center.y + sin(pendAng) * gearR * 0.85f)
+            drawLine(DoodleColors.InkBlack, center, bobCenter, strokeWidth = 2.dp.toPx())
+            drawCircle(rankTier.primaryColor, radius = 7.dp.toPx(), center = bobCenter)
+            drawCircle(DoodleColors.InkBlack, radius = 7.dp.toPx(), center = bobCenter, style = Stroke(width = 1.6.dp.toPx()))
+        }
+
+        16 -> {
+            // Tier 16 (Lv 751–800): Shimmering ghostly blue ethereal flame wisps
+            for (wisp in 0..7) {
+                val ang = phase + wisp * (2.0 * PI / 8.0).toFloat()
+                val orbitR = baseRadius * 0.82f
+                val wx = center.x + cos(ang) * orbitR
+                val wy = center.y + sin(ang * 1.5f) * (orbitR * 0.7f)
+                val wispPath = Path().apply {
+                    moveTo(wx - 6.dp.toPx(), wy + 8.dp.toPx())
+                    quadraticTo(wx - 8.dp.toPx(), wy - 6.dp.toPx(), wx + sin(time * 6f + wisp) * 4.dp.toPx(), wy - 16.dp.toPx())
+                    quadraticTo(wx + 8.dp.toPx(), wy - 6.dp.toPx(), wx + 6.dp.toPx(), wy + 8.dp.toPx())
+                    close()
+                }
+                drawPath(path = wispPath, color = rankTier.primaryColor.copy(alpha = 0.68f))
+                drawPath(path = wispPath, color = rankTier.accentColor, style = Stroke(width = 1.5.dp.toPx()))
+            }
+        }
+
+        17 -> {
+            // Tier 17 (Lv 801–850): Heavy angular metallic crosshatch sparks and levitating iron shards
+            for (s in 0..7) {
+                val ang = phase * 1.4f + s * (2.0 * PI / 8.0).toFloat()
+                val r = baseRadius * (0.68f + (s % 2) * 0.32f)
+                val sx = center.x + cos(ang) * r
+                val sy = center.y + sin(ang) * r
+                val shard = Path().apply {
+                    moveTo(sx, sy - 8.dp.toPx())
+                    lineTo(sx + 6.dp.toPx(), sy + 4.dp.toPx())
+                    lineTo(sx - 5.dp.toPx(), sy + 7.dp.toPx())
+                    close()
+                }
+                drawPath(path = shard, color = rankTier.primaryColor)
+                drawPath(path = shard, color = rankTier.accentColor, style = Stroke(width = 2.dp.toPx()))
+            }
+        }
+
+        18 -> {
+            // Tier 18 (Lv 851–900): Floating golden ancient runes and mystical sigil doodles
+            val sigilR = baseRadius * 0.98f
+            drawCircle(
+                color = rankTier.accentColor.copy(alpha = 0.72f),
+                radius = sigilR,
+                center = center,
+                style = Stroke(width = 2.2.dp.toPx())
+            )
+            for (r in 0..5) {
+                val ang = phase * 0.9f + r * (PI / 3.0).toFloat()
+                val rx = center.x + cos(ang) * sigilR
+                val ry = center.y + sin(ang) * sigilR
+                drawCircle(color = rankTier.primaryColor, radius = 8.dp.toPx(), center = Offset(rx, ry))
+                drawCircle(color = DoodleColors.InkBlack, radius = 8.dp.toPx(), center = Offset(rx, ry), style = Stroke(width = 1.5.dp.toPx()))
+                // Rune cross-stroke inside sigil node
+                drawLine(
+                    color = rankTier.accentColor,
+                    start = Offset(rx - 4.dp.toPx(), ry - 4.dp.toPx()),
+                    end = Offset(rx + 4.dp.toPx(), ry + 4.dp.toPx()),
+                    strokeWidth = 1.8.dp.toPx()
+                )
+                drawLine(
+                    color = rankTier.accentColor,
+                    start = Offset(rx, ry - 5.dp.toPx()),
+                    end = Offset(rx, ry + 5.dp.toPx()),
+                    strokeWidth = 1.8.dp.toPx()
+                )
+            }
+        }
+
+        19 -> {
+            // Tier 19 (Lv 901–950): Glowing third-eye doodle above the head with floating parchment scrolls
+            val eyeCenter = Offset(center.x, center.y - baseRadius * 0.92f)
+            val eyeW = 28.dp.toPx() * pulse
+            val eyeH = 13.dp.toPx() * pulse
+            val eyePath = Path().apply {
+                moveTo(eyeCenter.x - eyeW, eyeCenter.y)
+                quadraticTo(eyeCenter.x, eyeCenter.y - eyeH, eyeCenter.x + eyeW, eyeCenter.y)
+                quadraticTo(eyeCenter.x, eyeCenter.y + eyeH, eyeCenter.x - eyeW, eyeCenter.y)
+                close()
+            }
+            drawPath(path = eyePath, color = rankTier.primaryColor)
+            drawPath(path = eyePath, color = DoodleColors.InkBlack, style = Stroke(width = 2.dp.toPx()))
+            drawCircle(color = rankTier.accentColor, radius = 5.5.dp.toPx(), center = eyeCenter)
+            drawCircle(color = DoodleColors.InkBlack, radius = 2.5.dp.toPx(), center = eyeCenter)
+
+            // Floating parchment scrolls around stickman
+            for (sc in 0..3) {
+                val ang = phase * 0.8f + sc * (PI / 2.0).toFloat()
+                val sx = center.x + cos(ang) * baseRadius * 0.88f
+                val sy = center.y + sin(ang) * baseRadius * 0.55f
+                drawRoundRect(
+                    color = Color(0xFFFFF8E1),
+                    topLeft = Offset(sx - 9.dp.toPx(), sy - 6.dp.toPx()),
+                    size = Size(18.dp.toPx(), 12.dp.toPx()),
+                    cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                )
+                drawRoundRect(
+                    color = DoodleColors.InkBlack,
+                    topLeft = Offset(sx - 9.dp.toPx(), sy - 6.dp.toPx()),
+                    size = Size(18.dp.toPx(), 12.dp.toPx()),
+                    cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx()),
+                    style = Stroke(width = 1.4.dp.toPx())
+                )
+            }
+        }
+
+        else -> {
+            // Tier 20 (Lv 951–1,000): Ultimate pulsating gold-and-rainbow cosmos aura with shooting stars and divine doodle light rays
+            val divineRays = 16
+            for (i in 0 until divineRays) {
+                val ang = phase * 1.1f + (i * 2.0 * PI / divineRays).toFloat()
+                val rOuter = baseRadius * (if (i % 2 == 0) 1.38f else 0.95f)
+                drawLine(
+                    color = if (i % 2 == 0) Color(0xFFFFD700).copy(alpha = 0.78f) else Color(0xFFD500F9).copy(alpha = 0.62f),
+                    start = center,
+                    end = Offset(center.x + cos(ang) * rOuter, center.y + sin(ang) * rOuter),
+                    strokeWidth = 3.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
+            val rainbow = listOf(
+                Color(0xFFFF1744),
+                Color(0xFFFF9100),
+                Color(0xFFFFEA00),
+                Color(0xFF00E676),
+                Color(0xFF2979FF),
+                Color(0xFFD500F9)
+            )
+            rainbow.forEachIndexed { idx, col ->
+                drawCircle(
+                    color = col.copy(alpha = 0.55f),
+                    radius = baseRadius * (0.45f + idx * 0.13f),
+                    center = center,
+                    style = Stroke(width = 2.6.dp.toPx())
+                )
+            }
+            // Shooting stars streaking across the divine cosmos aura
+            for (st in 0..4) {
+                val ang = phase * 2.2f + st * 1.25f
+                val r = baseRadius * (0.72f + (st % 2) * 0.35f)
+                val starPos = Offset(center.x + cos(ang) * r, center.y + sin(ang) * r)
+                val tailPos = Offset(center.x + cos(ang - 0.35f) * (r * 0.85f), center.y + sin(ang - 0.35f) * (r * 0.85f))
+                drawLine(
+                    color = Color.White.copy(alpha = 0.85f),
+                    start = tailPos,
+                    end = starPos,
+                    strokeWidth = 2.4.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawDoodleSparkleStar(
+                    center = starPos,
+                    radius = 6.5.dp.toPx() * pulse,
+                    color = Color(0xFFFFD700),
+                    rotationRad = ang
                 )
             }
         }
