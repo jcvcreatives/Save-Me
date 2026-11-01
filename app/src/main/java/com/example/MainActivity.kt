@@ -123,8 +123,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.Brush
+import com.example.data.JUNK_TEST_UIDS
 import com.example.data.PlayerAccount
 import com.example.data.PlayerAccountRepository
+import com.example.data.computePasswordHash
 import com.example.ui.RegistrationAuthScreen
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
@@ -1557,6 +1559,71 @@ class WordGameViewModel : ViewModel() {
         }
     }
 
+    private var lastLocalFirestoreWriteMs: Long = 0L
+
+    private fun resetLocalStateToFresh() {
+        isApplyingRemoteSnapshot = true
+        try {
+            coins = 100
+            campaignLevelIndex = 0
+            perfectCount = 0
+            currentStreak = 0
+            maxStreak = 0
+            chestProgress = 0
+            themeProgress = 0
+            freeShieldPotions = 2
+            unlockAllMapLevels = false
+            completedCampaignLevels.clear()
+            levelStarRatings.clear()
+            claimedMilestoneChests.clear()
+            writeLocalStorageOnly()
+        } finally {
+            isApplyingRemoteSnapshot = false
+        }
+    }
+
+    private fun applyRemoteAccountToLocalState(account: PlayerAccount) {
+        isApplyingRemoteSnapshot = true
+        try {
+            cloudAccount = account
+            registeredPlayerUid = account.userId.ifBlank { account.id }
+            val remoteIdx = account.campaignLevelIndex.toInt().coerceIn(0, CAMPAIGN_LEVELS.lastIndex)
+            val remoteCoins = account.coins.toInt().coerceAtLeast(0)
+            val remotePerfect = account.perfectCount.toInt().coerceAtLeast(0)
+            val remoteStreak = account.currentStreak.toInt().coerceAtLeast(0)
+            val remoteMaxStreak = account.maxStreak.toInt().coerceAtLeast(0)
+            val remoteCompletedCount = maxOf(
+                remoteIdx,
+                account.completedLevelsCount.toInt().coerceIn(0, CAMPAIGN_LEVELS.size)
+            )
+
+            campaignLevelIndex = remoteIdx
+            coins = remoteCoins
+            perfectCount = remotePerfect
+            currentStreak = remoteStreak
+            maxStreak = remoteMaxStreak
+            completedCampaignLevels.clear()
+            for (lvl in 1..remoteCompletedCount) {
+                completedCampaignLevels.add(lvl)
+            }
+
+            appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.apply {
+                putString("registeredPlayerUid", account.userId.ifBlank { account.id })
+                putString("registeredPlayerName", account.displayName)
+                if (!account.email.isNullOrBlank()) {
+                    putString("registeredPlayerEmail", account.email)
+                }
+                putString("registeredPlayerMode", account.authMethod)
+                apply()
+            }
+
+            lastCloudSyncEpochMs = System.currentTimeMillis()
+            writeLocalStorageOnly()
+        } finally {
+            isApplyingRemoteSnapshot = false
+        }
+    }
+
     private fun startObservingCloudAccount(user: FirebaseUser) {
         startObservingCloudAccountByUid(
             uid = user.uid,
@@ -1572,92 +1639,54 @@ class WordGameViewModel : ViewModel() {
         fallbackEmail: String?,
         fallbackAuthMethod: String
     ) {
+        if (uid in JUNK_TEST_UIDS) {
+            signOutFirebase()
+            return
+        }
         val repo = playerAccountRepo ?: return
         accountSnapshotJob?.cancel()
         accountSnapshotJob = viewModelScope.launch {
-            // Ensure /players/{userId} exists or is merged immediately when session starts
-            val initRes = repo.createOrSyncPlayerAccount(
-                displayName = fallbackName,
-                email = fallbackEmail,
-                authMethod = fallbackAuthMethod,
-                campaignLevelIndex = campaignLevelIndex,
-                coins = coins,
-                perfectCount = perfectCount,
-                currentStreak = currentStreak,
-                maxStreak = maxStreak,
-                completedLevelsCount = completedCampaignLevels.size,
-                userId = uid
-            )
-            initRes.onSuccess { synced ->
-                cloudAccount = synced
-                lastCloudSyncEpochMs = System.currentTimeMillis()
-                writeLocalStorageOnly()
+            var targetUid = uid
+            val existingRes = repo.getPlayerAccount(targetUid)
+            val existingDirect = existingRes.getOrNull()
+            val canonicalAccount = if (existingDirect != null && !existingDirect.email.isNullOrBlank()) {
+                existingDirect
+            } else {
+                repo.findPlayerAccountByIdentifier(fallbackEmail ?: fallbackName.ifBlank { targetUid }).getOrNull()
+                    ?: existingDirect
             }
 
-            repo.observePlayerAccount(uid)
+            if (canonicalAccount != null) {
+                targetUid = canonicalAccount.userId.ifBlank { canonicalAccount.id }.ifBlank { uid }
+                applyRemoteAccountToLocalState(canonicalAccount)
+            } else {
+                val initRes = repo.createOrSyncPlayerAccount(
+                    displayName = fallbackName,
+                    email = fallbackEmail,
+                    authMethod = fallbackAuthMethod,
+                    campaignLevelIndex = campaignLevelIndex,
+                    coins = coins,
+                    perfectCount = perfectCount,
+                    currentStreak = currentStreak,
+                    maxStreak = maxStreak,
+                    completedLevelsCount = completedCampaignLevels.size,
+                    userId = targetUid
+                )
+                initRes.onSuccess { synced ->
+                    applyRemoteAccountToLocalState(synced)
+                }
+            }
+
+            repo.observePlayerAccount(targetUid)
                 .catch { e ->
                     authErrorMessage = e.localizedMessage ?: "Failed to sync profile"
                 }
                 .collect { account ->
                     if (account != null) {
-                        cloudAccount = account
-                        val reconciledLevelIdx = maxOf(campaignLevelIndex, account.campaignLevelIndex.toInt())
-                            .coerceIn(0, CAMPAIGN_LEVELS.lastIndex)
-                        val reconciledCoins = maxOf(coins, account.coins.toInt())
-                        val reconciledPerfect = maxOf(perfectCount, account.perfectCount.toInt())
-                        val reconciledMaxStreak = maxOf(maxStreak, account.maxStreak.toInt())
-                        val reconciledStreak = maxOf(currentStreak, account.currentStreak.toInt())
-
-                        isApplyingRemoteSnapshot = true
-                        try {
-                            campaignLevelIndex = reconciledLevelIdx
-                            coins = reconciledCoins
-                            perfectCount = reconciledPerfect
-                            maxStreak = reconciledMaxStreak
-                            currentStreak = reconciledStreak
-                            val remoteCompletedCount = account.completedLevelsCount.toInt().coerceIn(0, CAMPAIGN_LEVELS.size)
-                            if (completedCampaignLevels.size < remoteCompletedCount) {
-                                for (lvl in 1..remoteCompletedCount) {
-                                    if (!completedCampaignLevels.contains(lvl)) {
-                                        completedCampaignLevels.add(lvl)
-                                    }
-                                }
-                            }
-                            writeLocalStorageOnly()
-                        } finally {
-                            isApplyingRemoteSnapshot = false
+                        if (System.currentTimeMillis() - lastLocalFirestoreWriteMs < 800L) {
+                            return@collect
                         }
-
-                        val needsPushToFirestore =
-                            account.campaignLevelIndex.toInt() != campaignLevelIndex ||
-                                account.coins.toInt() != coins ||
-                                account.perfectCount.toInt() != perfectCount ||
-                                account.maxStreak.toInt() != maxStreak ||
-                                account.completedLevelsCount.toInt() != completedCampaignLevels.size
-
-                        if (needsPushToFirestore) {
-                            syncCurrentStateToFirestore()
-                        } else {
-                            lastCloudSyncEpochMs = System.currentTimeMillis()
-                        }
-                    } else {
-                        val createRes = repo.createOrSyncPlayerAccount(
-                            displayName = fallbackName,
-                            email = fallbackEmail,
-                            authMethod = fallbackAuthMethod,
-                            campaignLevelIndex = campaignLevelIndex,
-                            coins = coins,
-                            perfectCount = perfectCount,
-                            currentStreak = currentStreak,
-                            maxStreak = maxStreak,
-                            completedLevelsCount = completedCampaignLevels.size,
-                            userId = uid
-                        )
-                        createRes.onSuccess { created ->
-                            cloudAccount = created
-                            lastCloudSyncEpochMs = System.currentTimeMillis()
-                            writeLocalStorageOnly()
-                        }
+                        applyRemoteAccountToLocalState(account)
                     }
                 }
         }
@@ -1670,62 +1699,148 @@ class WordGameViewModel : ViewModel() {
         authMethod: String,
         isCreate: Boolean
     ) {
+        val rawIdent = (email?.takeIf { it.isNotBlank() } ?: nickname).trim()
         val cleanNick = nickname.trim().take(50).ifEmpty {
             email?.substringBefore("@")?.take(50)?.ifEmpty { "Doodle Player" } ?: "Doodle Player"
         }
         val cleanEmail = email?.trim()?.take(150)?.takeIf { it.isNotEmpty() }
-        val uid = currentUser?.uid ?: buildDirectAccountUid(cleanEmail ?: cleanNick)
+        val cleanPassword = password.trim()
         val prefs = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val repo = playerAccountRepo
 
-        if (!isCreate && prefs != null) {
-            val savedPass = prefs.getString("account_pwd_$uid", null)
-            if (!savedPass.isNullOrEmpty() && password.isNotEmpty() && savedPass != password) {
-                authErrorMessage = "Incorrect password for '$cleanNick'. Tap 'Forgot password?' to reset."
+        if (!isCreate) {
+            if (rawIdent.isEmpty()) {
+                authErrorMessage = "Please enter your Email or Doodle Nickname to log in."
                 return
             }
+            if (cleanPassword.isEmpty()) {
+                authErrorMessage = "Please enter your password to log in."
+                return
+            }
+            if (repo == null) {
+                authErrorMessage = "Cloud database is still connecting. Please try again in a moment."
+                return
+            }
+            isSyncingCloud = true
+            authErrorMessage = null
+            viewModelScope.launch {
+                val foundRes = repo.findPlayerAccountByIdentifier(rawIdent)
+                val remoteAccount = foundRes.getOrNull()
+                if (remoteAccount == null || remoteAccount.userId.isBlank()) {
+                    isSyncingCloud = false
+                    authErrorMessage = "❌ Account '$rawIdent' not found! Check your spelling or tap 'Create new account'."
+                    return@launch
+                }
+
+                val resolvedUid = remoteAccount.userId
+                val enteredHash = computePasswordHash(cleanPassword)
+                val savedLocalPass = prefs?.getString("account_pwd_$resolvedUid", null)
+                val remoteHash = remoteAccount.passwordHash?.trim().orEmpty()
+
+                if (remoteHash.isNotEmpty()) {
+                    if (remoteHash != enteredHash) {
+                        isSyncingCloud = false
+                        authErrorMessage = "❌ Incorrect password for '${remoteAccount.displayName}'. Tap 'Forgot password?' to reset."
+                        return@launch
+                    }
+                } else if (!savedLocalPass.isNullOrEmpty() && savedLocalPass != cleanPassword) {
+                    isSyncingCloud = false
+                    authErrorMessage = "❌ Incorrect password for '${remoteAccount.displayName}'. Tap 'Forgot password?' to reset."
+                    return@launch
+                } else if (cleanPassword.length < 3) {
+                    isSyncingCloud = false
+                    authErrorMessage = "❌ Invalid password! Please enter your account password."
+                    return@launch
+                }
+
+                isGuestSession = false
+                prefs?.edit()?.putString("account_pwd_$resolvedUid", cleanPassword)?.apply()
+                applyRemoteAccountToLocalState(remoteAccount)
+
+                if (remoteHash.isEmpty()) {
+                    repo.updateProgress(
+                        displayName = remoteAccount.displayName,
+                        email = remoteAccount.email,
+                        passwordHash = enteredHash,
+                        authMethod = remoteAccount.authMethod,
+                        campaignLevelIndex = campaignLevelIndex,
+                        coins = coins,
+                        perfectCount = perfectCount,
+                        currentStreak = currentStreak,
+                        maxStreak = maxStreak,
+                        completedLevelsCount = completedCampaignLevels.size,
+                        userId = resolvedUid
+                    ).onSuccess { updated ->
+                        cloudAccount = updated
+                    }
+                }
+
+                isSyncingCloud = false
+                statusBannerMessage = "👋 Welcome back, ${remoteAccount.displayName}! (Synced Level ${campaignLevelIndex + 1})"
+                currentScreen = ScreenState.MAIN_MENU
+                startObservingCloudAccountByUid(
+                    uid = resolvedUid,
+                    fallbackName = remoteAccount.displayName,
+                    fallbackEmail = remoteAccount.email,
+                    fallbackAuthMethod = remoteAccount.authMethod
+                )
+            }
+            return
         }
 
-        prefs?.edit()?.apply {
-            putString("registeredPlayerUid", uid)
-            putString("registeredPlayerName", cleanNick)
-            if (cleanEmail != null) {
-                putString("registeredPlayerEmail", cleanEmail)
-            } else {
-                remove("registeredPlayerEmail")
-            }
-            putString("registeredPlayerMode", authMethod)
-            if (password.isNotEmpty()) {
-                putString("account_pwd_$uid", password)
-            }
-            apply()
+        // Create New Account flow (isCreate == true)
+        if (cleanNick.length < 2) {
+            authErrorMessage = "Please enter a Doodle Nickname (at least 2 characters)."
+            return
+        }
+        if (cleanPassword.length < 4) {
+            authErrorMessage = "Please enter a password (at least 4 characters) to protect your account."
+            return
         }
 
-        registeredPlayerUid = uid
-        isGuestSession = false
-        authErrorMessage = null
-        val optimisticAccount = PlayerAccount(
-            id = uid,
-            userId = uid,
-            displayName = cleanNick,
-            email = cleanEmail,
-            authMethod = authMethod,
-            campaignLevelIndex = campaignLevelIndex.toLong(),
-            coins = coins.toLong(),
-            perfectCount = perfectCount.toLong(),
-            currentStreak = currentStreak.toLong(),
-            maxStreak = maxStreak.toLong(),
-            completedLevelsCount = completedCampaignLevels.size.toLong()
-        )
-        cloudAccount = optimisticAccount
-        writeLocalStorageOnly()
+        val pwdHash = computePasswordHash(cleanPassword)
+        val uid = currentUser?.uid ?: buildDirectAccountUid(cleanEmail ?: cleanNick)
+        if (uid in JUNK_TEST_UIDS) {
+            authErrorMessage = "Please choose a valid nickname or email."
+            return
+        }
 
-        val repo = playerAccountRepo
         if (repo != null) {
             isSyncingCloud = true
+            authErrorMessage = null
             viewModelScope.launch {
+                val existingByEmail = if (cleanEmail != null) repo.findPlayerAccountByIdentifier(cleanEmail).getOrNull() else null
+                val existingByNick = repo.findPlayerAccountByIdentifier(cleanNick).getOrNull()
+                val existingCloud = existingByEmail ?: existingByNick
+                if (existingCloud != null && existingCloud.userId.isNotBlank()) {
+                    isSyncingCloud = false
+                    authErrorMessage = "⚠️ Account '${existingCloud.displayName}' already exists! Please log in instead."
+                    return@launch
+                }
+
+                if (!isGuestSession) {
+                    resetLocalStateToFresh()
+                }
+
+                isGuestSession = false
+                registeredPlayerUid = uid
+                prefs?.edit()?.apply {
+                    putString("registeredPlayerUid", uid)
+                    putString("registeredPlayerName", cleanNick)
+                    if (cleanEmail != null) {
+                        putString("registeredPlayerEmail", cleanEmail)
+                    } else {
+                        remove("registeredPlayerEmail")
+                    }
+                    putString("registeredPlayerMode", authMethod)
+                    putString("account_pwd_$uid", cleanPassword)
+                    apply()
+                }
+
                 val res = repo.createOrSyncPlayerAccount(
                     displayName = cleanNick,
                     email = cleanEmail,
+                    passwordHash = pwdHash,
                     authMethod = authMethod,
                     campaignLevelIndex = campaignLevelIndex,
                     coins = coins,
@@ -1736,12 +1851,12 @@ class WordGameViewModel : ViewModel() {
                     userId = uid
                 )
                 isSyncingCloud = false
-                res.onSuccess { synced ->
-                    cloudAccount = synced
-                    lastCloudSyncEpochMs = System.currentTimeMillis()
-                    writeLocalStorageOnly()
+                res.onSuccess { created ->
+                    applyRemoteAccountToLocalState(created)
+                    statusBannerMessage = "✨ Account created for $cleanNick!"
+                    currentScreen = ScreenState.MAIN_MENU
                 }.onFailure { err ->
-                    authErrorMessage = err.localizedMessage
+                    authErrorMessage = err.localizedMessage ?: "Failed to create account."
                 }
                 startObservingCloudAccountByUid(
                     uid = uid,
@@ -1751,13 +1866,6 @@ class WordGameViewModel : ViewModel() {
                 )
             }
         }
-
-        statusBannerMessage = if (isCreate) {
-            "✨ Account created for $cleanNick!"
-        } else {
-            "👋 Welcome back, $cleanNick!"
-        }
-        currentScreen = ScreenState.MAIN_MENU
     }
 
     fun openRegistrationScreen() {
@@ -1772,6 +1880,9 @@ class WordGameViewModel : ViewModel() {
         currentUser = null
         registeredPlayerUid = null
         cloudAccount = null
+        if (!isGuestSession) {
+            resetLocalStateToFresh()
+        }
         isGuestSession = true
         authErrorMessage = null
         appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()
@@ -1816,37 +1927,46 @@ class WordGameViewModel : ViewModel() {
                             ?: user.displayName?.takeIf { it.isNotBlank() }
                             ?: "Doodle Player"
                         val resolvedEmail = preferredEmail?.takeIf { it.isNotBlank() } ?: user.email
-                        registeredPlayerUid = user.uid
-                        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.apply {
-                            putString("registeredPlayerUid", user.uid)
-                            putString("registeredPlayerName", resolvedName)
-                            if (resolvedEmail != null) putString("registeredPlayerEmail", resolvedEmail)
-                            putString("registeredPlayerMode", authMethod)
-                            apply()
-                        }
-                        val syncRes = repo.createOrSyncPlayerAccount(
-                            displayName = resolvedName,
-                            email = resolvedEmail,
-                            authMethod = authMethod,
-                            campaignLevelIndex = campaignLevelIndex,
-                            coins = coins,
-                            perfectCount = perfectCount,
-                            currentStreak = currentStreak,
-                            maxStreak = maxStreak,
-                            completedLevelsCount = completedCampaignLevels.size,
-                            userId = user.uid
-                        )
-                        syncRes.onSuccess { synced ->
-                            cloudAccount = synced
-                            lastCloudSyncEpochMs = System.currentTimeMillis()
-                            writeLocalStorageOnly()
-                            statusBannerMessage = "👋 Welcome, ${synced.displayName}!"
+
+                        val existingCloud = repo.findPlayerAccountByIdentifier(resolvedEmail ?: resolvedName).getOrNull()
+                        val targetUid = existingCloud?.userId?.takeIf { it.isNotBlank() } ?: user.uid
+                        registeredPlayerUid = targetUid
+
+                        if (existingCloud != null) {
+                            applyRemoteAccountToLocalState(existingCloud)
+                            statusBannerMessage = "👋 Welcome back, ${existingCloud.displayName}! (Level ${campaignLevelIndex + 1})"
                             currentScreen = ScreenState.MAIN_MENU
-                        }.onFailure { err ->
-                            authErrorMessage = err.localizedMessage ?: "Failed to save profile."
+                        } else {
+                            if (!isGuestSession) {
+                                resetLocalStateToFresh()
+                            }
+                            val syncRes = repo.createOrSyncPlayerAccount(
+                                displayName = resolvedName,
+                                email = resolvedEmail,
+                                authMethod = authMethod,
+                                campaignLevelIndex = campaignLevelIndex,
+                                coins = coins,
+                                perfectCount = perfectCount,
+                                currentStreak = currentStreak,
+                                maxStreak = maxStreak,
+                                completedLevelsCount = completedCampaignLevels.size,
+                                userId = targetUid
+                            )
+                            syncRes.onSuccess { synced ->
+                                applyRemoteAccountToLocalState(synced)
+                                statusBannerMessage = "👋 Welcome, ${synced.displayName}!"
+                                currentScreen = ScreenState.MAIN_MENU
+                            }.onFailure { err ->
+                                authErrorMessage = err.localizedMessage ?: "Failed to save profile."
+                            }
                         }
                         isExplicitSignInInFlight = false
-                        startObservingCloudAccount(user)
+                        startObservingCloudAccountByUid(
+                            uid = targetUid,
+                            fallbackName = existingCloud?.displayName ?: resolvedName,
+                            fallbackEmail = existingCloud?.email ?: resolvedEmail,
+                            fallbackAuthMethod = authMethod
+                        )
                     } else {
                         isExplicitSignInInFlight = false
                         currentScreen = ScreenState.MAIN_MENU
@@ -1876,9 +1996,11 @@ class WordGameViewModel : ViewModel() {
         isSyncingCloud = true
         authErrorMessage = null
         viewModelScope.launch {
-            val res = repo.createOrSyncPlayerAccount(
+            lastLocalFirestoreWriteMs = System.currentTimeMillis()
+            val res = repo.updateProgress(
                 displayName = cleanNick,
                 email = cleanEmail,
+                passwordHash = cloudAccount?.passwordHash,
                 authMethod = authMethod,
                 campaignLevelIndex = campaignLevelIndex,
                 coins = coins,
@@ -1907,6 +2029,7 @@ class WordGameViewModel : ViewModel() {
         cloudAccount = null
         isGuestSession = false
         authErrorMessage = null
+        resetLocalStateToFresh()
         appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()
             ?.remove("registeredPlayerUid")
             ?.remove("registeredPlayerName")
@@ -1971,14 +2094,16 @@ class WordGameViewModel : ViewModel() {
     private fun syncCurrentStateToFirestore() {
         val activeUid = currentUser?.uid ?: registeredPlayerUid ?: cloudAccount?.userId
         val repo = playerAccountRepo
-        if (!activeUid.isNullOrBlank() && repo != null && !isGuestSession) {
+        if (!activeUid.isNullOrBlank() && activeUid !in JUNK_TEST_UIDS && repo != null && !isGuestSession) {
             isSyncingCloud = true
+            lastLocalFirestoreWriteMs = System.currentTimeMillis()
             viewModelScope.launch {
                 val res = repo.updateProgress(
                     displayName = cloudAccount?.displayName
                         ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
                         ?: "Doodle Player",
                     email = cloudAccount?.email ?: currentUser?.email,
+                    passwordHash = cloudAccount?.passwordHash,
                     authMethod = cloudAccount?.authMethod ?: "account",
                     campaignLevelIndex = campaignLevelIndex,
                     coins = coins,

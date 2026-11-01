@@ -21,9 +21,36 @@ import kotlinx.coroutines.tasks.await
 
 private val VALID_AUTH_METHODS = setOf("gmail", "account", "email", "google")
 
+val JUNK_TEST_UIDS = setOf(
+    "usr_asdasda",
+    "usr_irbdhejebdiensishdbsiej",
+    "usr_jrjdhdhdhisdj",
+    "usr_jsjsjsj",
+    "usr_ndjdjsjd",
+    "usr_nsjsj",
+    "usr_sdfdsfsd",
+    "usr_udjdjd"
+)
+
 fun normalizeAuthMethod(raw: String?): String {
     val cleaned = raw?.trim()?.lowercase() ?: "gmail"
     return if (cleaned in VALID_AUTH_METHODS) cleaned else "gmail"
+}
+
+fun computePasswordHash(rawPassword: String?): String {
+    val pwd = rawPassword?.trim().orEmpty()
+    if (pwd.isEmpty()) return ""
+    val input = "doodle_auth_v1:$pwd"
+    var h1 = 0x811c9dc5.toInt()
+    var h2 = 0x1505
+    for (i in input.indices) {
+        val ch = input[i].code
+        h1 = (h1 xor ch) * 0x01000193
+        h2 = (h2 * 33) xor ch
+    }
+    val hex1 = h1.toUInt().toString(16).padStart(8, '0')
+    val hex2 = h2.toUInt().toString(16).padStart(8, '0')
+    return "dh1_${hex1}_${hex2}"
 }
 
 @IgnoreExtraProperties
@@ -32,18 +59,20 @@ data class PlayerAccount(
     val userId: String = "",
     val displayName: String = "Doodle Player",
     val email: String? = null,
+    val passwordHash: String? = null,
     val authMethod: String = "gmail",
     val campaignLevelIndex: Long = 0L,
-    val coins: Long = 1231L,
-    val perfectCount: Long = 3L,
-    val currentStreak: Long = 2L,
-    val maxStreak: Long = 5L,
+    val coins: Long = 100L,
+    val perfectCount: Long = 0L,
+    val currentStreak: Long = 0L,
+    val maxStreak: Long = 0L,
     val completedLevelsCount: Long = 0L,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 ) {
     fun toCreateMap(): Map<String, Any> {
         val cleanEmail = email?.trim()?.take(150)?.takeIf { it.isNotEmpty() }
+        val cleanPwdHash = passwordHash?.trim()?.take(128)?.takeIf { it.isNotEmpty() }
         val payload = mutableMapOf<String, Any>(
             "userId" to userId,
             "displayName" to displayName.trim().take(50).ifEmpty { "Doodle Player" },
@@ -60,11 +89,15 @@ data class PlayerAccount(
         if (cleanEmail != null) {
             payload["email"] = cleanEmail
         }
+        if (cleanPwdHash != null) {
+            payload["passwordHash"] = cleanPwdHash
+        }
         return payload
     }
 
     fun toUpdateMap(): Map<String, Any> {
         val cleanEmail = email?.trim()?.take(150)?.takeIf { it.isNotEmpty() }
+        val cleanPwdHash = passwordHash?.trim()?.take(128)?.takeIf { it.isNotEmpty() }
         val payload = mutableMapOf<String, Any>(
             "userId" to userId,
             "displayName" to displayName.trim().take(50).ifEmpty { "Doodle Player" },
@@ -79,6 +112,9 @@ data class PlayerAccount(
         )
         if (cleanEmail != null) {
             payload["email"] = cleanEmail
+        }
+        if (cleanPwdHash != null) {
+            payload["passwordHash"] = cleanPwdHash
         }
         return payload
     }
@@ -118,6 +154,7 @@ class PlayerAccountRepository(
     }
 
     suspend fun getPlayerAccount(userId: String = currentUid()): Result<PlayerAccount?> = runCatching {
+        if (userId in JUNK_TEST_UIDS) return@runCatching null
         val docRef = db.collection(COLLECTION_PLAYERS).document(userId)
         try {
             val snapshot = docRef.get().await()
@@ -137,15 +174,86 @@ class PlayerAccountRepository(
         }
     }
 
+    suspend fun findPlayerAccountByIdentifier(identifier: String): Result<PlayerAccount?> = runCatching {
+        val raw = identifier.trim()
+        val lower = raw.lowercase()
+        if (lower.isEmpty()) return@runCatching null
+        val slug = lower.replace(Regex("[^a-z0-9]"), "_").trim('_').take(32)
+        if (slug.isEmpty()) return@runCatching null
+        val directUid = if (lower.startsWith("usr_")) lower else "usr_$slug"
+        if (directUid in JUNK_TEST_UIDS || lower in JUNK_TEST_UIDS) return@runCatching null
+
+        val matches = mutableListOf<PlayerAccount>()
+        try {
+            val querySnap = db.collection(COLLECTION_PLAYERS).get().await()
+            for (docSnap in querySnap.documents) {
+                val docId = docSnap.id
+                if (docId in JUNK_TEST_UIDS) continue
+                val account = docSnap.toObject(
+                    PlayerAccount::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                ) ?: continue
+                val resolvedId = account.userId.ifBlank { docId }
+                if (resolvedId in JUNK_TEST_UIDS) continue
+                val emailLower = account.email?.trim()?.lowercase().orEmpty()
+                val nameLower = account.displayName.trim().lowercase()
+                val uidLower = resolvedId.lowercase()
+                val emailPrefix = emailLower.substringBefore("@")
+                if (
+                    emailLower == lower ||
+                    nameLower == lower ||
+                    uidLower == lower ||
+                    uidLower == directUid ||
+                    (emailPrefix.isNotEmpty() && emailPrefix == lower)
+                ) {
+                    matches.add(account.copy(id = docId, userId = resolvedId))
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            val directSnap = db.collection(COLLECTION_PLAYERS).document(directUid).get().await()
+            if (directSnap.exists()) {
+                val acc = directSnap.toObject(
+                    PlayerAccount::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                )
+                if (acc != null) {
+                    matches.add(acc.copy(id = directUid, userId = acc.userId.ifBlank { directUid }))
+                }
+            }
+        }
+
+        if (matches.isEmpty()) return@runCatching null
+
+        matches.sortWith(
+            Comparator { a, b ->
+                val aHasEmail = !a.email.isNullOrBlank() && a.email.contains("@")
+                val bHasEmail = !b.email.isNullOrBlank() && b.email.contains("@")
+                if (aHasEmail != bHasEmail) {
+                    return@Comparator if (aHasEmail) -1 else 1
+                }
+                val aExactEmail = a.email?.trim()?.lowercase() == lower
+                val bExactEmail = b.email?.trim()?.lowercase() == lower
+                if (aExactEmail != bExactEmail) {
+                    return@Comparator if (aExactEmail) -1 else 1
+                }
+                b.campaignLevelIndex.compareTo(a.campaignLevelIndex)
+            }
+        )
+        matches.first()
+    }
+
     suspend fun createOrSyncPlayerAccount(
         displayName: String,
         email: String? = null,
+        passwordHash: String? = null,
         authMethod: String = "gmail",
         campaignLevelIndex: Int = 0,
-        coins: Int = 1231,
-        perfectCount: Int = 3,
-        currentStreak: Int = 2,
-        maxStreak: Int = 5,
+        coins: Int = 100,
+        perfectCount: Int = 0,
+        currentStreak: Int = 0,
+        maxStreak: Int = 0,
         completedLevelsCount: Int = 0,
         userId: String = currentUid()
     ): Result<PlayerAccount> = runCatching {
@@ -163,6 +271,7 @@ class PlayerAccountRepository(
 
             val cleanName = displayName.trim().take(50).ifEmpty { "Doodle Player" }
             val cleanEmail = email?.trim()?.take(150)?.takeIf { it.isNotEmpty() }
+            val cleanPwdHash = passwordHash?.trim()?.take(128)?.takeIf { it.isNotEmpty() }
             val cleanAuth = normalizeAuthMethod(authMethod)
 
             if (!existingSnap.exists()) {
@@ -171,6 +280,7 @@ class PlayerAccountRepository(
                     userId = uid,
                     displayName = cleanName,
                     email = cleanEmail,
+                    passwordHash = cleanPwdHash,
                     authMethod = cleanAuth,
                     campaignLevelIndex = campaignLevelIndex.toLong().coerceIn(0L, 1000L),
                     coins = coins.toLong().coerceIn(0L, 10000000L),
@@ -198,6 +308,7 @@ class PlayerAccountRepository(
                     userId = uid,
                     displayName = cleanName,
                     email = cleanEmail ?: existing.email,
+                    passwordHash = cleanPwdHash ?: existing.passwordHash,
                     authMethod = cleanAuth,
                     campaignLevelIndex = maxOf(existing.campaignLevelIndex, campaignLevelIndex.toLong()).coerceIn(0L, 1000L),
                     coins = maxOf(existing.coins, coins.toLong()).coerceIn(0L, 10000000L),
@@ -222,6 +333,7 @@ class PlayerAccountRepository(
     suspend fun updateProgress(
         displayName: String,
         email: String?,
+        passwordHash: String? = null,
         authMethod: String,
         campaignLevelIndex: Int,
         coins: Int,
@@ -236,12 +348,14 @@ class PlayerAccountRepository(
             val docRef = db.collection(COLLECTION_PLAYERS).document(uid)
             val cleanName = displayName.trim().take(50).ifEmpty { "Doodle Player" }
             val cleanEmail = email?.trim()?.take(150)?.takeIf { it.isNotEmpty() }
+            val cleanPwdHash = passwordHash?.trim()?.take(128)?.takeIf { it.isNotEmpty() }
             val cleanAuth = normalizeAuthMethod(authMethod)
             val updated = PlayerAccount(
                 id = uid,
                 userId = uid,
                 displayName = cleanName,
                 email = cleanEmail,
+                passwordHash = cleanPwdHash,
                 authMethod = cleanAuth,
                 campaignLevelIndex = campaignLevelIndex.toLong().coerceIn(0L, 1000L),
                 coins = coins.toLong().coerceIn(0L, 10000000L),

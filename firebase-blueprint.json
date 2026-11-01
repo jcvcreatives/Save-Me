@@ -46,6 +46,10 @@
           "type": "integer",
           "description": "Total number of campaign levels completed (0 to 1000)."
         },
+        "passwordHash": {
+          "type": "string",
+          "description": "Optional deterministic password verifier hash for cross-device login authentication (up to 128 chars)."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",

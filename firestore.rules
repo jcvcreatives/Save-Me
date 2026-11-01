@@ -31,8 +31,10 @@ service cloud.firestore {
     }
 
     function isAuthorizedPlayerAccess(userId) {
-      return (isSignedIn() && isValidId(userId) && request.auth.uid == userId) ||
-             (request.auth == null && isDirectRegisteredId(userId));
+      return isValidId(userId) && (
+        (isSignedIn() && request.auth.uid == userId) ||
+        isDirectRegisteredId(userId)
+      );
     }
 
     function isValidPlayerAccount(data, userId) {
@@ -41,6 +43,7 @@ service cloud.firestore {
              data.displayName.size() >= 1 &&
              data.displayName.size() <= 50 &&
              (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 150)) &&
+             (!('passwordHash' in data) || data.passwordHash == null || (data.passwordHash is string && data.passwordHash.size() <= 128)) &&
              data.authMethod is string &&
              data.authMethod.size() >= 1 &&
              data.authMethod.size() <= 20 &&
@@ -62,7 +65,7 @@ service cloud.firestore {
 
     match /players/{userId} {
       allow get: if isAuthorizedPlayerAccess(userId);
-      allow list: if isAuthorizedPlayerAccess(userId) && (!('userId' in existing()) || existing().userId == userId);
+      allow list: if isValidId(userId);
 
       allow create: if isAuthorizedPlayerAccess(userId) &&
                        incoming().keys().hasAll([
@@ -76,6 +79,7 @@ service cloud.firestore {
                          'userId',
                          'displayName',
                          'email',
+                         'passwordHash',
                          'authMethod',
                          'campaignLevelIndex',
                          'coins',
@@ -96,6 +100,7 @@ service cloud.firestore {
                          'userId',
                          'displayName',
                          'email',
+                         'passwordHash',
                          'authMethod',
                          'campaignLevelIndex',
                          'coins',

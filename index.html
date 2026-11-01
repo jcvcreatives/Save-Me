@@ -1928,16 +1928,255 @@
       return errInfo;
     }
 
+    const JUNK_TEST_UIDS = new Set([
+      'usr_asdasda',
+      'usr_irbdhejebdiensishdbsiej',
+      'usr_jrjdhdhdhisdj',
+      'usr_jsjsjsj',
+      'usr_ndjdjsjd',
+      'usr_nsjsj',
+      'usr_sdfdsfsd',
+      'usr_udjdjd'
+    ]);
+
+    function computePasswordHash(rawPassword) {
+      const pwd = String(rawPassword || '').trim();
+      if (!pwd) return '';
+      const input = 'doodle_auth_v1:' + pwd;
+      let h1 = 0x811c9dc5;
+      let h2 = 0x1505;
+      for (let i = 0; i < input.length; i++) {
+        const ch = input.charCodeAt(i);
+        h1 ^= ch;
+        h1 = Math.imul(h1, 0x01000193) >>> 0;
+        h2 = (Math.imul(h2, 33) ^ ch) >>> 0;
+      }
+      return 'dh1_' + h1.toString(16).padStart(8, '0') + '_' + h2.toString(16).padStart(8, '0');
+    }
+
+    function resetLocalGameStateToFresh() {
+      isReconcilingState = true;
+      try {
+        coins = 100;
+        campaignIdx = 0;
+        completedCampaignSet = new Set();
+        levelStarsMap = {};
+        claimedChestsSet = new Set();
+        freePlayAll = false;
+        freePotions = 2;
+        perfectCount = 0;
+        streak = 0;
+        maxStreak = 0;
+        chestProg = 0;
+        themeProg = 0;
+        const freshSnap = buildCanonicalStateSnapshot(Date.now());
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(freshSnap));
+        lastSyncedSignature = computeStateSignature();
+      } catch (e) {
+      } finally {
+        isReconcilingState = false;
+      }
+    }
+
+    let lastLocalStateWriteMs = 0;
+
+    function applyCloudDocAsSourceOfTruth(remoteDoc) {
+      if (!remoteDoc) return;
+      isReconcilingState = true;
+      try {
+        const remoteIdx = Math.max(0, Math.min(999, Math.floor(Number(remoteDoc.campaignLevelIndex ?? 0))));
+        const remoteCoins = Math.max(0, Math.min(10000000, Math.floor(Number(remoteDoc.coins ?? 100))));
+        const remotePerfect = Math.max(0, Math.min(1000000, Math.floor(Number(remoteDoc.perfectCount ?? 0))));
+        const remoteStreak = Math.max(0, Math.min(1000000, Math.floor(Number(remoteDoc.currentStreak ?? 0))));
+        const remoteMaxStreak = Math.max(0, Math.min(1000000, Math.floor(Number(remoteDoc.maxStreak ?? 0))));
+        const remoteCompletedCount = Math.max(
+          remoteIdx,
+          Math.max(0, Math.min(1000, Math.floor(Number(remoteDoc.completedLevelsCount ?? 0))))
+        );
+
+        campaignIdx = remoteIdx;
+        coins = remoteCoins;
+        perfectCount = remotePerfect;
+        streak = remoteStreak;
+        maxStreak = remoteMaxStreak;
+        completedCampaignSet = new Set();
+        for (let lv = 1; lv <= remoteCompletedCount; lv++) {
+          completedCampaignSet.add(lv);
+        }
+
+        if (remoteDoc.displayName) {
+          localStorage.setItem('doodle_account_name', String(remoteDoc.displayName).trim().slice(0, 50));
+        }
+        if (remoteDoc.email && !String(remoteDoc.email).endsWith('@doodleword.app')) {
+          localStorage.setItem('doodle_account_email', String(remoteDoc.email).trim().slice(0, 150));
+        }
+        if (remoteDoc.userId) {
+          localStorage.setItem('doodle_account_uid', String(remoteDoc.userId));
+          localStorage.setItem(FIRESTORE_MIRROR_PREFIX + remoteDoc.userId, JSON.stringify(remoteDoc));
+        }
+
+        const nowMs = Date.now();
+        const canonicalSnap = buildCanonicalStateSnapshot(nowMs);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(canonicalSnap));
+        lastSyncedSignature = computeStateSignature();
+        lastCloudSyncTimestamp = nowMs;
+
+        updateCloudSyncUIStatus(
+          'SAVED ✓',
+          `Lv ${campaignIdx + 1} • ⭐ ${coins}`
+        );
+        if (typeof updateMenuUI === 'function') {
+          updateMenuUI();
+        }
+      } catch (e) {
+      } finally {
+        isReconcilingState = false;
+      }
+    }
+
+    async function findAccountInFirestore(identifier) {
+      if (firebaseInitPromise) {
+        try { await firebaseInitPromise; } catch (e) {}
+      }
+      if (!fbDb || !fbMod) return null;
+      const raw = String(identifier || '').trim();
+      const lower = raw.toLowerCase();
+      if (!lower) return null;
+      const slug = lower.replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32);
+      if (!slug) return null;
+      const directUid = lower.startsWith('usr_') ? lower : ('usr_' + slug);
+      if (JUNK_TEST_UIDS.has(directUid) || JUNK_TEST_UIDS.has(lower)) {
+        return null;
+      }
+
+      const matches = [];
+      try {
+        const colRef = fbMod.collection(fbDb, FIRESTORE_COLLECTION);
+        const querySnap = await fbMod.getDocs(colRef);
+        querySnap.forEach((docSnap) => {
+          const docId = docSnap.id;
+          if (JUNK_TEST_UIDS.has(docId)) return;
+          const data = docSnap.data() || {};
+          const uidVal = String(data.userId || docId).trim();
+          if (JUNK_TEST_UIDS.has(uidVal)) return;
+          const emailVal = String(data.email || '').trim().toLowerCase();
+          const nameVal = String(data.displayName || '').trim().toLowerCase();
+          const uidLower = uidVal.toLowerCase();
+          const emailPrefix = emailVal ? emailVal.split('@')[0] : '';
+
+          if (
+            emailVal === lower ||
+            nameVal === lower ||
+            uidLower === lower ||
+            uidLower === directUid ||
+            (emailPrefix && emailPrefix === lower)
+          ) {
+            matches.push({
+              ...data,
+              userId: uidVal || docId,
+              _docId: docId
+            });
+          }
+        });
+      } catch (listErr) {
+        try {
+          const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, directUid);
+          const snap = await fbMod.getDoc(docRef);
+          if (snap && snap.exists()) {
+            const data = snap.data() || {};
+            if (!JUNK_TEST_UIDS.has(directUid)) {
+              matches.push({
+                ...data,
+                userId: data.userId || directUid,
+                _docId: directUid
+              });
+            }
+          }
+        } catch (getErr) {}
+      }
+
+      if (matches.length === 0) return null;
+
+      // Sort so canonical email-backed accounts (e.g. usr_jcvcreatives_gmail_com) take priority over nickname-only duplicates
+      matches.sort((a, b) => {
+        const aHasEmail = Boolean(a.email && String(a.email).includes('@'));
+        const bHasEmail = Boolean(b.email && String(b.email).includes('@'));
+        if (aHasEmail !== bHasEmail) return aHasEmail ? -1 : 1;
+        const aExactEmail = String(a.email || '').toLowerCase() === lower;
+        const bExactEmail = String(b.email || '').toLowerCase() === lower;
+        if (aExactEmail !== bExactEmail) return aExactEmail ? -1 : 1;
+        return Number(b.campaignLevelIndex || 0) - Number(a.campaignLevelIndex || 0);
+      });
+
+      const primary = matches[0];
+      // If a duplicate nickname-only doc existed alongside the primary email-backed doc, clean up the duplicate
+      if (matches.length > 1 && primary.email) {
+        for (let i = 1; i < matches.length; i++) {
+          const dup = matches[i];
+          if (dup._docId && dup._docId !== primary._docId && !dup.email) {
+            try {
+              await fbMod.deleteDoc(fbMod.doc(fbDb, FIRESTORE_COLLECTION, dup._docId));
+            } catch (e) {}
+          }
+        }
+      }
+      return primary;
+    }
+
+    async function pullLatestAccountStateFromFirestore(explicitUid) {
+      if (firebaseInitPromise) {
+        try { await firebaseInitPromise; } catch (e) {}
+      }
+      if (!fbDb || !fbMod || !isUserSignedInViaRegistration()) return null;
+
+      const savedEmail = (localStorage.getItem('doodle_account_email') || '').trim();
+      const savedName = (localStorage.getItem('doodle_account_name') || '').trim();
+      let uid = explicitUid || getSignedInUserId();
+      if (JUNK_TEST_UIDS.has(uid)) {
+        await handleSignOut();
+        return null;
+      }
+
+      let remoteData = null;
+      try {
+        const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
+        const snap = await fbMod.getDoc(docRef);
+        if (snap && snap.exists()) {
+          remoteData = { ...snap.data(), userId: snap.data().userId || uid };
+        }
+      } catch (e) {}
+
+      // Also check if a canonical email-backed document exists for the same player (e.g. logged in on phone via nickname "jcv")
+      if (!remoteData || (!remoteData.email && (savedEmail || savedName))) {
+        const canonical = await findAccountInFirestore(savedEmail || savedName || uid);
+        if (canonical && canonical.userId) {
+          remoteData = canonical;
+          if (canonical.userId !== uid) {
+            uid = canonical.userId;
+            localStorage.setItem('doodle_account_uid', uid);
+          }
+        }
+      }
+
+      if (remoteData) {
+        applyCloudDocAsSourceOfTruth(remoteData);
+        return remoteData;
+      }
+      return null;
+    }
+
     /**
-     * Explicitly writes or merges the signed-in player's profile and game state
+     * Explicitly writes the signed-in player's profile and current authoritative game state
      * into Cloud Firestore at `/players/{userId}` with security rules compliance.
      */
     function syncPlayerToFirestore(user, profileOverrides = {}) {
       const targetUser = user || (fbAuth && fbAuth.currentUser);
-      const resolvedUid = (targetUser && targetUser.uid)
-        ? targetUser.uid
-        : (profileOverrides.uid || (isUserSignedInViaRegistration() ? getSignedInUserId() : null));
-      if (!fbDb || !fbMod || !resolvedUid) {
+      const resolvedUid = profileOverrides.uid
+        ? profileOverrides.uid
+        : ((targetUser && targetUser.uid)
+            ? targetUser.uid
+            : (isUserSignedInViaRegistration() ? getSignedInUserId() : null));
+      if (!fbDb || !fbMod || !resolvedUid || JUNK_TEST_UIDS.has(resolvedUid)) {
         return Promise.resolve(null);
       }
       firestoreWriteQueue = firestoreWriteQueue.then(async () => {
@@ -1952,32 +2191,24 @@
         }
 
         const existingData = (snap && snap.exists()) ? snap.data() : null;
-        if (existingData && !profileOverrides.skipStateMerge) {
-          campaignIdx = Math.max(campaignIdx, Number(existingData.campaignLevelIndex || 0));
-          coins = Math.max(coins, Number(existingData.coins || 0));
-          perfectCount = Math.max(perfectCount, Number(existingData.perfectCount || 0));
-          maxStreak = Math.max(maxStreak, Number(existingData.maxStreak || 0));
-          streak = Math.max(streak, Number(existingData.currentStreak || 0));
-          const remoteCompletedCount = Number(existingData.completedLevelsCount || 0);
-          if (completedCampaignSet.size < remoteCompletedCount) {
-            for (let lv = 1; lv <= remoteCompletedCount; lv++) {
-              completedCampaignSet.add(lv);
-            }
-          }
+
+        // If pulling on sign-in or when remote exists and forcePullFromCloud is set, adopt remote state instead of overwriting it
+        if (existingData && profileOverrides.adoptCloudProgressFirst) {
+          applyCloudDocAsSourceOfTruth({ ...existingData, userId: uid });
         }
 
         const rawName = (
           profileOverrides.displayName ||
+          (existingData && existingData.displayName) ||
           localStorage.getItem('doodle_account_name') ||
           (targetUser && targetUser.displayName) ||
-          (existingData && existingData.displayName) ||
           (targetUser && targetUser.email ? targetUser.email.split('@')[0] : 'Doodle Player')
         ).trim().slice(0, 50) || 'Doodle Player';
 
         const candidateEmail = (
-          profileOverrides.email !== undefined
+          profileOverrides.email !== undefined && profileOverrides.email !== ''
             ? profileOverrides.email
-            : (localStorage.getItem('doodle_account_email') || (targetUser && targetUser.email) || (existingData && existingData.email) || '')
+            : ((existingData && existingData.email) || localStorage.getItem('doodle_account_email') || (targetUser && targetUser.email) || '')
         ).trim().slice(0, 150);
 
         const cleanEmail = (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidateEmail) && !candidateEmail.endsWith('@doodleword.app'))
@@ -1986,10 +2217,16 @@
 
         const authMethod = normalizeAuthMethodWeb(
           profileOverrides.authMethod ||
-          localStorage.getItem('doodle_account_mode') ||
           (existingData && existingData.authMethod) ||
+          localStorage.getItem('doodle_account_mode') ||
           'account'
         );
+
+        const passwordHashVal = (
+          profileOverrides.passwordHash ||
+          (existingData && existingData.passwordHash) ||
+          ''
+        ).trim().slice(0, 128);
 
         const payload = {
           userId: uid,
@@ -2007,11 +2244,15 @@
         if (cleanEmail) {
           payload.email = cleanEmail;
         }
+        if (passwordHashVal) {
+          payload.passwordHash = passwordHashVal;
+        }
         if (!snap || !snap.exists()) {
           payload.createdAt = fbMod.serverTimestamp();
         }
 
         try {
+          lastLocalStateWriteMs = Date.now();
           await fbMod.setDoc(docRef, payload, { merge: true });
           const nowIso = new Date().toISOString();
           const mirrorDoc = {
@@ -2055,53 +2296,31 @@
       isReconcilingState = true;
       try {
         const nowMs = Date.now();
-        let localSnap = buildCanonicalStateSnapshot(nowMs);
+        const localSnap = buildCanonicalStateSnapshot(nowMs);
+
+        // 1. Always write canonical snapshot to localStorage
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(localSnap));
 
         if (isUserSignedInViaRegistration()) {
           const uid = getSignedInUserId();
-          const mirrorKey = FIRESTORE_MIRROR_PREFIX + uid;
-          let remoteDoc = null;
-          try {
-            const rawRemote = localStorage.getItem(mirrorKey);
-            if (rawRemote) remoteDoc = JSON.parse(rawRemote);
-          } catch (e) {}
+          if (uid && !JUNK_TEST_UIDS.has(uid)) {
+            const mirrorKey = FIRESTORE_MIRROR_PREFIX + uid;
+            const firestoreDoc = buildFirestorePlayerDoc(localSnap);
+            localStorage.setItem(mirrorKey, JSON.stringify(firestoreDoc));
+            lastCloudSyncTimestamp = nowMs;
 
-          // If reconciling on sign-in or external storage event, merge highest progression so neither side loses progress
-          if (remoteDoc && (reason === 'auth_signin' || reason === 'storage_event' || reason === 'initial_load')) {
-            campaignIdx = Math.max(campaignIdx, Number(remoteDoc.campaignLevelIndex || 0));
-            coins = Math.max(coins, Number(remoteDoc.coins || 0));
-            perfectCount = Math.max(perfectCount, Number(remoteDoc.perfectCount || 0));
-            maxStreak = Math.max(maxStreak, Number(remoteDoc.maxStreak || 0));
-            streak = Math.max(streak, Number(remoteDoc.currentStreak || 0));
-            const remoteCompletedCount = Number(remoteDoc.completedLevelsCount || 0);
-            if (completedCampaignSet.size < remoteCompletedCount) {
-              for (let lv = 1; lv <= remoteCompletedCount; lv++) {
-                completedCampaignSet.add(lv);
-              }
+            // Only push local state changes to Firestore when triggered by an actual local gameplay/profile action
+            if (fbDb && fbMod && reason !== 'initial_load' && reason !== 'storage_event' && reason !== 'remote_snapshot') {
+              lastLocalStateWriteMs = nowMs;
+              pushDocToRealFirestore(firestoreDoc);
             }
-            localSnap = buildCanonicalStateSnapshot(nowMs);
+
+            updateCloudSyncUIStatus(
+              'SAVED ✓',
+              `Lv ${campaignIdx + 1} • ⭐ ${coins}`
+            );
           }
-
-          // 1. Write canonical snapshot to localStorage
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(localSnap));
-
-          // 2. Build & write strictly compliant Firestore `/players/{userId}` document for 1:1 parity
-          const firestoreDoc = buildFirestorePlayerDoc(localSnap);
-          localStorage.setItem(mirrorKey, JSON.stringify(firestoreDoc));
-          lastCloudSyncTimestamp = nowMs;
-
-          // 3. Push to live Firebase Firestore SDK (named database: ai-studio-android-doodlewo-e3227616-d2d4-458e-8bb7-b7a283c81613)
-          if (fbDb && fbMod) {
-            pushDocToRealFirestore(firestoreDoc);
-          }
-
-          updateCloudSyncUIStatus(
-            'SAVED ✓',
-            `Lv ${campaignIdx + 1} • ⭐ ${coins}`
-          );
         } else {
-          // Guest or unauthenticated session: persist to localStorage
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(localSnap));
           updateCloudSyncUIStatus('LOCAL', `Lv ${campaignIdx + 1} • ⭐ ${coins}`);
         }
 
@@ -2113,7 +2332,7 @@
     }
 
     function attachRealtimePlayerListener(user) {
-      if (!fbDb || !fbMod || !user || !user.uid) return;
+      if (!fbDb || !fbMod || !user || !user.uid || JUNK_TEST_UIDS.has(user.uid)) return;
       if (activeFirestoreUnsubscribe) {
         activeFirestoreUnsubscribe();
         activeFirestoreUnsubscribe = null;
@@ -2122,11 +2341,11 @@
       activeFirestoreUnsubscribe = fbMod.onSnapshot(docRef, (snap) => {
         if (snap.exists()) {
           const data = snap.data();
-          localStorage.setItem(FIRESTORE_MIRROR_PREFIX + user.uid, JSON.stringify(data));
-          reconcileLocalAndFirestoreParity('storage_event');
-          updateMenuUI();
-        } else {
-          syncPlayerToFirestore(fbAuth ? fbAuth.currentUser : null, { uid: user.uid });
+          // Ignore echo from our own immediate local write within 800ms
+          if (Date.now() - lastLocalStateWriteMs < 800) {
+            return;
+          }
+          applyCloudDocAsSourceOfTruth({ ...data, userId: data.userId || user.uid });
         }
       }, (err) => {
         handleFirestoreErrorWeb(err, 'list', `${FIRESTORE_COLLECTION}/${user.uid}`);
@@ -2146,6 +2365,25 @@
         fbDb = fsMod.getFirestore(fbApp, FIRESTORE_DATABASE_ID);
         fbMod = { ...authMod, ...fsMod };
 
+        // Clean up any accidental gibberish test documents created earlier
+        try {
+          const regMap = getRegisteredAccountsMap();
+          let regChanged = false;
+          for (const junkUid of JUNK_TEST_UIDS) {
+            if (regMap[junkUid]) {
+              delete regMap[junkUid];
+              regChanged = true;
+            }
+            localStorage.removeItem(FIRESTORE_MIRROR_PREFIX + junkUid);
+            try {
+              await fsMod.deleteDoc(fsMod.doc(fbDb, FIRESTORE_COLLECTION, junkUid));
+            } catch (e) {}
+          }
+          if (regChanged) {
+            localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(regMap));
+          }
+        } catch (e) {}
+
         authMod.onAuthStateChanged(fbAuth, async (user) => {
           if (activeFirestoreUnsubscribe) {
             activeFirestoreUnsubscribe();
@@ -2156,52 +2394,43 @@
               const token = await user.getIdToken();
               localStorage.setItem('doodle_firebase_id_token', token);
             } catch (e) {}
-            localStorage.setItem('doodle_account_uid', user.uid);
-            if (!localStorage.getItem('doodle_account_name') && user.displayName) {
-              localStorage.setItem('doodle_account_name', user.displayName);
-            }
-            if (!localStorage.getItem('doodle_account_email') && user.email && !user.email.endsWith('@doodleword.app')) {
-              localStorage.setItem('doodle_account_email', user.email);
+
+            const resolvedEmail = (user.email && !user.email.endsWith('@doodleword.app'))
+              ? user.email
+              : (localStorage.getItem('doodle_account_email') || '');
+            const resolvedName = user.displayName || localStorage.getItem('doodle_account_name') || (resolvedEmail ? resolvedEmail.split('@')[0] : 'Doodle Player');
+
+            // Check if a canonical player document already exists in Firestore for this email/nickname
+            const existingCloud = await findAccountInFirestore(resolvedEmail || resolvedName || user.uid);
+            const activeUid = (existingCloud && existingCloud.userId) ? existingCloud.userId : user.uid;
+
+            localStorage.setItem('doodle_account_uid', activeUid);
+            localStorage.setItem('doodle_account_name', (existingCloud && existingCloud.displayName) || resolvedName);
+            if (resolvedEmail) {
+              localStorage.setItem('doodle_account_email', resolvedEmail);
             }
             if (!isUserSignedInViaRegistration()) {
               localStorage.setItem('doodle_account_mode', 'gmail');
             }
 
-            await syncPlayerToFirestore(user);
-            attachRealtimePlayerListener(user);
+            if (existingCloud) {
+              applyCloudDocAsSourceOfTruth(existingCloud);
+            } else {
+              await syncPlayerToFirestore(user, { uid: activeUid, displayName: resolvedName, email: resolvedEmail, authMethod: 'gmail' });
+            }
+            attachRealtimePlayerListener({ uid: activeUid });
           } else {
             localStorage.removeItem('doodle_firebase_id_token');
-            // Backfill any previously registered accounts in localStorage directly to Cloud Firestore
-            try {
-              const regMap = getRegisteredAccountsMap();
-              for (const regUid of Object.keys(regMap)) {
-                const rec = regMap[regUid];
-                if (rec && rec.uid) {
-                  await syncPlayerToFirestore(null, {
-                    uid: rec.uid,
-                    displayName: rec.nick || 'Doodle Player',
-                    email: rec.email || '',
-                    authMethod: rec.mode || 'account',
-                    skipStateMerge: true,
-                    skipActiveUidUpdate: true
-                  });
-                }
-              }
-            } catch (e) {}
-
-            // If player already registered in localStorage, sync & attach listener on their /players/{uid} document
             if (isUserSignedInViaRegistration()) {
-              const savedEmail = localStorage.getItem('doodle_account_email') || '';
-              const savedName = localStorage.getItem('doodle_account_name') || 'Doodle Player';
-              const savedMode = localStorage.getItem('doodle_account_mode') || 'account';
-              const directUid = getSignedInUserId();
-              await syncPlayerToFirestore(null, {
-                uid: directUid,
-                displayName: savedName,
-                email: savedEmail,
-                authMethod: savedMode
-              });
-              attachRealtimePlayerListener({ uid: directUid });
+              const currentUid = getSignedInUserId();
+              if (JUNK_TEST_UIDS.has(currentUid)) {
+                await handleSignOut();
+                return;
+              }
+              // Pull authoritative cloud progress FIRST before any local writes
+              const pulled = await pullLatestAccountStateFromFirestore(currentUid);
+              const finalUid = (pulled && pulled.userId) ? pulled.userId : getSignedInUserId();
+              attachRealtimePlayerListener({ uid: finalUid });
             }
           }
           updateCloudSyncUIStatus();
@@ -2231,7 +2460,7 @@
           if (typeof data.soundEnabled === 'boolean') soundEnabled = data.soundEnabled;
           if (typeof data.useCursive === 'boolean') useCursive = data.useCursive;
         }
-        reconcileLocalAndFirestoreParity('initial_load');
+        lastSyncedSignature = computeStateSignature();
       } catch (e) {}
     }
 
@@ -2250,9 +2479,32 @@
 
     window.addEventListener('online', () => {
       if (isUserSignedInViaRegistration()) {
-        reconcileLocalAndFirestoreParity('network_online');
+        pullLatestAccountStateFromFirestore();
       }
     });
+
+    window.addEventListener('focus', () => {
+      if (isUserSignedInViaRegistration() && Date.now() - lastLocalStateWriteMs > 1500) {
+        pullLatestAccountStateFromFirestore();
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && isUserSignedInViaRegistration() && Date.now() - lastLocalStateWriteMs > 1500) {
+        pullLatestAccountStateFromFirestore();
+      }
+    });
+
+    // Periodic cross-device cloud sync check when on Menu/Map screen so Phone and PC stay locked in sync
+    setInterval(() => {
+      if (
+        isUserSignedInViaRegistration() &&
+        Date.now() - lastLocalStateWriteMs > 2500 &&
+        !document.getElementById('gameScreen')?.classList.contains('active')
+      ) {
+        pullLatestAccountStateFromFirestore();
+      }
+    }, 4000);
 
     loadSavedState();
 
@@ -6147,10 +6399,16 @@
       return authedUser;
     }
 
-    async function completeAccountSession(uid, nick, email, mode, toastMsg, passwordOpt) {
+    async function completeAccountSession(uid, nick, email, mode, toastMsg, passwordOpt, options = {}) {
+      if (JUNK_TEST_UIDS.has(uid)) {
+        showToast('❌ Invalid account identifier.');
+        return;
+      }
       const cleanNick = (nick || '').trim().slice(0, 50) || (email ? email.split('@')[0] : 'Doodle Player');
       const cleanEmail = (email || '').trim().slice(0, 150);
       const cleanMode = normalizeAuthMethodWeb(mode);
+      const pwdHash = passwordOpt ? computePasswordHash(passwordOpt) : (options.passwordHash || '');
+
       saveRegisteredAccountRecord({
         uid,
         nick: cleanNick,
@@ -6170,14 +6428,26 @@
       if (firebaseInitPromise) {
         try { await firebaseInitPromise; } catch (e) {}
       }
+
+      if (options.remoteDoc) {
+        // Login to existing account: Cloud Firestore is the authoritative source of truth!
+        applyCloudDocAsSourceOfTruth({
+          ...options.remoteDoc,
+          userId: uid,
+          displayName: options.remoteDoc.displayName || cleanNick,
+          email: options.remoteDoc.email || cleanEmail
+        });
+      }
+
       await syncPlayerToFirestore(fbAuth ? fbAuth.currentUser : null, {
         uid,
-        displayName: cleanNick,
-        email: cleanEmail,
-        authMethod: cleanMode
+        displayName: (options.remoteDoc && options.remoteDoc.displayName) ? options.remoteDoc.displayName : cleanNick,
+        email: (options.remoteDoc && options.remoteDoc.email) ? options.remoteDoc.email : cleanEmail,
+        authMethod: cleanMode,
+        passwordHash: pwdHash,
+        adoptCloudProgressFirst: Boolean(options.remoteDoc)
       });
       attachRealtimePlayerListener({ uid });
-      reconcileLocalAndFirestoreParity('auth_signin');
       enterMenuWithAccount('👤 ' + cleanNick.slice(0, 12) + ' ✓', toastMsg);
     }
 
@@ -6193,36 +6463,49 @@
         return;
       }
 
-      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
-      const existing = findRegisteredAccount(identifier);
-      if (existing && existing.password && existing.password !== password) {
-        showToast('Incorrect password for "' + existing.nick + '". Tap "Forgot password?" to reset.');
+      if (firebaseInitPromise) {
+        try { await firebaseInitPromise; } catch (e) {}
+      }
+
+      // 1. Strictly verify that the account actually exists in Cloud Firestore!
+      const remoteAccount = await findAccountInFirestore(identifier);
+      if (!remoteAccount || !remoteAccount.userId) {
+        showToast('❌ Account "' + identifier + '" not found! Check your spelling or tap "Create new account".');
         return;
       }
 
-      const display = (existing && existing.nick) || (isEmail ? identifier.split('@')[0] : identifier);
-      const email = isEmail ? identifier : ((existing && existing.email) || '');
-      const mode = (existing && existing.mode) || 'account';
+      // 2. Strictly verify the password!
+      const enteredHash = computePasswordHash(password);
+      const localRecord = findRegisteredAccount(identifier) || findRegisteredAccount(remoteAccount.userId);
+      if (remoteAccount.passwordHash) {
+        if (remoteAccount.passwordHash !== enteredHash) {
+          showToast('❌ Incorrect password for "' + (remoteAccount.displayName || identifier) + '"! Tap "Forgot password?" to reset.');
+          return;
+        }
+      } else if (localRecord && localRecord.password && localRecord.password !== password) {
+        showToast('❌ Incorrect password for "' + (remoteAccount.displayName || identifier) + '"! Tap "Forgot password?" to reset.');
+        return;
+      } else if (password.trim().length < 3) {
+        showToast('❌ Invalid password! Please enter your account password.');
+        return;
+      }
 
-      const authedUser = await ensureFirebaseAuthenticatedUser({
-        email,
-        nick: display,
-        password,
-        authMethod: mode,
-        preferCreate: false
-      });
+      const uid = remoteAccount.userId;
+      const display = remoteAccount.displayName || (localRecord && localRecord.nick) || identifier;
+      const email = remoteAccount.email || (localRecord && localRecord.email) || '';
+      const mode = remoteAccount.authMethod || 'account';
 
-      const uid = (authedUser && authedUser.uid)
-        ? authedUser.uid
-        : ((existing && existing.uid) || ('usr_' + (identifier.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle')));
+      // 3. Apply authoritative Cloud Firestore level & coins before entering the game
+      applyCloudDocAsSourceOfTruth(remoteAccount);
 
       await completeAccountSession(
         uid,
         display,
         email,
         mode,
-        '👋 Welcome back, ' + display + '!',
-        password
+        '👋 Welcome back, ' + display + '! (Synced Level ' + (campaignIdx + 1) + ')',
+        password,
+        { remoteDoc: remoteAccount, passwordHash: enteredHash }
       );
     }
 
@@ -6246,38 +6529,40 @@
         showToast('Please enter your Email or Doodle Nickname!');
         return;
       }
-      if (!newPassword || newPassword.length < 3) {
-        showToast('Please enter a new password (at least 3 characters)!');
+      if (!newPassword || newPassword.length < 4) {
+        showToast('Please enter a new password (at least 4 characters)!');
         return;
       }
       if (firebaseInitPromise) {
         try { await firebaseInitPromise; } catch (e) {}
       }
+
+      const remoteAccount = await findAccountInFirestore(identifier);
+      if (!remoteAccount || !remoteAccount.userId) {
+        showToast('❌ Account "' + identifier + '" not found! Please check your spelling.');
+        return;
+      }
+
       const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
       if (isEmail && fbAuth && fbMod && fbMod.sendPasswordResetEmail) {
         try { await fbMod.sendPasswordResetEmail(fbAuth, identifier); } catch (e) {}
       }
-      const found = findRegisteredAccount(identifier);
-      const nick = found ? found.nick : (isEmail ? identifier.split('@')[0] : identifier);
-      const email = found ? found.email : (isEmail ? identifier : '');
-      const authedUser = await ensureFirebaseAuthenticatedUser({
-        email,
-        nick,
-        password: newPassword,
-        authMethod: found?.mode || 'account',
-        preferCreate: false
-      });
-      const uid = (authedUser && authedUser.uid)
-        ? authedUser.uid
-        : (found ? found.uid : ('usr_' + (identifier.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle')));
+
+      const uid = remoteAccount.userId;
+      const nick = remoteAccount.displayName || identifier;
+      const email = remoteAccount.email || (isEmail ? identifier : '');
+      const newHash = computePasswordHash(newPassword);
+
       closeAllModals();
+      applyCloudDocAsSourceOfTruth(remoteAccount);
       await completeAccountSession(
         uid,
         nick,
         email,
-        found?.mode || 'account',
-        '🔑 Password updated! Logged in as ' + nick + '.',
-        newPassword
+        remoteAccount.authMethod || 'account',
+        '🔑 Password updated! Logged in as ' + nick + ' (Level ' + (campaignIdx + 1) + ').',
+        newPassword,
+        { remoteDoc: remoteAccount, passwordHash: newHash }
       );
     }
 
@@ -6285,40 +6570,52 @@
       const nick = (document.getElementById('regNicknameInput').value || '').trim();
       const email = (document.getElementById('regEmailInput').value || '').trim();
       const password = (document.getElementById('regPasswordInput')?.value || '');
-      if (!nick) {
-        showToast('Please enter a Doodle Nickname to create your account!');
+      if (!nick || nick.length < 2) {
+        showToast('Please enter a Doodle Nickname (at least 2 characters)!');
         return;
       }
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         showToast('Please enter a valid Gmail/email address or leave it blank.');
         return;
       }
-      if (!password) {
-        showToast('Please enter a password so you can log back into your account anytime!');
+      if (!password || password.length < 4) {
+        showToast('Please enter a password (at least 4 characters) to protect your account!');
         return;
       }
 
-      const authedUser = await ensureFirebaseAuthenticatedUser({
-        email,
-        nick,
-        password,
-        authMethod: 'account',
-        preferCreate: true
-      });
+      if (firebaseInitPromise) {
+        try { await firebaseInitPromise; } catch (e) {}
+      }
 
-      const uid = (authedUser && authedUser.uid)
-        ? authedUser.uid
-        : ((fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid)
-            ? fbAuth.currentUser.uid
-            : 'usr_' + ((email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle'));
+      // Check if an account with this email or nickname already exists in Cloud Firestore
+      const existingByEmail = email ? await findAccountInFirestore(email) : null;
+      const existingByNick = await findAccountInFirestore(nick);
+      const existingCloud = existingByEmail || existingByNick;
+      if (existingCloud && existingCloud.userId) {
+        showToast('⚠️ Account "' + (existingCloud.displayName || nick) + '" already exists! Please log in instead.');
+        const loginIdEl = document.getElementById('loginIdentifierInput');
+        if (loginIdEl) loginIdEl.value = email || nick;
+        switchAuthCardView('login');
+        return;
+      }
+
+      // Fresh account creation starts at Level 1 unless the player was actively playing as Guest in this session
+      const currentMode = localStorage.getItem('doodle_account_mode');
+      if (currentMode !== 'guest') {
+        resetLocalGameStateToFresh();
+      }
+
+      const pwdHash = computePasswordHash(password);
+      const uid = 'usr_' + ((email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) || 'doodle');
 
       await completeAccountSession(
         uid,
         nick,
         email,
         'account',
-        '✨ Welcome, ' + nick + '!',
-        password
+        '✨ Account created! Welcome, ' + nick + '!',
+        password,
+        { passwordHash: pwdHash }
       );
     }
 
@@ -6334,15 +6631,7 @@
         return;
       }
       const mode = localStorage.getItem('doodle_account_mode') || 'account';
-      const existing = findRegisteredAccount(email || nick);
-      const authedUser = await ensureFirebaseAuthenticatedUser({
-        email,
-        nick,
-        password: existing && existing.password ? existing.password : '',
-        authMethod: mode,
-        preferCreate: false
-      });
-      const uid = (authedUser && authedUser.uid) ? authedUser.uid : getSignedInUserId();
+      const uid = getSignedInUserId();
       await completeAccountSession(
         uid,
         nick,
@@ -6371,18 +6660,19 @@
             localStorage.setItem('doodle_firebase_id_token', token);
             const display = prefilledNick || user.displayName || (user.email ? user.email.split('@')[0] : 'GmailPlayer');
             const email = user.email || prefilledEmail;
-            await syncPlayerToFirestore(user, {
-              displayName: display,
-              email,
-              authMethod: 'gmail'
-            });
-            attachRealtimePlayerListener(user);
+            const existingCloud = await findAccountInFirestore(email || display || user.uid);
+            const targetUid = (existingCloud && existingCloud.userId) ? existingCloud.userId : user.uid;
+            if (existingCloud) {
+              applyCloudDocAsSourceOfTruth(existingCloud);
+            }
             await completeAccountSession(
-              user.uid,
-              display,
+              targetUid,
+              (existingCloud && existingCloud.displayName) || display,
               email,
               'gmail',
-              '✅ Signed in with Google (' + (email || display) + ')!'
+              '✅ Signed in with Google (' + (email || display) + ')!',
+              '',
+              { remoteDoc: existingCloud }
             );
             return;
           }
@@ -6398,22 +6688,23 @@
 
       // 2. If the user already typed a valid email in the form and didn't request switching, authenticate & sync it to Firestore
       if (!forceAccountPicker && prefilledEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prefilledEmail)) {
-        const display = prefilledNick || prefilledEmail.split('@')[0];
-        const authedUser = await ensureFirebaseAuthenticatedUser({
-          email: prefilledEmail,
-          nick: display,
-          password: '',
-          authMethod: 'gmail',
-          preferCreate: true
-        });
-        const cleanId = prefilledEmail.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'gmail';
-        const uid = (authedUser && authedUser.uid) ? authedUser.uid : ('usr_' + cleanId);
+        const existingCloud = await findAccountInFirestore(prefilledEmail);
+        const display = (existingCloud && existingCloud.displayName) || prefilledNick || prefilledEmail.split('@')[0];
+        const cleanId = prefilledEmail.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) || 'gmail';
+        const uid = (existingCloud && existingCloud.userId) ? existingCloud.userId : ('usr_' + cleanId);
+        if (existingCloud) {
+          applyCloudDocAsSourceOfTruth(existingCloud);
+        } else if (localStorage.getItem('doodle_account_mode') !== 'guest') {
+          resetLocalGameStateToFresh();
+        }
         await completeAccountSession(
           uid,
           display,
           prefilledEmail,
           'gmail',
-          '✅ Signed in with Gmail (' + prefilledEmail + ')!'
+          '✅ Signed in with Gmail (' + prefilledEmail + ')!',
+          '',
+          { remoteDoc: existingCloud }
         );
         return;
       }
@@ -6434,23 +6725,24 @@
         showToast('Please enter a valid Gmail address (e.g. yourname@gmail.com)!');
         return;
       }
-      const display = nick || email.split('@')[0];
       closeAllModals();
-      const authedUser = await ensureFirebaseAuthenticatedUser({
-        email,
-        nick: display,
-        password: '',
-        authMethod: 'gmail',
-        preferCreate: true
-      });
-      const cleanId = email.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'gmail';
-      const uid = (authedUser && authedUser.uid) ? authedUser.uid : ('usr_' + cleanId);
+      const existingCloud = await findAccountInFirestore(email);
+      const display = (existingCloud && existingCloud.displayName) || nick || email.split('@')[0];
+      const cleanId = email.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) || 'gmail';
+      const uid = (existingCloud && existingCloud.userId) ? existingCloud.userId : ('usr_' + cleanId);
+      if (existingCloud) {
+        applyCloudDocAsSourceOfTruth(existingCloud);
+      } else if (localStorage.getItem('doodle_account_mode') !== 'guest') {
+        resetLocalGameStateToFresh();
+      }
       await completeAccountSession(
         uid,
         display,
         email,
         'gmail',
-        '✅ Signed in with Gmail (' + email + ')!'
+        '✅ Signed in with Gmail (' + email + ')!',
+        '',
+        { remoteDoc: existingCloud }
       );
     }
 
@@ -6468,6 +6760,12 @@
       localStorage.removeItem('doodle_account_email');
       localStorage.removeItem('doodle_account_uid');
       localStorage.removeItem('doodle_firebase_id_token');
+
+      // Reset local device game state on Sign Out so one account's progress never leaks into another account!
+      resetLocalGameStateToFresh();
+      if (typeof updateMenuUI === 'function') {
+        updateMenuUI();
+      }
 
       const nickEl = document.getElementById('regNicknameInput');
       const emailEl = document.getElementById('regEmailInput');
@@ -6493,6 +6791,9 @@
       if (activeFirestoreUnsubscribe) {
         activeFirestoreUnsubscribe();
         activeFirestoreUnsubscribe = null;
+      }
+      if (localStorage.getItem('doodle_account_mode') !== 'guest') {
+        resetLocalGameStateToFresh();
       }
       localStorage.setItem('doodle_account_mode', 'guest');
       localStorage.removeItem('doodle_account_name');
@@ -6522,9 +6823,19 @@
     (function restoreSavedAccountSession() {
       const savedMode = localStorage.getItem('doodle_account_mode');
       const savedName = localStorage.getItem('doodle_account_name');
+      const savedUid = localStorage.getItem('doodle_account_uid') || '';
+      if (JUNK_TEST_UIDS.has(savedUid)) {
+        localStorage.removeItem('doodle_account_mode');
+        localStorage.removeItem('doodle_account_name');
+        localStorage.removeItem('doodle_account_email');
+        localStorage.removeItem('doodle_account_uid');
+        resetLocalGameStateToFresh();
+        updateCloudSyncUIStatus();
+        return;
+      }
       if (savedMode === 'account' || savedMode === 'gmail') {
-        reconcileLocalAndFirestoreParity('auth_signin');
-        enterMenuWithAccount('☁️ ' + (savedName || 'Cloud').slice(0, 12) + ' ✓', '');
+        enterMenuWithAccount('👤 ' + (savedName || 'Player').slice(0, 12) + ' ✓', '');
+        pullLatestAccountStateFromFirestore(savedUid);
       } else {
         updateCloudSyncUIStatus();
       }
