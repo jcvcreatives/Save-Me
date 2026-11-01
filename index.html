@@ -197,6 +197,8 @@
       max-height: 290px;
       flex: 1;
       display: block;
+      cursor: pointer;
+      touch-action: manipulation;
     }
 
     .peril-preview-pill {
@@ -2568,7 +2570,7 @@
         } else if (id === 'menuScreen') {
           const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
           const mc = document.getElementById('menuCanvas');
-          if (mc) renderPerilScene(mc, getActiveMenuPeril(curLvl), 6, 6, true, nowSec, 0.016);
+          if (mc) renderHomeChargingStickman(mc, curLvl, getActiveMenuRank(curLvl), nowSec, 0.016);
           renderRankAuraCanvas(getActiveMenuRank(curLvl), nowSec);
         }
       };
@@ -4589,7 +4591,7 @@
         const menuCanvas = document.getElementById('menuCanvas');
         if (menuCanvas && menuScreenEl && menuScreenEl.classList.contains('active')) {
           const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
-          renderPerilScene(menuCanvas, getActiveMenuPeril(curLvl), 6, 6, true, t, dt);
+          renderHomeChargingStickman(menuCanvas, curLvl, getActiveMenuRank(curLvl), t, dt);
           renderRankAuraCanvas(getActiveMenuRank(curLvl), t);
         }
       } catch (err) {
@@ -4614,6 +4616,1118 @@
       } catch (err) {
         console.error('Victory canvas render error:', err);
       }
+    }
+
+    // =========================================================================
+    // 4B. HOME SCREEN CENTERPIECE: 3-STAGE DRAGON BALL CHARGING STICKMAN,
+    //     DOUBLE-LAYERED ENERGY SHELL, 20-TIER AURA & TAP-TO-SURGE FX
+    // =========================================================================
+    let homeSurgeStartMs = 0;
+    let homeSurgeDurationMs = 800;
+    let homeAccumulatedPhase = 0;
+    let homeRapidTapCombo = 0;
+    let homeLastTapMs = 0;
+    const homeBurstParticles = [];
+    const homeComicPopups = [];
+    const HOME_COMIC_PHRASES = ['SURGE!', '+KI!', 'MAX INK!', 'POWER UP!', 'OVERDRIVE!'];
+
+    function getHomeSurgeMultiplier(nowMs) {
+      const elapsed = nowMs - homeSurgeStartMs;
+      if (homeSurgeStartMs <= 0 || elapsed >= homeSurgeDurationMs || elapsed < 0) return 1.0;
+      const prog = elapsed / homeSurgeDurationMs;
+      const easeOut = 1 - Math.pow(1 - prog, 2.2);
+      return 2.5 - 1.5 * easeOut;
+    }
+
+    function playProceduralKiBurstSound(comboStep, tierNum) {
+      if (!soundEnabled) return;
+      try {
+        const ctx = getAudioCtx();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const dur = 0.28;
+        const pitchMult = 1 + (Math.min(12, Math.max(1, comboStep)) - 1) * 0.085 + (tierNum || 1) * 0.012;
+        const startFreq = 115 * pitchMult;
+        const peakFreq = 310 * pitchMult;
+
+        // Main & Sub-octave Dragon Ball Ki oscillators
+        const oscMain = ctx.createOscillator();
+        const oscSub = ctx.createOscillator();
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        const masterGain = ctx.createGain();
+
+        oscMain.type = 'sawtooth';
+        oscSub.type = 'sine';
+        oscMain.frequency.setValueAtTime(startFreq, now);
+        oscMain.frequency.exponentialRampToValueAtTime(peakFreq, now + dur * 0.36);
+        oscMain.frequency.exponentialRampToValueAtTime(startFreq * 1.35, now + dur);
+
+        oscSub.frequency.setValueAtTime(startFreq * 0.5, now);
+        oscSub.frequency.exponentialRampToValueAtTime(peakFreq * 0.5, now + dur * 0.36);
+        oscSub.frequency.exponentialRampToValueAtTime(startFreq * 0.65, now + dur);
+
+        // 28Hz DBZ Ki vibrato
+        lfo.frequency.value = 28;
+        lfoGain.gain.value = 18 * pitchMult;
+        lfo.connect(lfoGain);
+        lfoGain.connect(oscMain.frequency);
+
+        // Filtered noise whoosh
+        const bufSize = Math.floor(ctx.sampleRate * dur);
+        const noiseBuf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+        const data = noiseBuf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.55));
+        }
+        const noiseSrc = ctx.createBufferSource();
+        noiseSrc.buffer = noiseBuf;
+        const bandpass = ctx.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.setValueAtTime(420 * pitchMult, now);
+        bandpass.frequency.exponentialRampToValueAtTime(980 * pitchMult, now + dur);
+
+        masterGain.gain.setValueAtTime(0.01, now);
+        masterGain.gain.linearRampToValueAtTime(0.28, now + 0.03);
+        masterGain.gain.exponentialRampToValueAtTime(0.008, now + dur);
+
+        oscMain.connect(masterGain);
+        oscSub.connect(masterGain);
+        noiseSrc.connect(bandpass);
+        bandpass.connect(masterGain);
+        masterGain.connect(ctx.destination);
+
+        oscMain.start(now);
+        oscSub.start(now);
+        lfo.start(now);
+        noiseSrc.start(now);
+
+        oscMain.stop(now + dur);
+        oscSub.stop(now + dur);
+        lfo.stop(now + dur);
+        noiseSrc.stop(now + dur);
+      } catch (e) {}
+    }
+
+    function triggerHomeStickmanSurge(clientX, clientY) {
+      const canvas = document.getElementById('menuCanvas');
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const nowMs = performance.now();
+
+      homeRapidTapCombo = (nowMs - homeLastTapMs < 950) ? Math.min(12, homeRapidTapCombo + 1) : 1;
+      homeLastTapMs = nowMs;
+      homeSurgeStartMs = nowMs;
+
+      if (navigator.vibrate) {
+        try { navigator.vibrate(22); } catch (e) {}
+      }
+
+      const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
+      const rank = getActiveMenuRank(curLvl);
+      const currentTier = rank ? rank.tier : Math.min(20, Math.max(1, Math.floor((curLvl - 1) / 50) + 1));
+
+      playProceduralKiBurstSound(homeRapidTapCombo, currentTier);
+
+      const relX = (clientX && rect.width > 0) ? ((clientX - rect.left) / rect.width) : 0.5;
+      const relY = (clientY && rect.height > 0) ? ((clientY - rect.top) / rect.height) : 0.52;
+      const spawnXFrac = Math.min(0.82, Math.max(0.18, relX));
+      const spawnYFrac = Math.min(0.80, Math.max(0.22, relY));
+
+      const palette = [
+        (rank && rank.primaryColor) || '#FFF59D',
+        (rank && rank.secondaryColor) || '#29B6F6',
+        (rank && rank.color) || '#0288D1',
+        '#FFD166',
+        '#FFFFFF'
+      ];
+
+      const count = 18 + Math.floor(Math.random() * 7);
+      for (let i = 0; i < count; i++) {
+        const ang = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.28;
+        const speed = 125 + Math.random() * 195;
+        homeBurstParticles.push({
+          xFrac: spawnXFrac,
+          yFrac: spawnYFrac,
+          vx: Math.cos(ang) * speed,
+          vy: Math.sin(ang) * speed - 30,
+          color: palette[i % palette.length],
+          radius: 3.2 + Math.random() * 4.2,
+          isStar: i % 2 === 0,
+          createdMs: nowMs,
+          durationMs: 650 + Math.random() * 200
+        });
+      }
+
+      const phrase = HOME_COMIC_PHRASES[(homeRapidTapCombo - 1 + Math.floor(Math.random() * HOME_COMIC_PHRASES.length)) % HOME_COMIC_PHRASES.length];
+      homeComicPopups.push({
+        text: phrase,
+        xFrac: Math.min(0.78, Math.max(0.22, spawnXFrac + (Math.random() - 0.5) * 0.22)),
+        yFrac: Math.min(0.62, Math.max(0.20, spawnYFrac - 0.12 + (Math.random() - 0.5) * 0.08)),
+        color: (rank && rank.primaryColor) || '#FFD166',
+        createdMs: nowMs,
+        durationMs: 820
+      });
+    }
+
+    (function bindHomeMenuCanvasSurge() {
+      const attach = () => {
+        const mc = document.getElementById('menuCanvas');
+        if (!mc || mc.dataset.surgeBound === '1') return;
+        mc.dataset.surgeBound = '1';
+        mc.addEventListener('pointerdown', (e) => {
+          triggerHomeStickmanSurge(e.clientX, e.clientY);
+        });
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attach);
+      } else {
+        attach();
+      }
+    })();
+
+    function drawHomeSparkleStar(ctx, cx, cy, radius, fillColor, rotRad) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rotRad || 0);
+      ctx.fillStyle = fillColor;
+      ctx.strokeStyle = 'rgba(30,30,30,0.6)';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const r = i % 2 === 0 ? radius : radius * 0.34;
+        const a = (i * Math.PI) / 4;
+        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function renderHomeChargingStickman(canvas, currentLevel, rank, t, dt) {
+      if (!canvas) return;
+      const { ctx, w, h } = syncCanvasHD(canvas, 420, 235);
+      ctx.clearRect(0, 0, w, h);
+
+      const activeRank = rank || getRankForLevel(currentLevel || 1);
+      const currentTier = activeRank ? activeRank.tier : Math.min(20, Math.max(1, Math.floor(((currentLevel || 1) - 1) / 50) + 1));
+      const primary = activeRank.primaryColor || '#FFF59D';
+      const secondary = activeRank.secondaryColor || '#29B6F6';
+      const accent = activeRank.color || '#0288D1';
+
+      const nowMs = performance.now();
+      const surgeMultiplier = getHomeSurgeMultiplier(nowMs);
+      const surgeBoost = Math.max(0, surgeMultiplier - 1.0);
+      const speedMult = surgeBoost > 0.04 ? (1 + surgeBoost * 0.95) : 1;
+      homeAccumulatedPhase += (dt || 0.016) * speedMult;
+      const phase = homeAccumulatedPhase * 2.2;
+      const basePulse = 0.92 + Math.sin(phase * 2.4) * 0.12;
+      const effectivePulse = basePulse * (1 + surgeBoost * 0.36);
+
+      // Canvas micro-shake during surge
+      const shakeAmp = surgeBoost > 0.04 ? surgeBoost * 4.2 : 0;
+      const shakeX = Math.sin(t * 68) * shakeAmp;
+      const shakeY = Math.cos(t * 79) * shakeAmp;
+
+      const groundY = h * 0.84;
+      const centerX = w * 0.5;
+
+      // 3-Stage Evolving Dragon Ball Levitation Offset:
+      // Tiers 1–5 (Grounded Ki Charge): 0px
+      // Tiers 6–12 (Ascendant Hover): 25px + sin(t * 4) * 8
+      // Tiers 13–20 (Transcendent Cosmic Float): 40px + sin(t * 3.2) * 10
+      let hoverOffset = 0;
+      if (currentTier >= 6 && currentTier <= 12) {
+        hoverOffset = 25 + Math.sin(phase * 1.8) * 8 + surgeBoost * 6;
+      } else if (currentTier >= 13) {
+        hoverOffset = 40 + Math.sin(phase * 1.45) * 10 + surgeBoost * 9;
+      }
+
+      const footY = groundY - hoverOffset;
+      const coreY = footY - 46;
+
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+
+      // =======================================================================
+      // 1. SYNCHRONIZED 20-TIER STICKMAN AURA (MATCHES TIER PROGRESS CARD)
+      // =======================================================================
+      const baseRadius = Math.min(w, h) * 0.34 * effectivePulse;
+
+      // Vivid radial aura backdrop wash around stickman
+      const bgRadial = ctx.createRadialGradient(centerX, coreY, 6, centerX, coreY, baseRadius * 1.38);
+      bgRadial.addColorStop(0, primary);
+      bgRadial.addColorStop(0.55, secondary);
+      bgRadial.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.85, 0.42 * effectivePulse);
+      ctx.fillStyle = bgRadial;
+      ctx.beginPath();
+      ctx.arc(centerX, coreY, baseRadius * 1.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (currentTier === 1) {
+        // Tier 1 (Lv 1–50): Soft pale-yellow hatching lines & subtle golden ki pulse
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2.2;
+        ctx.globalAlpha = 0.55;
+        for (let i = -10; i <= 10; i++) {
+          const off = i * 9 + Math.sin(phase * 1.5 + i) * 3;
+          ctx.beginPath();
+          ctx.moveTo(centerX + off - 26, coreY + 46);
+          ctx.lineTo(centerX + off + 26, coreY - 46);
+          ctx.stroke();
+        }
+        for (let s = 0; s < 5; s++) {
+          const ang = phase + s * 1.25;
+          const r = baseRadius * (0.65 + (s % 2) * 0.25);
+          drawHomeSparkleStar(ctx, centerX + Math.cos(ang) * r, coreY + Math.sin(ang) * r, 5.5 * basePulse, primary, ang);
+        }
+      } else if (currentTier === 2) {
+        // Tier 2 (Lv 51–100): Gentle flowing blue ink-splash rings & orbiting droplets
+        for (let i = 0; i < 5; i++) {
+          const ringProg = ((phase * 0.28 + i * 0.2) % 1);
+          const r = baseRadius * (0.35 + ringProg * 0.98);
+          ctx.globalAlpha = Math.max(0.18, (1 - ringProg) * 0.85);
+          ctx.strokeStyle = i % 2 === 0 ? accent : secondary;
+          ctx.lineWidth = 3.0;
+          ctx.beginPath();
+          ctx.arc(centerX, coreY, r, 0, Math.PI * 2);
+          ctx.stroke();
+
+          const dropAng = phase * 1.6 + i * 1.3;
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = primary;
+          ctx.strokeStyle = accent;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(centerX + Math.cos(dropAng) * r, coreY + Math.sin(dropAng) * r, 4.5 * basePulse, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      } else if (currentTier === 3) {
+        // Tier 3 (Lv 101–150): Rotating green sketchy cross-hatch starburst rays
+        const rayCount = 18;
+        for (let i = 0; i < rayCount; i++) {
+          const ang = phase * 1.2 + (i * Math.PI * 2) / rayCount;
+          const inR = baseRadius * 0.28;
+          const outR = baseRadius * (i % 2 === 0 ? 1.25 : 0.86);
+          ctx.strokeStyle = i % 2 === 0 ? accent : secondary;
+          ctx.globalAlpha = 0.72;
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(centerX + Math.cos(ang) * inR, coreY + Math.sin(ang) * inR);
+          ctx.lineTo(centerX + Math.cos(ang) * outR, coreY + Math.sin(ang) * outR);
+          ctx.stroke();
+        }
+      } else if (currentTier === 4) {
+        // Tier 4 (Lv 151–200): Shimmering purple geometric coordinate grid pulse
+        const gridHalf = baseRadius * 1.15;
+        const step = 16;
+        const shift = (phase * 10) % step;
+        ctx.lineWidth = 1.7;
+        for (let d = -gridHalf + shift; d <= gridHalf; d += step) {
+          ctx.strokeStyle = secondary;
+          ctx.globalAlpha = 0.52;
+          ctx.beginPath();
+          ctx.moveTo(centerX + d, coreY - gridHalf);
+          ctx.lineTo(centerX + d, coreY + gridHalf);
+          ctx.stroke();
+
+          ctx.strokeStyle = accent;
+          ctx.globalAlpha = 0.45;
+          ctx.beginPath();
+          ctx.moveTo(centerX - gridHalf, coreY + d);
+          ctx.lineTo(centerX + gridHalf, coreY + d);
+          ctx.stroke();
+        }
+        for (let k = 0; k < 6; k++) {
+          const a = phase + k * 1.05;
+          drawHomeSparkleStar(ctx, centerX + Math.cos(a) * baseRadius * 0.85, coreY + Math.sin(a) * baseRadius * 0.85, 5.5 * basePulse, primary, -a);
+        }
+      } else if (currentTier === 5) {
+        // Tier 5 (Lv 201–250): Radiant golden flame aura with floating doodle sparks
+        for (let i = 0; i < 12; i++) {
+          const bx = centerX + (i - 5.5) * 14;
+          const fh = (32 + Math.abs(Math.sin(phase * 2.2 + i * 0.8)) * 42) * effectivePulse;
+          const tipX = bx + Math.sin(phase * 3 + i) * 7;
+          ctx.fillStyle = i % 2 === 0 ? primary : secondary;
+          ctx.globalAlpha = 0.55;
+          ctx.beginPath();
+          ctx.moveTo(bx - 9, groundY);
+          ctx.quadraticCurveTo(bx - 4, groundY - fh * 0.6, tipX, groundY - fh);
+          ctx.quadraticCurveTo(bx + 4, groundY - fh * 0.6, bx + 9, groundY);
+          ctx.closePath();
+          ctx.fill();
+        }
+        for (let s = 0; s < 10; s++) {
+          const lift = ((phase * 0.45 + s * 0.11) % 1);
+          const sx = centerX + Math.sin(phase * 1.4 + s * 1.7) * (baseRadius * 0.95);
+          const sy = groundY - lift * (baseRadius * 2.0);
+          ctx.globalAlpha = 0.88;
+          ctx.fillStyle = s % 2 === 0 ? '#FFEA00' : '#FF6D00';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 3.6 * (1 - lift * 0.4), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (currentTier === 6) {
+        // Tier 6 (Lv 251–300): Multi-colored rainbow pulsating aura with crackling lightning doodles
+        const rainbow = ['#FF1744', '#FF9100', '#FFEA00', '#00E676', '#2979FF', '#D500F9'];
+        rainbow.forEach((col, idx) => {
+          ctx.strokeStyle = col;
+          ctx.globalAlpha = 0.56;
+          ctx.lineWidth = 3.2;
+          ctx.beginPath();
+          ctx.arc(centerX, coreY, baseRadius * (0.48 + idx * 0.12), 0, Math.PI * 2);
+          ctx.stroke();
+        });
+        ctx.strokeStyle = '#FFEA00';
+        ctx.globalAlpha = 0.92;
+        ctx.lineWidth = 2.4;
+        for (let b = 0; b < 6; b++) {
+          const ang = phase * 2 + (b * Math.PI) / 3;
+          ctx.beginPath();
+          ctx.moveTo(centerX + Math.cos(ang) * baseRadius * 0.35, coreY + Math.sin(ang) * baseRadius * 0.35);
+          ctx.lineTo(centerX + Math.cos(ang + 0.18) * baseRadius * 0.75, coreY + Math.sin(ang + 0.18) * baseRadius * 0.75);
+          ctx.lineTo(centerX + Math.cos(ang - 0.12) * baseRadius * 1.18, coreY + Math.sin(ang - 0.12) * baseRadius * 1.18);
+          ctx.stroke();
+        }
+      } else if (currentTier === 7) {
+        // Tier 7 (Lv 301–350): Matrix green code-doodle grid raining down
+        for (let c = 0; c < 10; c++) {
+          const colX = centerX + (c - 4.5) * 18;
+          const dropProg = ((phase * (0.38 + (c % 3) * 0.12) + c * 0.14) % 1);
+          const headY = (coreY - baseRadius * 1.15) + dropProg * (baseRadius * 2.2);
+          const tailTop = Math.max(coreY - baseRadius * 1.2, headY - 28);
+          ctx.strokeStyle = accent;
+          ctx.globalAlpha = 0.75;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(colX, tailTop);
+          ctx.lineTo(colX, headY);
+          ctx.stroke();
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.globalAlpha = 0.95;
+          ctx.beginPath();
+          ctx.arc(colX, headY, 2.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (currentTier === 8) {
+        // Tier 8 (Lv 351–400): Orbiting mini planet doodles and twinkling star crosshairs
+        for (let p = 0; p < 5; p++) {
+          const ang = phase * (1.1 + p * 0.15) + p * 1.25;
+          const orbitR = baseRadius * (0.55 + (p % 2) * 0.42);
+          const px = centerX + Math.cos(ang) * orbitR;
+          const py = coreY + Math.sin(ang) * (orbitR * 0.68);
+          const pRad = (5 + (p % 2) * 2.2) * basePulse;
+          ctx.fillStyle = primary;
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(px, py, pRad, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.strokeStyle = accent;
+          ctx.beginPath();
+          ctx.ellipse(px, py, pRad * 1.7, pRad * 0.5, 0.3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else if (currentTier === 9) {
+        // Tier 9 (Lv 401–450): Pulsing sketchy ink atomic electron rings
+        for (let ring = 0; ring < 3; ring++) {
+          const tilt = (ring * Math.PI) / 3 + phase * 0.4;
+          const rx = baseRadius * 1.15;
+          const ry = baseRadius * 0.42;
+          ctx.strokeStyle = accent;
+          ctx.globalAlpha = 0.72;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.ellipse(centerX, coreY, rx, ry, tilt, 0, Math.PI * 2);
+          ctx.stroke();
+
+          const eAng = phase * 2.2 + ring * 2;
+          const ex = centerX + Math.cos(eAng) * rx * Math.cos(tilt) - Math.sin(eAng) * ry * Math.sin(tilt);
+          const ey = coreY + Math.cos(eAng) * rx * Math.sin(tilt) + Math.sin(eAng) * ry * Math.cos(tilt);
+          ctx.fillStyle = primary;
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(ex, ey, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      } else if (currentTier === 10) {
+        // Tier 10 (Lv 451–500): Shimmering spiral galaxy sketch rotating infinitely
+        for (let arm = 0; arm < 3; arm++) {
+          ctx.strokeStyle = accent;
+          ctx.globalAlpha = 0.7;
+          ctx.lineWidth = 2.6;
+          ctx.beginPath();
+          for (let s = 0; s <= 28; s++) {
+            const frac = s / 28;
+            const r = frac * baseRadius * 1.2;
+            const ang = phase * 1.5 + (arm * Math.PI * 2) / 3 + frac * 4.2;
+            const px = centerX + Math.cos(ang) * r;
+            const py = coreY + Math.sin(ang) * r * 0.78;
+            if (s === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+      } else if (currentTier === 11) {
+        // Tier 11 (Lv 501–550): Glowing constellation connecting-line star maps
+        const pts = [];
+        for (let idx = 0; idx < 8; idx++) {
+          const ang = phase * 0.55 + (idx * Math.PI * 2) / 8;
+          const r = baseRadius * (idx % 2 === 0 ? 1.08 : 0.72);
+          pts.push([centerX + Math.cos(ang) * r, coreY + Math.sin(ang) * r]);
+        }
+        ctx.strokeStyle = accent;
+        ctx.globalAlpha = 0.62;
+        ctx.lineWidth = 1.8;
+        for (let i = 0; i < pts.length; i++) {
+          const nxt = pts[(i + 1) % pts.length];
+          ctx.beginPath();
+          ctx.moveTo(pts[i][0], pts[i][1]);
+          ctx.lineTo(nxt[0], nxt[1]);
+          ctx.stroke();
+          drawHomeSparkleStar(ctx, pts[i][0], pts[i][1], 5.5 * basePulse, primary, phase + i);
+        }
+      } else if (currentTier === 12) {
+        // Tier 12 (Lv 551–600): Swirling purple and magenta cosmic dust clouds
+        for (let cl = 0; cl < 8; cl++) {
+          const ang = phase * 0.9 + (cl * Math.PI * 2) / 8;
+          const dist = baseRadius * (0.55 + 0.35 * Math.sin(phase + cl));
+          const cxCl = centerX + Math.cos(ang) * dist;
+          const cyCl = coreY + Math.sin(ang) * dist * 0.8;
+          ctx.fillStyle = cl % 2 === 0 ? primary : secondary;
+          ctx.globalAlpha = 0.42;
+          ctx.beginPath();
+          ctx.arc(cxCl, cyCl, 19 * basePulse, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (currentTier === 13) {
+        // Tier 13 (Lv 601–650): Spiraling blackhole doodle ring pulling ink particles inward
+        ctx.strokeStyle = accent;
+        ctx.globalAlpha = 0.8;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(centerX, coreY, baseRadius * 0.52, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let p = 0; p < 12; p++) {
+          const inward = 1 - ((phase * 0.38 + p * 0.083) % 1);
+          const r = baseRadius * (0.25 + inward * 0.95);
+          const ang = phase * 2.4 + p * 0.6 + (1 - inward) * 3.5;
+          ctx.fillStyle = '#1E1E1E';
+          ctx.globalAlpha = 0.78;
+          ctx.beginPath();
+          ctx.arc(centerX + Math.cos(ang) * r, coreY + Math.sin(ang) * r, 3.2 * (0.5 + inward * 0.7), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (currentTier === 14) {
+        // Tier 14 (Lv 651–700): Exploding orange and yellow radiant starburst shockwaves
+        const spikes = 20;
+        ctx.beginPath();
+        for (let i = 0; i < spikes; i++) {
+          const ang = phase * 1.4 + (i * Math.PI * 2) / spikes;
+          const r = baseRadius * (i % 2 === 0 ? 1.25 : 0.62);
+          const px = centerX + Math.cos(ang) * r;
+          const py = coreY + Math.sin(ang) * r;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = primary;
+        ctx.globalAlpha = 0.38;
+        ctx.fill();
+        ctx.strokeStyle = accent;
+        ctx.globalAlpha = 0.85;
+        ctx.lineWidth = 2.4;
+        ctx.stroke();
+      } else if (currentTier === 15) {
+        // Tier 15 (Lv 701–750): Ticking clock gear teeth and swinging pendulum sketches
+        const gearR = baseRadius * 0.92;
+        ctx.strokeStyle = accent;
+        ctx.globalAlpha = 0.72;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(centerX, coreY, gearR, 0, Math.PI * 2);
+        ctx.stroke();
+        const discreteStep = Math.floor(t * 4) * (Math.PI / 12);
+        for (let k = 0; k < 12; k++) {
+          const ang = discreteStep + (k * Math.PI * 2) / 12;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(centerX + Math.cos(ang) * (gearR - 4), coreY + Math.sin(ang) * (gearR - 4));
+          ctx.lineTo(centerX + Math.cos(ang) * (gearR + 9), coreY + Math.sin(ang) * (gearR + 9));
+          ctx.stroke();
+        }
+        const pendAng = Math.PI / 2 + Math.sin(phase * 1.8) * 0.48;
+        const bobX = centerX + Math.cos(pendAng) * gearR * 0.85;
+        const bobY = coreY + Math.sin(pendAng) * gearR * 0.85;
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(centerX, coreY);
+        ctx.lineTo(bobX, bobY);
+        ctx.stroke();
+        ctx.fillStyle = primary;
+        ctx.beginPath();
+        ctx.arc(bobX, bobY, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (currentTier === 16) {
+        // Tier 16 (Lv 751–800): Shimmering ghostly blue ethereal flame wisps
+        for (let wisp = 0; wisp < 8; wisp++) {
+          const ang = phase + (wisp * Math.PI * 2) / 8;
+          const wx = centerX + Math.cos(ang) * baseRadius * 0.82;
+          const wy = coreY + Math.sin(ang * 1.5) * baseRadius * 0.58;
+          ctx.fillStyle = primary;
+          ctx.strokeStyle = accent;
+          ctx.globalAlpha = 0.72;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(wx - 6, wy + 8);
+          ctx.quadraticCurveTo(wx - 8, wy - 6, wx + Math.sin(phase * 3 + wisp) * 4, wy - 16);
+          ctx.quadraticCurveTo(wx + 8, wy - 6, wx + 6, wy + 8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      } else if (currentTier === 17) {
+        // Tier 17 (Lv 801–850): Heavy angular metallic crosshatch sparks and levitating iron shards
+        for (let s = 0; s < 8; s++) {
+          const ang = phase * 1.4 + (s * Math.PI * 2) / 8;
+          const r = baseRadius * (0.68 + (s % 2) * 0.32);
+          const sx = centerX + Math.cos(ang) * r;
+          const sy = coreY + Math.sin(ang) * r;
+          ctx.fillStyle = primary;
+          ctx.strokeStyle = accent;
+          ctx.globalAlpha = 0.85;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy - 8);
+          ctx.lineTo(sx + 6, sy + 4);
+          ctx.lineTo(sx - 5, sy + 7);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      } else if (currentTier === 18) {
+        // Tier 18 (Lv 851–900): Floating golden ancient runes and mystical sigil doodles
+        const sigilR = baseRadius * 0.98;
+        ctx.strokeStyle = accent;
+        ctx.globalAlpha = 0.72;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.arc(centerX, coreY, sigilR, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let r = 0; r < 6; r++) {
+          const ang = phase * 0.9 + (r * Math.PI) / 3;
+          const rx = centerX + Math.cos(ang) * sigilR;
+          const ry = coreY + Math.sin(ang) * sigilR;
+          ctx.fillStyle = primary;
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(rx, ry, 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      } else if (currentTier === 19) {
+        // Tier 19 (Lv 901–950): Glowing third-eye doodle above the head with floating parchment scrolls
+        const eyeX = centerX;
+        const eyeY = coreY - baseRadius * 0.92;
+        const eyeW = 26 * basePulse;
+        const eyeH = 12 * basePulse;
+        ctx.fillStyle = primary;
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(eyeX - eyeW, eyeY);
+        ctx.quadraticCurveTo(eyeX, eyeY - eyeH, eyeX + eyeW, eyeY);
+        ctx.quadraticCurveTo(eyeX, eyeY + eyeH, eyeX - eyeW, eyeY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = accent;
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeY, 5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Tier 20 (Lv 951–1,000): Ultimate pulsating gold-and-rainbow cosmos aura with shooting stars
+        for (let i = 0; i < 16; i++) {
+          const ang = phase * 1.1 + (i * Math.PI * 2) / 16;
+          const rOut = baseRadius * (i % 2 === 0 ? 1.38 : 0.95);
+          ctx.strokeStyle = i % 2 === 0 ? '#FFD700' : '#D500F9';
+          ctx.globalAlpha = 0.75;
+          ctx.lineWidth = 2.8;
+          ctx.beginPath();
+          ctx.moveTo(centerX, coreY);
+          ctx.lineTo(centerX + Math.cos(ang) * rOut, coreY + Math.sin(ang) * rOut);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+
+      // =======================================================================
+      // 2. DOUBLE-LAYERED JAGGED DRAGON BALL ENERGY SHELL + UPWARD KI LINES
+      // =======================================================================
+      const surgeScale = 1 + surgeBoost * 0.35;
+      const outerW = 58 * effectivePulse * surgeScale;
+      const outerH = 76 * effectivePulse * surgeScale;
+      const baseBottomY = Math.max(footY + 6, groundY - 4);
+      const crownTopY = coreY - outerH * 0.88;
+
+      function traceJaggedKiShell(scaleX, scaleY, phaseShift, spikes) {
+        const halfW = outerW * scaleX;
+        const totalH = (baseBottomY - crownTopY) * scaleY;
+        const topY = baseBottomY - totalH;
+        ctx.beginPath();
+        ctx.moveTo(centerX - halfW * 0.62, baseBottomY);
+        for (let i = 1; i <= spikes; i++) {
+          const frac = i / spikes;
+          const y = baseBottomY - totalH * frac;
+          const profile = Math.sin(frac * Math.PI);
+          const jag = Math.sin(t * 24 + i * 1.7 + phaseShift) * (6 * surgeScale);
+          const x = centerX - halfW * (0.45 + 0.65 * profile) + jag;
+          const ctrlY = y + (totalH / spikes) * 0.45;
+          const ctrlX = x - 7;
+          ctx.quadraticCurveTo(ctrlX, ctrlY, x, y);
+        }
+        const apexX = centerX + Math.sin(t * 30 + phaseShift) * 5;
+        const apexY = topY - 9 * surgeScale;
+        ctx.lineTo(apexX, apexY);
+        for (let i = spikes; i >= 1; i--) {
+          const frac = i / spikes;
+          const y = baseBottomY - totalH * frac;
+          const profile = Math.sin(frac * Math.PI);
+          const jag = Math.cos(t * 24 + i * 1.9 + phaseShift) * (6 * surgeScale);
+          const x = centerX + halfW * (0.45 + 0.65 * profile) + jag;
+          const ctrlY = y - (totalH / spikes) * 0.35;
+          const ctrlX = x + 7;
+          ctx.quadraticCurveTo(ctrlX, ctrlY, x, y);
+        }
+        ctx.lineTo(centerX + halfW * 0.62, baseBottomY);
+        ctx.closePath();
+      }
+
+      // Layer 1: Outer jagged aura shell
+      ctx.save();
+      traceJaggedKiShell(1.05, 1.04, 0, 7);
+      const outerGrad = ctx.createLinearGradient(centerX, crownTopY, centerX, baseBottomY);
+      outerGrad.addColorStop(0, secondary);
+      outerGrad.addColorStop(0.55, primary);
+      outerGrad.addColorStop(1, secondary);
+      ctx.globalAlpha = 0.42;
+      ctx.fillStyle = outerGrad;
+      ctx.fill();
+      ctx.globalAlpha = 0.86;
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2.6;
+      ctx.stroke();
+      ctx.globalAlpha = 0.52;
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Layer 2: Inner intense core aura shell
+      traceJaggedKiShell(0.74, 0.82, 1.6, 6);
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = primary;
+      ctx.fill();
+      ctx.globalAlpha = 0.92;
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2.0;
+      ctx.stroke();
+
+      // Upward-rising sketchy wind/ki lines
+      const windLines = surgeMultiplier > 1.2 ? 14 : 9;
+      for (let i = 0; i < windLines; i++) {
+        const side = i % 2 === 0 ? -1 : 1;
+        const lane = Math.floor(i / 2) + 1;
+        const xSpread = (16 + lane * 11) * side + Math.sin(t * 9 + i) * 3;
+        const cycle = (t * (2.2 + (i % 3) * 0.45) + i * 0.21) % 1;
+        const sy = baseBottomY - cycle * (outerH * 1.25);
+        const lineLen = (14 + (i % 3) * 6) * surgeScale;
+        ctx.globalAlpha = Math.sin(cycle * Math.PI) * 0.78;
+        ctx.strokeStyle = i % 3 === 0 ? '#1E1E1E' : accent;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.moveTo(centerX + xSpread, sy);
+        ctx.lineTo(centerX + xSpread * 0.94, sy - lineLen);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // =======================================================================
+      // 3. HORIZONTAL GROUND LINE, SHADOW, FLOATING PEBBLES & SHOCKWAVE RINGS
+      // =======================================================================
+      ctx.save();
+      const lineMargin = w * 0.08;
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(lineMargin, groundY);
+      ctx.lineTo(w - lineMargin, groundY);
+      ctx.stroke();
+
+      // Ground hash ticks
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = 1.4;
+      for (let i = 0; i <= 14; i++) {
+        const tx = lineMargin + ((w - lineMargin * 2) / 14) * i;
+        ctx.beginPath();
+        ctx.moveTo(tx, groundY + 1);
+        ctx.lineTo(tx - 5, groundY + 7);
+        ctx.stroke();
+      }
+
+      // Scaling sketchy oval shadow on ground line
+      const shadowScale = (1 - Math.min(0.58, hoverOffset / 95)) * (1 + surgeBoost * 0.18);
+      const shadowW = 27 * shadowScale;
+      const shadowH = 5 * shadowScale;
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = '#1E1E1E';
+      ctx.beginPath();
+      ctx.ellipse(centerX, groundY, shadowW, shadowH, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+
+      // Tiers 6–20: Floating pebble doodles rising off the ground line
+      if (currentTier >= 6) {
+        const pebbleCount = currentTier >= 13 ? 10 : 7;
+        for (let i = 0; i < pebbleCount; i++) {
+          const side = i % 2 === 0 ? -1 : 1;
+          const dist = 26 + i * 11;
+          const liftProg = (t * (0.65 + (i % 3) * 0.22) + i * 0.17) % 1;
+          const px = centerX + side * dist + Math.sin(t * 3 + i) * 3;
+          const py = groundY - 4 - liftProg * 46;
+          const pRad = (2.4 + (i % 3) * 1.1) * (1 - liftProg * 0.35);
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = '#D7CCC8';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.arc(px, py, pRad, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+
+      // Tiers 13–20 (or active Surge): Rhythmic downward shockwave rings rippling across the ground line
+      if (currentTier >= 13 || surgeMultiplier > 1.15) {
+        for (let r = 0; r < 3; r++) {
+          const prog = (t * 1.35 + r / 3) % 1;
+          const rw = (18 + prog * 78) * (1 + surgeBoost * 0.3);
+          const rh = 3 + prog * 9;
+          ctx.globalAlpha = (1 - prog) * 0.78;
+          ctx.strokeStyle = accent;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.ellipse(centerX, groundY, rw, rh, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+
+      // =======================================================================
+      // 4. 3-STAGE EVOLVING DRAGON BALL BLACK DOODLE STICKMAN
+      // =======================================================================
+      ctx.save();
+      const vibX = (currentTier <= 5 || surgeMultiplier > 1.1)
+        ? Math.sin(t * 35) * 2 * surgeMultiplier
+        : Math.sin(t * 12) * 0.8;
+      const cx = centerX + vibX;
+      const headRadius = 13.5;
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (currentTier <= 5) {
+        // STAGE 1 (Tiers 1–5 — Grounded Ki Charge): Wide bent knees on ground line, bent elbows with clenched fists at waist, angled eyebrows
+        const hipY = footY - 26;
+        const shoulderY = hipY - 28;
+        const headY = shoulderY - headRadius - 4;
+
+        // Torso & wide horse-stance bent legs
+        ctx.beginPath();
+        ctx.moveTo(cx, shoulderY);
+        ctx.lineTo(cx, hipY);
+        ctx.moveTo(cx, hipY);
+        ctx.lineTo(cx - 17, hipY + 12);
+        ctx.lineTo(cx - 22, footY);
+        ctx.moveTo(cx, hipY);
+        ctx.lineTo(cx + 17, hipY + 12);
+        ctx.lineTo(cx + 22, footY);
+
+        // Bent elbows + clenched fists at waist level
+        const leftFist = [cx - 13, hipY - 3];
+        const rightFist = [cx + 13, hipY - 3];
+        ctx.moveTo(cx, shoulderY + 3);
+        ctx.lineTo(cx - 21, shoulderY + 13);
+        ctx.lineTo(leftFist[0], leftFist[1]);
+        ctx.moveTo(cx, shoulderY + 3);
+        ctx.lineTo(cx + 21, shoulderY + 13);
+        ctx.lineTo(rightFist[0], rightFist[1]);
+        ctx.stroke();
+
+        // Glowing Ki Knuckles + Black Fists
+        [leftFist, rightFist].forEach(([fx, fy]) => {
+          ctx.fillStyle = primary;
+          ctx.globalAlpha = 0.82;
+          ctx.beginPath();
+          ctx.arc(fx, fy, 6.2 * (1 + surgeBoost * 0.3), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#1E1E1E';
+          ctx.beginPath();
+          ctx.arc(fx, fy, 4.0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Doodle Head
+        ctx.fillStyle = '#FAF9F6';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.arc(cx, headY, headRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Eyes & Angled Determined Eyebrows
+        const eyeY = headY - 1;
+        ctx.fillStyle = '#1E1E1E';
+        ctx.beginPath();
+        ctx.arc(cx - 4.5, eyeY, 2.0, 0, Math.PI * 2);
+        ctx.arc(cx + 4.5, eyeY, 2.0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 8, eyeY - 4.5);
+        ctx.lineTo(cx - 1.8, eyeY - 1.8);
+        ctx.moveTo(cx + 8, eyeY - 4.5);
+        ctx.lineTo(cx + 1.8, eyeY - 1.8);
+        ctx.moveTo(cx - 4, headY + 5.2);
+        ctx.lineTo(cx + 4, headY + 4.6);
+        ctx.stroke();
+      } else if (currentTier <= 12) {
+        // STAGE 2 (Tiers 6–12 — Ascendant Hover): Levitating 25px above ground, one knee raised, energy crackling around hands
+        const hipY = footY - 30;
+        const shoulderY = hipY - 28;
+        const headY = shoulderY - headRadius - 4;
+
+        ctx.beginPath();
+        ctx.moveTo(cx, shoulderY);
+        ctx.lineTo(cx, hipY);
+        // Left leg extended down, Right knee raised
+        ctx.moveTo(cx, hipY);
+        ctx.lineTo(cx - 10, hipY + 15);
+        ctx.lineTo(cx - 13, footY);
+        ctx.moveTo(cx, hipY);
+        ctx.lineTo(cx + 15, hipY + 3);
+        ctx.lineTo(cx + 9, hipY + 16);
+
+        const leftHand = [cx - 26, shoulderY + 2];
+        const rightHand = [cx + 26, shoulderY + 2];
+        ctx.moveTo(cx, shoulderY + 3);
+        ctx.lineTo(cx - 19, shoulderY + 10);
+        ctx.lineTo(leftHand[0], leftHand[1]);
+        ctx.moveTo(cx, shoulderY + 3);
+        ctx.lineTo(cx + 19, shoulderY + 10);
+        ctx.lineTo(rightHand[0], rightHand[1]);
+        ctx.stroke();
+
+        // Crackling energy around hands
+        [leftHand, rightHand].forEach(([hx, hy], idx) => {
+          const orbR = (6.5 + Math.sin(t * 16 + idx) * 2) * Math.min(1.8, surgeMultiplier);
+          ctx.fillStyle = primary;
+          ctx.globalAlpha = 0.78;
+          ctx.beginPath();
+          ctx.arc(hx, hy, orbR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = accent;
+          ctx.lineWidth = 1.6;
+          for (let a = 0; a < 3; a++) {
+            const ang = t * 14 + a * 2.1 + idx;
+            ctx.beginPath();
+            ctx.moveTo(hx + Math.cos(ang) * orbR * 0.4, hy + Math.sin(ang) * orbR * 0.4);
+            ctx.lineTo(hx + Math.cos(ang + 0.4) * orbR * 1.45, hy + Math.sin(ang + 0.4) * orbR * 1.45);
+            ctx.stroke();
+          }
+          ctx.fillStyle = '#1E1E1E';
+          ctx.beginPath();
+          ctx.arc(hx, hy, 3.8, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Doodle Head
+        ctx.fillStyle = '#FAF9F6';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.arc(cx, headY, headRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        const eyeY = headY - 1;
+        ctx.fillStyle = accent;
+        ctx.beginPath();
+        ctx.arc(cx - 4.5, eyeY, 2.8, 0, Math.PI * 2);
+        ctx.arc(cx + 4.5, eyeY, 2.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 8, eyeY - 4.5);
+        ctx.lineTo(cx - 2, eyeY - 2);
+        ctx.moveTo(cx + 8, eyeY - 4.5);
+        ctx.lineTo(cx + 2, eyeY - 2);
+        ctx.stroke();
+      } else {
+        // STAGE 3 (Tiers 13–20 — Transcendent Cosmic Float): High levitation, omnipotent arms-crossed Zen float, glowing eyes
+        const hipY = footY - 26;
+        const shoulderY = hipY - 28;
+        const headY = shoulderY - headRadius - 5;
+
+        // Cosmic Halo behind head
+        ctx.strokeStyle = primary;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(cx, headY, headRadius * 1.55, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, shoulderY);
+        ctx.lineTo(cx, hipY);
+        // Zen lotus legs
+        ctx.moveTo(cx, hipY);
+        ctx.lineTo(cx - 18, hipY + 9);
+        ctx.lineTo(cx + 4, hipY + 15);
+        ctx.moveTo(cx, hipY);
+        ctx.lineTo(cx + 18, hipY + 9);
+        ctx.lineTo(cx - 4, hipY + 15);
+        // Omnipotent crossed arms
+        ctx.moveTo(cx - 4, shoulderY + 2);
+        ctx.lineTo(cx - 16, shoulderY + 11);
+        ctx.lineTo(cx + 8, shoulderY + 9);
+        ctx.moveTo(cx + 4, shoulderY + 2);
+        ctx.lineTo(cx + 16, shoulderY + 11);
+        ctx.lineTo(cx - 8, shoulderY + 9);
+        ctx.stroke();
+
+        // Doodle Head
+        ctx.fillStyle = '#FAF9F6';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.arc(cx, headY, headRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Glowing Cosmic Eyes
+        const eyeY = headY - 0.5;
+        const flareLen = (7 + Math.sin(t * 18) * 2.5) * Math.min(1.9, surgeMultiplier);
+        [[cx - 4.8, eyeY], [cx + 4.8, eyeY]].forEach(([ex, ey]) => {
+          ctx.fillStyle = primary;
+          ctx.beginPath();
+          ctx.arc(ex, ey, 4.0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = accent;
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(ex - flareLen, ey);
+          ctx.lineTo(ex + flareLen, ey);
+          ctx.moveTo(ex, ey - flareLen * 0.7);
+          ctx.lineTo(ex, ey + flareLen * 0.7);
+          ctx.stroke();
+        });
+      }
+      ctx.restore();
+
+      // =======================================================================
+      // 5. INTERACTIVE TAP-TO-SURGE RADIAL BURST PARTICLES & COMIC POPUPS
+      // =======================================================================
+      for (let i = homeBurstParticles.length - 1; i >= 0; i--) {
+        const pt = homeBurstParticles[i];
+        const ageMs = nowMs - pt.createdMs;
+        if (ageMs >= pt.durationMs) {
+          homeBurstParticles.splice(i, 1);
+          continue;
+        }
+        const prog = ageMs / pt.durationMs;
+        const elapsedSec = ageMs / 1000;
+        const px = pt.xFrac * w + pt.vx * elapsedSec;
+        const py = pt.yFrac * h + pt.vy * elapsedSec + 110 * elapsedSec * elapsedSec;
+        const alpha = Math.max(0, 1 - prog);
+        const rad = pt.radius * (1 + (1 - prog) * 0.4);
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        if (pt.isStar) {
+          drawHomeSparkleStar(ctx, px, py, rad * 1.4, pt.color, elapsedSec * 9);
+        } else {
+          ctx.fillStyle = pt.color;
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(px, py, rad, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      for (let i = homeComicPopups.length - 1; i >= 0; i--) {
+        const pop = homeComicPopups[i];
+        const ageMs = nowMs - pop.createdMs;
+        if (ageMs >= pop.durationMs) {
+          homeComicPopups.splice(i, 1);
+          continue;
+        }
+        const prog = ageMs / pop.durationMs;
+        const px = pop.xFrac * w;
+        const py = pop.yFrac * h - prog * 48;
+        const alpha = prog < 0.75 ? 1 : (1 - (prog - 0.75) / 0.25);
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, alpha);
+        ctx.font = '900 15px var(--font-main)';
+        const textW = ctx.measureText(pop.text).width + 18;
+        const boxH = 26;
+        ctx.fillStyle = pop.color;
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(px - textW * 0.5, py - boxH * 0.5, textW, boxH, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#1E1E1E';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pop.text, px, py + 1);
+        ctx.restore();
+      }
+
+      ctx.restore();
     }
 
     function renderRankAuraCanvas(rank, t) {
