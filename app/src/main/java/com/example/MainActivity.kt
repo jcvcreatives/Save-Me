@@ -2429,7 +2429,7 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                         viewModel.isGuestSession -> "🕵️ Guest"
                         else -> "👤 Register"
                     }
-                    MainMenuScreen(
+                    HomeScreen(
                         levelNumber = viewModel.currentCampaignLevelNumber,
                         completedLevels = viewModel.completedCampaignCount,
                         totalCampaignLevels = viewModel.totalCampaignCount,
