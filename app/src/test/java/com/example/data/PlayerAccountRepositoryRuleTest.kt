@@ -215,6 +215,33 @@ class PlayerAccountRepositoryRuleTest : FirestoreEmulatorTestBase() {
         assertEquals(2200L, remote?.coins)
     }
 
+    @Test
+    fun createOrSyncPlayerAccount_directRegisteredUid_createsAndUpdatesAccount() = runBlocking {
+        auth.signOut()
+        val directUid = "usr_sharkslayer_${System.nanoTime()}"
+        val repository = PlayerAccountRepository(firestore)
+
+        val created = withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.createOrSyncPlayerAccount(
+                displayName = "SharkSlayer",
+                email = "shark@example.com",
+                authMethod = "account",
+                campaignLevelIndex = 3,
+                coins = 1400,
+                userId = directUid
+            ).getOrThrow()
+        }
+        assertEquals(directUid, created.userId)
+        assertEquals("SharkSlayer", created.displayName)
+
+        val fetched = withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.getPlayerAccount(directUid).getOrThrow()
+        }
+        assertNotNull(fetched)
+        assertEquals("SharkSlayer", fetched?.displayName)
+        assertEquals(1400L, fetched?.coins)
+    }
+
     private companion object {
         const val DEFAULT_TIMEOUT_MS = 5000L
         const val FLOW_TIMEOUT_MS = 3000L

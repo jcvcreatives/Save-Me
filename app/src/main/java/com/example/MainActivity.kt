@@ -1452,8 +1452,46 @@ class WordGameViewModel : ViewModel() {
     }
 
     private var isExplicitSignInInFlight: Boolean = false
+    var registeredPlayerUid by mutableStateOf<String?>(null)
+        private set
+
+    private fun buildDirectAccountUid(emailOrNick: String): String {
+        val slug = emailOrNick.trim().lowercase()
+            .replace(Regex("[^a-z0-9]"), "_")
+            .trim('_')
+            .take(32)
+            .ifEmpty { "doodle" }
+        return "usr_$slug"
+    }
 
     private fun initFirebaseSync(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val savedUid = prefs.getString("registeredPlayerUid", null)?.takeIf { it.isNotBlank() }
+        val savedName = prefs.getString("registeredPlayerName", null)?.takeIf { it.isNotBlank() }
+        val savedEmail = prefs.getString("registeredPlayerEmail", null)?.takeIf { it.isNotBlank() }
+        val savedMode = prefs.getString("registeredPlayerMode", "account") ?: "account"
+
+        if (savedUid != null && savedName != null) {
+            registeredPlayerUid = savedUid
+            isGuestSession = false
+            cloudAccount = PlayerAccount(
+                id = savedUid,
+                userId = savedUid,
+                displayName = savedName,
+                email = savedEmail,
+                authMethod = savedMode,
+                campaignLevelIndex = campaignLevelIndex.toLong(),
+                coins = coins.toLong(),
+                perfectCount = perfectCount.toLong(),
+                currentStreak = currentStreak.toLong(),
+                maxStreak = maxStreak.toLong(),
+                completedLevelsCount = completedCampaignLevels.size.toLong()
+            )
+            if (currentScreen == ScreenState.REGISTRATION) {
+                currentScreen = ScreenState.MAIN_MENU
+            }
+        }
+
         runCatching {
             val databaseId = context.getString(R.string.firestore_database_id)
             val db = FirebaseFirestore.getInstance(databaseId)
@@ -1465,12 +1503,26 @@ class WordGameViewModel : ViewModel() {
                 currentUser = user
                 if (user != null) {
                     isGuestSession = false
+                    registeredPlayerUid = user.uid
                     if (!isExplicitSignInInFlight) {
-                        startObservingCloudAccount(user)
+                        startObservingCloudAccountByUid(
+                            uid = user.uid,
+                            fallbackName = user.displayName?.takeIf { it.isNotBlank() } ?: savedName ?: "Doodle Player",
+                            fallbackEmail = user.email ?: savedEmail,
+                            fallbackAuthMethod = "gmail"
+                        )
                         if (currentScreen == ScreenState.REGISTRATION) {
                             currentScreen = ScreenState.MAIN_MENU
                         }
                     }
+                } else if (!registeredPlayerUid.isNullOrBlank() && !isGuestSession) {
+                    val activeUid = registeredPlayerUid!!
+                    startObservingCloudAccountByUid(
+                        uid = activeUid,
+                        fallbackName = cloudAccount?.displayName ?: savedName ?: "Doodle Player",
+                        fallbackEmail = cloudAccount?.email ?: savedEmail,
+                        fallbackAuthMethod = cloudAccount?.authMethod ?: savedMode
+                    )
                 } else {
                     accountSnapshotJob?.cancel()
                     accountSnapshotJob = null
@@ -1485,33 +1537,45 @@ class WordGameViewModel : ViewModel() {
     }
 
     private fun startObservingCloudAccount(user: FirebaseUser) {
+        startObservingCloudAccountByUid(
+            uid = user.uid,
+            fallbackName = cloudAccount?.displayName ?: user.displayName?.takeIf { it.isNotBlank() } ?: "Doodle Player",
+            fallbackEmail = cloudAccount?.email ?: user.email,
+            fallbackAuthMethod = cloudAccount?.authMethod ?: "gmail"
+        )
+    }
+
+    private fun startObservingCloudAccountByUid(
+        uid: String,
+        fallbackName: String,
+        fallbackEmail: String?,
+        fallbackAuthMethod: String
+    ) {
         val repo = playerAccountRepo ?: return
         accountSnapshotJob?.cancel()
         accountSnapshotJob = viewModelScope.launch {
             // Ensure /players/{userId} exists or is merged immediately when session starts
-            if (cloudAccount == null) {
-                val initRes = repo.createOrSyncPlayerAccount(
-                    displayName = user.displayName?.takeIf { it.isNotBlank() } ?: "Doodle Player",
-                    email = user.email,
-                    authMethod = "gmail",
-                    campaignLevelIndex = campaignLevelIndex,
-                    coins = coins,
-                    perfectCount = perfectCount,
-                    currentStreak = currentStreak,
-                    maxStreak = maxStreak,
-                    completedLevelsCount = completedCampaignLevels.size,
-                    userId = user.uid
-                )
-                initRes.onSuccess { synced ->
-                    cloudAccount = synced
-                    lastCloudSyncEpochMs = System.currentTimeMillis()
-                    writeLocalStorageOnly()
-                }
+            val initRes = repo.createOrSyncPlayerAccount(
+                displayName = fallbackName,
+                email = fallbackEmail,
+                authMethod = fallbackAuthMethod,
+                campaignLevelIndex = campaignLevelIndex,
+                coins = coins,
+                perfectCount = perfectCount,
+                currentStreak = currentStreak,
+                maxStreak = maxStreak,
+                completedLevelsCount = completedCampaignLevels.size,
+                userId = uid
+            )
+            initRes.onSuccess { synced ->
+                cloudAccount = synced
+                lastCloudSyncEpochMs = System.currentTimeMillis()
+                writeLocalStorageOnly()
             }
 
-            repo.observePlayerAccount(user.uid)
+            repo.observePlayerAccount(uid)
                 .catch { e ->
-                    authErrorMessage = e.localizedMessage ?: "Failed to sync cloud profile"
+                    authErrorMessage = e.localizedMessage ?: "Failed to sync profile"
                 }
                 .collect { account ->
                     if (account != null) {
@@ -1530,7 +1594,6 @@ class WordGameViewModel : ViewModel() {
                             perfectCount = reconciledPerfect
                             maxStreak = reconciledMaxStreak
                             currentStreak = reconciledStreak
-                            // Ensure completedCampaignLevels reflects at least remote completedLevelsCount
                             val remoteCompletedCount = account.completedLevelsCount.toInt().coerceIn(0, CAMPAIGN_LEVELS.size)
                             if (completedCampaignLevels.size < remoteCompletedCount) {
                                 for (lvl in 1..remoteCompletedCount) {
@@ -1544,7 +1607,6 @@ class WordGameViewModel : ViewModel() {
                             isApplyingRemoteSnapshot = false
                         }
 
-                        // If local state had higher progress than Firestore, push reconciled state back so Firestore & localStorage stay in strict parity
                         val needsPushToFirestore =
                             account.campaignLevelIndex.toInt() != campaignLevelIndex ||
                                 account.coins.toInt() != coins ||
@@ -1558,18 +1620,17 @@ class WordGameViewModel : ViewModel() {
                             lastCloudSyncEpochMs = System.currentTimeMillis()
                         }
                     } else {
-                        // First time this authenticated user connects: create their cloud document & mirror to localStorage
                         val createRes = repo.createOrSyncPlayerAccount(
-                            displayName = user.displayName?.takeIf { it.isNotBlank() } ?: "Doodle Player",
-                            email = user.email,
-                            authMethod = "gmail",
+                            displayName = fallbackName,
+                            email = fallbackEmail,
+                            authMethod = fallbackAuthMethod,
                             campaignLevelIndex = campaignLevelIndex,
                             coins = coins,
                             perfectCount = perfectCount,
                             currentStreak = currentStreak,
                             maxStreak = maxStreak,
                             completedLevelsCount = completedCampaignLevels.size,
-                            userId = user.uid
+                            userId = uid
                         )
                         createRes.onSuccess { created ->
                             cloudAccount = created
@@ -1579,6 +1640,103 @@ class WordGameViewModel : ViewModel() {
                     }
                 }
         }
+    }
+
+    fun registerOrLoginDirectAccount(
+        nickname: String,
+        email: String?,
+        password: String,
+        authMethod: String,
+        isCreate: Boolean
+    ) {
+        val cleanNick = nickname.trim().take(50).ifEmpty {
+            email?.substringBefore("@")?.take(50)?.ifEmpty { "Doodle Player" } ?: "Doodle Player"
+        }
+        val cleanEmail = email?.trim()?.take(150)?.takeIf { it.isNotEmpty() }
+        val uid = currentUser?.uid ?: buildDirectAccountUid(cleanEmail ?: cleanNick)
+        val prefs = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        if (!isCreate && prefs != null) {
+            val savedPass = prefs.getString("account_pwd_$uid", null)
+            if (!savedPass.isNullOrEmpty() && password.isNotEmpty() && savedPass != password) {
+                authErrorMessage = "Incorrect password for '$cleanNick'. Tap 'Forgot password?' to reset."
+                return
+            }
+        }
+
+        prefs?.edit()?.apply {
+            putString("registeredPlayerUid", uid)
+            putString("registeredPlayerName", cleanNick)
+            if (cleanEmail != null) {
+                putString("registeredPlayerEmail", cleanEmail)
+            } else {
+                remove("registeredPlayerEmail")
+            }
+            putString("registeredPlayerMode", authMethod)
+            if (password.isNotEmpty()) {
+                putString("account_pwd_$uid", password)
+            }
+            apply()
+        }
+
+        registeredPlayerUid = uid
+        isGuestSession = false
+        authErrorMessage = null
+        val optimisticAccount = PlayerAccount(
+            id = uid,
+            userId = uid,
+            displayName = cleanNick,
+            email = cleanEmail,
+            authMethod = authMethod,
+            campaignLevelIndex = campaignLevelIndex.toLong(),
+            coins = coins.toLong(),
+            perfectCount = perfectCount.toLong(),
+            currentStreak = currentStreak.toLong(),
+            maxStreak = maxStreak.toLong(),
+            completedLevelsCount = completedCampaignLevels.size.toLong()
+        )
+        cloudAccount = optimisticAccount
+        writeLocalStorageOnly()
+
+        val repo = playerAccountRepo
+        if (repo != null) {
+            isSyncingCloud = true
+            viewModelScope.launch {
+                val res = repo.createOrSyncPlayerAccount(
+                    displayName = cleanNick,
+                    email = cleanEmail,
+                    authMethod = authMethod,
+                    campaignLevelIndex = campaignLevelIndex,
+                    coins = coins,
+                    perfectCount = perfectCount,
+                    currentStreak = currentStreak,
+                    maxStreak = maxStreak,
+                    completedLevelsCount = completedCampaignLevels.size,
+                    userId = uid
+                )
+                isSyncingCloud = false
+                res.onSuccess { synced ->
+                    cloudAccount = synced
+                    lastCloudSyncEpochMs = System.currentTimeMillis()
+                    writeLocalStorageOnly()
+                }.onFailure { err ->
+                    authErrorMessage = err.localizedMessage
+                }
+                startObservingCloudAccountByUid(
+                    uid = uid,
+                    fallbackName = cleanNick,
+                    fallbackEmail = cleanEmail,
+                    fallbackAuthMethod = authMethod
+                )
+            }
+        }
+
+        statusBannerMessage = if (isCreate) {
+            "✨ Account created for $cleanNick!"
+        } else {
+            "👋 Welcome back, $cleanNick!"
+        }
+        currentScreen = ScreenState.MAIN_MENU
     }
 
     fun openRegistrationScreen() {
@@ -1591,9 +1749,16 @@ class WordGameViewModel : ViewModel() {
         accountSnapshotJob = null
         authInstance?.signOut()
         currentUser = null
+        registeredPlayerUid = null
         cloudAccount = null
         isGuestSession = true
         authErrorMessage = null
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()
+            ?.remove("registeredPlayerUid")
+            ?.remove("registeredPlayerName")
+            ?.remove("registeredPlayerEmail")
+            ?.remove("registeredPlayerMode")
+            ?.apply()
         currentScreen = ScreenState.MAIN_MENU
         statusBannerMessage = "🕵️ Logged in as Guest (Local Device Save)"
         writeLocalStorageOnly()
@@ -1626,11 +1791,21 @@ class WordGameViewModel : ViewModel() {
                 viewModelScope.launch {
                     val repo = playerAccountRepo
                     if (user != null && repo != null) {
+                        val resolvedName = preferredNickname?.takeIf { it.isNotBlank() }
+                            ?: user.displayName?.takeIf { it.isNotBlank() }
+                            ?: "Doodle Player"
+                        val resolvedEmail = preferredEmail?.takeIf { it.isNotBlank() } ?: user.email
+                        registeredPlayerUid = user.uid
+                        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.apply {
+                            putString("registeredPlayerUid", user.uid)
+                            putString("registeredPlayerName", resolvedName)
+                            if (resolvedEmail != null) putString("registeredPlayerEmail", resolvedEmail)
+                            putString("registeredPlayerMode", authMethod)
+                            apply()
+                        }
                         val syncRes = repo.createOrSyncPlayerAccount(
-                            displayName = preferredNickname?.takeIf { it.isNotBlank() }
-                                ?: user.displayName?.takeIf { it.isNotBlank() }
-                                ?: "Doodle Player",
-                            email = preferredEmail?.takeIf { it.isNotBlank() } ?: user.email,
+                            displayName = resolvedName,
+                            email = resolvedEmail,
                             authMethod = authMethod,
                             campaignLevelIndex = campaignLevelIndex,
                             coins = coins,
@@ -1647,7 +1822,7 @@ class WordGameViewModel : ViewModel() {
                             statusBannerMessage = "👋 Welcome, ${synced.displayName}!"
                             currentScreen = ScreenState.MAIN_MENU
                         }.onFailure { err ->
-                            authErrorMessage = err.localizedMessage ?: "Failed to save cloud profile."
+                            authErrorMessage = err.localizedMessage ?: "Failed to save profile."
                         }
                         isExplicitSignInInFlight = false
                         startObservingCloudAccount(user)
@@ -1667,27 +1842,37 @@ class WordGameViewModel : ViewModel() {
 
     fun updateCloudProfile(nickname: String, email: String?, authMethod: String) {
         val repo = playerAccountRepo ?: return
-        if (currentUser == null) return
+        val activeUid = currentUser?.uid ?: registeredPlayerUid ?: cloudAccount?.userId ?: return
+        val cleanNick = nickname.trim().take(50).ifEmpty { "Doodle Player" }
+        val cleanEmail = email?.trim()?.take(150)?.takeIf { it.isNotEmpty() }
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.apply {
+            putString("registeredPlayerUid", activeUid)
+            putString("registeredPlayerName", cleanNick)
+            if (cleanEmail != null) putString("registeredPlayerEmail", cleanEmail)
+            putString("registeredPlayerMode", authMethod)
+            apply()
+        }
         isSyncingCloud = true
         authErrorMessage = null
         viewModelScope.launch {
             val res = repo.createOrSyncPlayerAccount(
-                displayName = nickname,
-                email = email,
+                displayName = cleanNick,
+                email = cleanEmail,
                 authMethod = authMethod,
                 campaignLevelIndex = campaignLevelIndex,
                 coins = coins,
                 perfectCount = perfectCount,
                 currentStreak = currentStreak,
                 maxStreak = maxStreak,
-                completedLevelsCount = completedCampaignLevels.size
+                completedLevelsCount = completedCampaignLevels.size,
+                userId = activeUid
             )
             isSyncingCloud = false
             res.onSuccess { updated ->
                 cloudAccount = updated
-                statusBannerMessage = "☁️ Saved profile for ${updated.displayName}!"
+                statusBannerMessage = "✅ Saved profile for ${updated.displayName}!"
             }.onFailure { err ->
-                authErrorMessage = err.localizedMessage ?: "Could not update cloud profile."
+                authErrorMessage = err.localizedMessage ?: "Could not update profile."
             }
         }
     }
@@ -1697,11 +1882,18 @@ class WordGameViewModel : ViewModel() {
         accountSnapshotJob = null
         authInstance?.signOut()
         currentUser = null
+        registeredPlayerUid = null
         cloudAccount = null
         isGuestSession = false
         authErrorMessage = null
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()
+            ?.remove("registeredPlayerUid")
+            ?.remove("registeredPlayerName")
+            ?.remove("registeredPlayerEmail")
+            ?.remove("registeredPlayerMode")
+            ?.apply()
         currentScreen = ScreenState.REGISTRATION
-        statusBannerMessage = "Signed out of cloud account"
+        statusBannerMessage = "Signed out of account"
     }
 
     override fun onCleared() {
@@ -1756,31 +1948,31 @@ class WordGameViewModel : ViewModel() {
      * Pushes the current canonical game state to Firestore when signed in via the Registration screen.
      */
     private fun syncCurrentStateToFirestore() {
-        val user = currentUser
+        val activeUid = currentUser?.uid ?: registeredPlayerUid ?: cloudAccount?.userId
         val repo = playerAccountRepo
-        if (user != null && repo != null && !isGuestSession) {
+        if (!activeUid.isNullOrBlank() && repo != null && !isGuestSession) {
             isSyncingCloud = true
             viewModelScope.launch {
                 val res = repo.updateProgress(
                     displayName = cloudAccount?.displayName
-                        ?: user.displayName?.takeIf { it.isNotBlank() }
+                        ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
                         ?: "Doodle Player",
-                    email = cloudAccount?.email ?: user.email,
-                    authMethod = cloudAccount?.authMethod ?: "gmail",
+                    email = cloudAccount?.email ?: currentUser?.email,
+                    authMethod = cloudAccount?.authMethod ?: "account",
                     campaignLevelIndex = campaignLevelIndex,
                     coins = coins,
                     perfectCount = perfectCount,
                     currentStreak = currentStreak,
                     maxStreak = maxStreak,
                     completedLevelsCount = completedCampaignLevels.size,
-                    userId = user.uid
+                    userId = activeUid
                 )
                 isSyncingCloud = false
                 res.onSuccess { syncedAccount ->
                     cloudAccount = syncedAccount
                     lastCloudSyncEpochMs = System.currentTimeMillis()
                 }.onFailure { err ->
-                    authErrorMessage = err.localizedMessage ?: "Cloud sync failed"
+                    authErrorMessage = err.localizedMessage ?: "Sync failed"
                 }
             }
         }
@@ -2176,7 +2368,7 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
         ) {
             when (viewModel.currentScreen) {
                 ScreenState.REGISTRATION -> {
-                    BackHandler(enabled = viewModel.currentUser != null || viewModel.isGuestSession) {
+                    BackHandler(enabled = viewModel.currentUser != null || viewModel.cloudAccount != null || viewModel.isGuestSession) {
                         viewModel.navigateToMainMenu()
                     }
                     RegistrationAuthScreen(
@@ -2192,6 +2384,9 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                         onGoogleIdTokenReceived = { idToken, nickname, email, method ->
                             viewModel.signInWithGoogleIdToken(idToken, nickname, email, method)
                         },
+                        onRegisterOrLoginAccount = { nickname, email, password, method, isCreate ->
+                            viewModel.registerOrLoginDirectAccount(nickname, email, password, method, isCreate)
+                        },
                         onUpdateCloudProfile = { nickname, email, method ->
                             viewModel.updateCloudProfile(nickname, email, method)
                         },
@@ -2204,11 +2399,11 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
 
                 ScreenState.MAIN_MENU -> {
                     val accountLabel = when {
-                        viewModel.currentUser != null -> {
+                        viewModel.currentUser != null || viewModel.cloudAccount != null -> {
                             val name = viewModel.cloudAccount?.displayName
                                 ?: viewModel.currentUser?.displayName
-                                ?: "Cloud"
-                            "☁️ ${name.take(10)}"
+                                ?: "Player"
+                            "👤 ${name.take(10)} ✓"
                         }
                         viewModel.isGuestSession -> "🕵️ Guest"
                         else -> "👤 Register"

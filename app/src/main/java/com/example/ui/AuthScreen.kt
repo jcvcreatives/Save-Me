@@ -84,6 +84,7 @@ fun RegistrationAuthScreen(
     completedLevelsCount: Int = 0,
     fontFamily: FontFamily,
     onGoogleIdTokenReceived: (idToken: String, preferredNickname: String?, preferredEmail: String?, authMethod: String) -> Unit,
+    onRegisterOrLoginAccount: (nickname: String, email: String?, password: String, authMethod: String, isCreate: Boolean) -> Unit = { _, _, _, _, _ -> },
     onUpdateCloudProfile: (nickname: String, email: String?, authMethod: String) -> Unit,
     onContinueAsGuest: () -> Unit,
     onContinueToGame: () -> Unit,
@@ -93,12 +94,13 @@ fun RegistrationAuthScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    val isSignedInOrRegistered = currentUser != null || cloudAccount != null
 
     var nicknameInput by remember(cloudAccount?.displayName, currentUser?.displayName, isGuestSession) {
         mutableStateOf(
-            if (currentUser != null) {
+            if (isSignedInOrRegistered) {
                 cloudAccount?.displayName
-                    ?: currentUser.displayName?.takeIf { it.isNotBlank() }
+                    ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
                     ?: ""
             } else {
                 ""
@@ -107,9 +109,9 @@ fun RegistrationAuthScreen(
     }
     var emailInput by remember(cloudAccount?.email, currentUser?.email, isGuestSession) {
         mutableStateOf(
-            if (currentUser != null) {
+            if (isSignedInOrRegistered) {
                 cloudAccount?.email
-                    ?: currentUser.email?.takeIf { it.isNotBlank() }
+                    ?: currentUser?.email?.takeIf { it.isNotBlank() }
                     ?: ""
             } else {
                 ""
@@ -123,10 +125,6 @@ fun RegistrationAuthScreen(
         val activity = context.findActivity()
         if (activity == null) {
             onSetAuthError("Unable to launch Google Sign-In: Activity context unavailable.")
-            return
-        }
-        if (authMethod == "account" && nicknameInput.trim().isEmpty()) {
-            onSetAuthError("Please enter a Doodle Nickname to create your account!")
             return
         }
 
@@ -164,16 +162,31 @@ fun RegistrationAuthScreen(
                 }
             } catch (e: GetCredentialCancellationException) {
                 Log.i(TAG, "User cancelled Google Sign-In", e)
-                onSetAuthError("Google Sign-In was cancelled. You can try again or Log-in as Guest.")
+                onSetAuthError("Google Sign-In was cancelled. You can also register directly using the Create Account card above.")
             } catch (e: NoCredentialException) {
                 Log.w(TAG, "No Google account on device", e)
-                onSetAuthError(
-                    "No Google account found on this device/emulator. Add a Google account in Android Settings or tap 'Log-in as Guest' to play immediately!"
-                )
+                val cleanEmail = emailInput.trim()
+                val cleanNick = nicknameInput.trim().ifEmpty {
+                    if (cleanEmail.contains("@")) cleanEmail.substringBefore("@") else ""
+                }
+                if (cleanNick.isNotEmpty() || cleanEmail.isNotEmpty()) {
+                    onRegisterOrLoginAccount(
+                        cleanNick.ifEmpty { "Doodle Player" },
+                        cleanEmail.ifEmpty { null },
+                        "",
+                        "gmail",
+                        true
+                    )
+                } else {
+                    showCreateAccountForm = true
+                    onSetAuthError(
+                        "No Google account is signed into Android Settings on this device. Enter your Nickname & Gmail in 'Create Account' above to register immediately!"
+                    )
+                }
             } catch (e: GetCredentialException) {
                 Log.e(TAG, "Credential Manager error", e)
                 onSetAuthError(
-                    e.localizedMessage ?: "Could not complete Google Sign-In. Try again or Log-in as Guest."
+                    e.localizedMessage ?: "Could not complete Google Sign-In. Use 'Create Account' above or Log-in as Guest."
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected sign-in error", e)
@@ -195,7 +208,7 @@ fun RegistrationAuthScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Top Header Row: Optional Back Button
-        if (currentUser != null || isGuestSession) {
+        if (isSignedInOrRegistered || isGuestSession) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -312,7 +325,7 @@ fun RegistrationAuthScreen(
         DoodleWordTitleHeader(fontFamily = fontFamily)
 
         Text(
-            text = if (currentUser != null) {
+            text = if (isSignedInOrRegistered) {
                 "Welcome back! Ready to play."
             } else {
                 "Log in to your Account, Create a New Account, or Play as Guest"
@@ -350,8 +363,8 @@ fun RegistrationAuthScreen(
             }
         }
 
-        if (currentUser != null) {
-            // Signed-In Account Card
+        if (isSignedInOrRegistered) {
+            // Signed-In / Registered Account Card
             SketchyContainer(
                 fillColor = Color(0xFFE8F5E9),
                 borderColor = DoodleColors.InkBlack,
@@ -373,13 +386,13 @@ fun RegistrationAuthScreen(
                     ) {
                         Column {
                             Text(
-                                text = "👤 ${cloudAccount?.displayName ?: currentUser.displayName ?: "Doodle Player"}",
+                                text = "👤 ${cloudAccount?.displayName ?: currentUser?.displayName ?: "Doodle Player"}",
                                 fontFamily = fontFamily,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 18.sp,
                                 color = DoodleColors.InkBlack
                             )
-                            val activeEmail = cloudAccount?.email ?: currentUser.email
+                            val activeEmail = cloudAccount?.email ?: currentUser?.email
                             if (!activeEmail.isNullOrBlank()) {
                                 Text(
                                     text = activeEmail,
@@ -387,6 +400,16 @@ fun RegistrationAuthScreen(
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 12.sp,
                                     color = DoodleColors.InkBlue
+                                )
+                            }
+                            val activePlayerId = cloudAccount?.userId?.takeIf { it.isNotBlank() } ?: currentUser?.uid
+                            if (!activePlayerId.isNullOrBlank()) {
+                                Text(
+                                    text = "Player ID: $activePlayerId",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 11.sp,
+                                    color = DoodleColors.InkBlack.copy(alpha = 0.65f)
                                 )
                             }
                         }
@@ -397,7 +420,7 @@ fun RegistrationAuthScreen(
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "SYNCED",
+                                text = "SAVED ✓",
                                 fontFamily = fontFamily,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 11.sp,
@@ -440,7 +463,7 @@ fun RegistrationAuthScreen(
                             onClick = {
                                 onUpdateCloudProfile(
                                     nicknameInput.trim().ifEmpty { "Doodle Player" },
-                                    emailInput.trim().ifEmpty { currentUser.email },
+                                    emailInput.trim().ifEmpty { currentUser?.email ?: cloudAccount?.email },
                                     cloudAccount?.authMethod ?: "account"
                                 )
                             },
@@ -450,7 +473,7 @@ fun RegistrationAuthScreen(
                                 .testTag("save_cloud_profile_button")
                         ) {
                             Text(
-                                text = if (isSyncing) "Syncing..." else "💾 Save & Sync",
+                                text = if (isSyncing) "Saving..." else "💾 Save Profile",
                                 fontFamily = fontFamily,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 14.sp,
@@ -574,15 +597,19 @@ fun RegistrationAuthScreen(
                             } else if (loginPassword.isEmpty()) {
                                 onSetAuthError("Please enter your password to log in!")
                             } else if (!isLaunchingCredentialManager && !isSyncing) {
-                                if (cleanId.contains("@")) {
-                                    emailInput = cleanId
-                                    if (nicknameInput.isBlank()) {
-                                        nicknameInput = cleanId.substringBefore("@")
-                                    }
+                                val resolvedEmail = if (cleanId.contains("@")) cleanId else null
+                                val resolvedNick = if (cleanId.contains("@")) {
+                                    nicknameInput.trim().ifEmpty { cleanId.substringBefore("@") }
                                 } else {
-                                    nicknameInput = cleanId
+                                    cleanId
                                 }
-                                triggerGoogleSignIn(authMethod = "account")
+                                onRegisterOrLoginAccount(
+                                    resolvedNick,
+                                    resolvedEmail,
+                                    loginPassword,
+                                    "account",
+                                    false
+                                )
                             }
                         },
                         modifier = Modifier
@@ -591,7 +618,7 @@ fun RegistrationAuthScreen(
                             .testTag("login_submit_button")
                     ) {
                         Text(
-                            text = "Log in",
+                            text = if (isSyncing) "Logging in..." else "Log in",
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 17.sp,
@@ -604,7 +631,7 @@ fun RegistrationAuthScreen(
                             .fillMaxWidth()
                             .clickable {
                                 onSetAuthError(
-                                    "Enter your Email or Doodle Nickname above and sign in with Google to restore your cloud account!"
+                                    "Enter your Email or Doodle Nickname and a new password above, then tap Log in to recover your account!"
                                 )
                             }
                             .padding(vertical = 4.dp)
@@ -643,7 +670,7 @@ fun RegistrationAuthScreen(
                 }
             }
 
-            // 1. CREATE ACCOUNT CARD (Doodle Nickname + Gmail / Google Cloud Profile)
+            // 1. CREATE ACCOUNT CARD (Doodle Nickname + Gmail / Player Profile)
             SketchyContainer(
                 fillColor = Color.White,
                 borderColor = DoodleColors.InkBlack,
@@ -748,8 +775,20 @@ fun RegistrationAuthScreen(
                                 fillColor = DoodleColors.DoodleYellow,
                                 cornerRadius = 20.dp,
                                 onClick = {
-                                    if (!isLaunchingCredentialManager && !isSyncing) {
-                                        triggerGoogleSignIn(authMethod = "account")
+                                    val cleanNick = nicknameInput.trim()
+                                    val cleanEmail = emailInput.trim()
+                                    if (cleanNick.isEmpty()) {
+                                        onSetAuthError("Please enter a Doodle Nickname to create your account!")
+                                    } else if (cleanEmail.isNotEmpty() && !cleanEmail.contains("@")) {
+                                        onSetAuthError("Please enter a valid email address or leave it blank.")
+                                    } else if (!isLaunchingCredentialManager && !isSyncing) {
+                                        onRegisterOrLoginAccount(
+                                            cleanNick,
+                                            cleanEmail.ifEmpty { null },
+                                            createPassword,
+                                            "account",
+                                            true
+                                        )
                                     }
                                 },
                                 modifier = Modifier

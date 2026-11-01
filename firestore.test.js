@@ -7,12 +7,17 @@ const {
 const { readFileSync } = require('node:fs');
 
 let testEnv;
+const PROJECT_ID = process.env.GCP_PROJECT || 'demo-no-project';
+const [emulatorHost, emulatorPortStr] = (process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8085').split(':');
+const emulatorPort = parseInt(emulatorPortStr, 10);
 
 before(async () => {
   testEnv = await initializeTestEnvironment({
-    projectId: 'demo-no-project',
+    projectId: PROJECT_ID,
     firestore: {
       rules: readFileSync('firestore.rules', 'utf8'),
+      host: emulatorHost,
+      port: emulatorPort,
     },
   });
 });
@@ -69,7 +74,32 @@ test('authenticated user can create and merge their own /players/{userId} docume
   );
 });
 
-test('unauthenticated user cannot read or write /players/{userId}', async () => {
+test('direct registered player (usr_*) can create and update their own /players/{userId} document', async () => {
+  const unauthDb = testEnv.unauthenticatedContext().firestore();
+  const regRef = unauthDb.collection('players').doc('usr_sharkslayer');
+  const now = new Date();
+
+  await assertSucceeds(
+    regRef.set({
+      userId: 'usr_sharkslayer',
+      displayName: 'SharkSlayer',
+      email: 'shark@example.com',
+      authMethod: 'account',
+      campaignLevelIndex: 2,
+      coins: 1350,
+      perfectCount: 3,
+      currentStreak: 2,
+      maxStreak: 5,
+      completedLevelsCount: 2,
+      createdAt: now,
+      updatedAt: now
+    }, { merge: true })
+  );
+
+  await assertSucceeds(regRef.get());
+});
+
+test('unauthenticated user cannot read or write arbitrary /players/{userId}', async () => {
   const unauthDb = testEnv.unauthenticatedContext().firestore();
   const ref = unauthDb.collection('players').doc('alice_123');
 
