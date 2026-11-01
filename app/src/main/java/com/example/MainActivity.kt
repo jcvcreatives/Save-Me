@@ -1649,12 +1649,8 @@ class WordGameViewModel : ViewModel() {
             var targetUid = uid
             val existingRes = repo.getPlayerAccount(targetUid)
             val existingDirect = existingRes.getOrNull()
-            val canonicalAccount = if (existingDirect != null && !existingDirect.email.isNullOrBlank()) {
-                existingDirect
-            } else {
-                repo.findPlayerAccountByIdentifier(fallbackEmail ?: fallbackName.ifBlank { targetUid }).getOrNull()
-                    ?: existingDirect
-            }
+            val canonicalAccount = existingDirect
+                ?: repo.findPlayerAccountByIdentifier(fallbackEmail ?: fallbackName.ifBlank { targetUid }).getOrNull()
 
             if (canonicalAccount != null) {
                 targetUid = canonicalAccount.userId.ifBlank { canonicalAccount.id }.ifBlank { uid }
@@ -1724,7 +1720,8 @@ class WordGameViewModel : ViewModel() {
             isSyncingCloud = true
             authErrorMessage = null
             viewModelScope.launch {
-                val foundRes = repo.findPlayerAccountByIdentifier(rawIdent)
+                val enteredHash = computePasswordHash(cleanPassword)
+                val foundRes = repo.findPlayerAccountByIdentifier(rawIdent, enteredHash)
                 val remoteAccount = foundRes.getOrNull()
                 if (remoteAccount == null || remoteAccount.userId.isBlank()) {
                     isSyncingCloud = false
@@ -1733,7 +1730,6 @@ class WordGameViewModel : ViewModel() {
                 }
 
                 val resolvedUid = remoteAccount.userId
-                val enteredHash = computePasswordHash(cleanPassword)
                 val savedLocalPass = prefs?.getString("account_pwd_$resolvedUid", null)
                 val remoteHash = remoteAccount.passwordHash?.trim().orEmpty()
 
@@ -1809,15 +1805,6 @@ class WordGameViewModel : ViewModel() {
             isSyncingCloud = true
             authErrorMessage = null
             viewModelScope.launch {
-                val existingByEmail = if (cleanEmail != null) repo.findPlayerAccountByIdentifier(cleanEmail).getOrNull() else null
-                val existingByNick = repo.findPlayerAccountByIdentifier(cleanNick).getOrNull()
-                val existingCloud = existingByEmail ?: existingByNick
-                if (existingCloud != null && existingCloud.userId.isNotBlank()) {
-                    isSyncingCloud = false
-                    authErrorMessage = "⚠️ Account '${existingCloud.displayName}' already exists! Please log in instead."
-                    return@launch
-                }
-
                 if (!isGuestSession) {
                     resetLocalStateToFresh()
                 }
@@ -1848,7 +1835,8 @@ class WordGameViewModel : ViewModel() {
                     currentStreak = currentStreak,
                     maxStreak = maxStreak,
                     completedLevelsCount = completedCampaignLevels.size,
-                    userId = uid
+                    userId = uid,
+                    overwriteIfExists = true
                 )
                 isSyncingCloud = false
                 res.onSuccess { created ->
@@ -2021,6 +2009,42 @@ class WordGameViewModel : ViewModel() {
     }
 
     fun signOutFirebase() {
+        val activeUid = currentUser?.uid ?: registeredPlayerUid ?: cloudAccount?.userId
+        val activeName = cloudAccount?.displayName
+            ?: appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.getString("registeredPlayerName", null)
+            ?: "Doodle Player"
+        val activeEmail = cloudAccount?.email
+            ?: appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.getString("registeredPlayerEmail", null)
+        val activePwdHash = cloudAccount?.passwordHash
+        val activeAuth = cloudAccount?.authMethod ?: "account"
+        val snapIdx = campaignLevelIndex
+        val snapCoins = coins
+        val snapPerfect = perfectCount
+        val snapStreak = currentStreak
+        val snapMaxStreak = maxStreak
+        val snapCompleted = completedCampaignLevels.size
+
+        if (!activeUid.isNullOrBlank() && activeUid !in JUNK_TEST_UIDS && !isGuestSession) {
+            val repo = playerAccountRepo
+            if (repo != null) {
+                viewModelScope.launch {
+                    repo.updateProgress(
+                        displayName = activeName,
+                        email = activeEmail,
+                        passwordHash = activePwdHash,
+                        authMethod = activeAuth,
+                        campaignLevelIndex = snapIdx,
+                        coins = snapCoins,
+                        perfectCount = snapPerfect,
+                        currentStreak = snapStreak,
+                        maxStreak = snapMaxStreak,
+                        completedLevelsCount = snapCompleted,
+                        userId = activeUid
+                    )
+                }
+            }
+        }
+
         accountSnapshotJob?.cancel()
         accountSnapshotJob = null
         authInstance?.signOut()

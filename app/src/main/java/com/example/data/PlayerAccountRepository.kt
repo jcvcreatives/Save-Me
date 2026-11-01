@@ -174,7 +174,10 @@ class PlayerAccountRepository(
         }
     }
 
-    suspend fun findPlayerAccountByIdentifier(identifier: String): Result<PlayerAccount?> = runCatching {
+    suspend fun findPlayerAccountByIdentifier(
+        identifier: String,
+        passwordHashOpt: String? = null
+    ): Result<PlayerAccount?> = runCatching {
         val raw = identifier.trim()
         val lower = raw.lowercase()
         if (lower.isEmpty()) return@runCatching null
@@ -182,36 +185,32 @@ class PlayerAccountRepository(
         if (slug.isEmpty()) return@runCatching null
         val directUid = if (lower.startsWith("usr_")) lower else "usr_$slug"
         if (directUid in JUNK_TEST_UIDS || lower in JUNK_TEST_UIDS) return@runCatching null
+        val cleanPwdHash = passwordHashOpt?.trim()?.takeIf { it.isNotEmpty() }
 
-        val matches = mutableListOf<PlayerAccount>()
-        try {
-            val querySnap = db.collection(COLLECTION_PLAYERS).get().await()
-            for (docSnap in querySnap.documents) {
-                val docId = docSnap.id
-                if (docId in JUNK_TEST_UIDS) continue
-                val account = docSnap.toObject(
-                    PlayerAccount::class.java,
-                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                ) ?: continue
-                val resolvedId = account.userId.ifBlank { docId }
-                if (resolvedId in JUNK_TEST_UIDS) continue
-                val emailLower = account.email?.trim()?.lowercase().orEmpty()
-                val nameLower = account.displayName.trim().lowercase()
-                val uidLower = resolvedId.lowercase()
-                val emailPrefix = emailLower.substringBefore("@")
-                if (
-                    emailLower == lower ||
-                    nameLower == lower ||
-                    uidLower == lower ||
-                    uidLower == directUid ||
-                    (emailPrefix.isNotEmpty() && emailPrefix == lower)
-                ) {
-                    matches.add(account.copy(id = docId, userId = resolvedId))
-                }
+        val matchesById = linkedMapOf<String, PlayerAccount>()
+        fun addIfMatches(docId: String, account: PlayerAccount) {
+            if (docId in JUNK_TEST_UIDS) return
+            val resolvedId = account.userId.ifBlank { docId }
+            if (resolvedId in JUNK_TEST_UIDS) return
+            val emailLower = account.email?.trim()?.lowercase().orEmpty()
+            val nameLower = account.displayName.trim().lowercase()
+            val uidLower = resolvedId.lowercase()
+            val docIdLower = docId.lowercase()
+            val emailPrefix = emailLower.substringBefore("@")
+            if (
+                emailLower == lower ||
+                nameLower == lower ||
+                uidLower == lower ||
+                uidLower == directUid ||
+                docIdLower == directUid ||
+                (emailPrefix.isNotEmpty() && emailPrefix == lower)
+            ) {
+                matchesById[docId] = account.copy(id = docId, userId = resolvedId)
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
+        }
+
+        // 1. Direct UID lookup first
+        try {
             val directSnap = db.collection(COLLECTION_PLAYERS).document(directUid).get().await()
             if (directSnap.exists()) {
                 val acc = directSnap.toObject(
@@ -219,24 +218,51 @@ class PlayerAccountRepository(
                     DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
                 )
                 if (acc != null) {
-                    matches.add(acc.copy(id = directUid, userId = acc.userId.ifBlank { directUid }))
+                    addIfMatches(directUid, acc)
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
         }
 
+        // 2. Collection query
+        try {
+            val querySnap = db.collection(COLLECTION_PLAYERS).get().await()
+            for (docSnap in querySnap.documents) {
+                val docId = docSnap.id
+                val account = docSnap.toObject(
+                    PlayerAccount::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                ) ?: continue
+                addIfMatches(docId, account)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+
+        val matches = matchesById.values.toMutableList()
         if (matches.isEmpty()) return@runCatching null
 
         matches.sortWith(
             Comparator { a, b ->
-                val aHasEmail = !a.email.isNullOrBlank() && a.email.contains("@")
-                val bHasEmail = !b.email.isNullOrBlank() && b.email.contains("@")
-                if (aHasEmail != bHasEmail) {
-                    return@Comparator if (aHasEmail) -1 else 1
+                if (cleanPwdHash != null) {
+                    val aPassMatch = a.passwordHash?.trim() == cleanPwdHash
+                    val bPassMatch = b.passwordHash?.trim() == cleanPwdHash
+                    if (aPassMatch != bPassMatch) {
+                        return@Comparator if (aPassMatch) -1 else 1
+                    }
                 }
                 val aExactEmail = a.email?.trim()?.lowercase() == lower
                 val bExactEmail = b.email?.trim()?.lowercase() == lower
                 if (aExactEmail != bExactEmail) {
                     return@Comparator if (aExactEmail) -1 else 1
+                }
+                val aExactUid = a.id.lowercase() == directUid || a.userId.lowercase() == directUid
+                val bExactUid = b.id.lowercase() == directUid || b.userId.lowercase() == directUid
+                if (aExactUid != bExactUid) {
+                    return@Comparator if (aExactUid) -1 else 1
                 }
                 b.campaignLevelIndex.compareTo(a.campaignLevelIndex)
             }
@@ -255,7 +281,8 @@ class PlayerAccountRepository(
         currentStreak: Int = 0,
         maxStreak: Int = 0,
         completedLevelsCount: Int = 0,
-        userId: String = currentUid()
+        userId: String = currentUid(),
+        overwriteIfExists: Boolean = false
     ): Result<PlayerAccount> = runCatching {
         writeMutex.withLock {
             val uid = userId.ifBlank { currentUid() }
@@ -310,12 +337,36 @@ class PlayerAccountRepository(
                     email = cleanEmail ?: existing.email,
                     passwordHash = cleanPwdHash ?: existing.passwordHash,
                     authMethod = cleanAuth,
-                    campaignLevelIndex = maxOf(existing.campaignLevelIndex, campaignLevelIndex.toLong()).coerceIn(0L, 1000L),
-                    coins = maxOf(existing.coins, coins.toLong()).coerceIn(0L, 10000000L),
-                    perfectCount = maxOf(existing.perfectCount, perfectCount.toLong()).coerceIn(0L, 1000000L),
-                    currentStreak = maxOf(existing.currentStreak, currentStreak.toLong()).coerceIn(0L, 1000000L),
-                    maxStreak = maxOf(existing.maxStreak, maxStreak.toLong()).coerceIn(0L, 1000000L),
-                    completedLevelsCount = maxOf(existing.completedLevelsCount, completedLevelsCount.toLong()).coerceIn(0L, 1000L)
+                    campaignLevelIndex = if (overwriteIfExists) {
+                        campaignLevelIndex.toLong().coerceIn(0L, 1000L)
+                    } else {
+                        maxOf(existing.campaignLevelIndex, campaignLevelIndex.toLong()).coerceIn(0L, 1000L)
+                    },
+                    coins = if (overwriteIfExists) {
+                        coins.toLong().coerceIn(0L, 10000000L)
+                    } else {
+                        maxOf(existing.coins, coins.toLong()).coerceIn(0L, 10000000L)
+                    },
+                    perfectCount = if (overwriteIfExists) {
+                        perfectCount.toLong().coerceIn(0L, 1000000L)
+                    } else {
+                        maxOf(existing.perfectCount, perfectCount.toLong()).coerceIn(0L, 1000000L)
+                    },
+                    currentStreak = if (overwriteIfExists) {
+                        currentStreak.toLong().coerceIn(0L, 1000000L)
+                    } else {
+                        maxOf(existing.currentStreak, currentStreak.toLong()).coerceIn(0L, 1000000L)
+                    },
+                    maxStreak = if (overwriteIfExists) {
+                        maxStreak.toLong().coerceIn(0L, 1000000L)
+                    } else {
+                        maxOf(existing.maxStreak, maxStreak.toLong()).coerceIn(0L, 1000000L)
+                    },
+                    completedLevelsCount = if (overwriteIfExists) {
+                        completedLevelsCount.toLong().coerceIn(0L, 1000L)
+                    } else {
+                        maxOf(existing.completedLevelsCount, completedLevelsCount.toLong()).coerceIn(0L, 1000L)
+                    }
                 )
                 try {
                     docRef.set(merged.toUpdateMap(), SetOptions.merge()).await()

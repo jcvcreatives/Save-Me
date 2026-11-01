@@ -1768,10 +1768,12 @@
       const mode = localStorage.getItem('doodle_account_mode') === 'account' ? 'account' : 'gmail';
       const existingRaw = localStorage.getItem(FIRESTORE_MIRROR_PREFIX + uid);
       let createdAtIso = new Date(snapshot.updatedAt).toISOString();
+      let existingPwdHash = '';
       if (existingRaw) {
         try {
           const parsed = JSON.parse(existingRaw);
           if (parsed && parsed.createdAt) createdAtIso = parsed.createdAt;
+          if (parsed && parsed.passwordHash) existingPwdHash = String(parsed.passwordHash);
         } catch (e) {}
       }
       const doc = {
@@ -1788,6 +1790,7 @@
         createdAt: createdAtIso,
         updatedAt: new Date(snapshot.updatedAt).toISOString()
       };
+      if (existingPwdHash) doc.passwordHash = existingPwdHash;
       if (!doc.email) delete doc.email;
       return doc;
     }
@@ -2034,11 +2037,146 @@
       }
     }
 
-    async function findAccountInFirestore(identifier) {
+    const FIRESTORE_REST_BASE = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents`;
+
+    function parseFirestoreRestDoc(restDoc) {
+      if (!restDoc || !restDoc.fields) return null;
+      const f = restDoc.fields;
+      const docName = String(restDoc.name || '');
+      const docId = docName.split('/').pop() || '';
+      const getStr = (k) => (f[k] && f[k].stringValue !== undefined) ? String(f[k].stringValue) : '';
+      const getInt = (k, defVal = 0) => {
+        if (!f[k]) return defVal;
+        if (f[k].integerValue !== undefined) return Number(f[k].integerValue);
+        if (f[k].doubleValue !== undefined) return Number(f[k].doubleValue);
+        return defVal;
+      };
+      const getTs = (k) => (f[k] && f[k].timestampValue !== undefined) ? String(f[k].timestampValue) : null;
+      const parsed = {
+        userId: getStr('userId') || docId,
+        displayName: getStr('displayName') || 'Doodle Player',
+        authMethod: getStr('authMethod') || 'account',
+        campaignLevelIndex: getInt('campaignLevelIndex', 0),
+        coins: getInt('coins', 100),
+        perfectCount: getInt('perfectCount', 0),
+        currentStreak: getInt('currentStreak', 0),
+        maxStreak: getInt('maxStreak', 0),
+        completedLevelsCount: getInt('completedLevelsCount', 0),
+        createdAt: getTs('createdAt'),
+        updatedAt: getTs('updatedAt'),
+        _docId: docId || getStr('userId')
+      };
+      const emailVal = getStr('email');
+      if (emailVal) parsed.email = emailVal;
+      const pwdHashVal = getStr('passwordHash');
+      if (pwdHashVal) parsed.passwordHash = pwdHashVal;
+      return parsed;
+    }
+
+    async function fetchPlayerDocViaRest(uid) {
+      if (!uid || JUNK_TEST_UIDS.has(uid)) return null;
+      try {
+        const res = await fetch(`${FIRESTORE_REST_BASE}/${FIRESTORE_COLLECTION}/${encodeURIComponent(uid)}`, {
+          method: 'GET',
+          cache: 'no-store'
+        });
+        if (!res.ok) return null;
+        const json = await res.json();
+        return parseFirestoreRestDoc(json);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function queryAllPlayersViaRest() {
+      try {
+        const res = await fetch(`${FIRESTORE_REST_BASE}:runQuery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({
+            structuredQuery: {
+              from: [{ collectionId: FIRESTORE_COLLECTION }],
+              limit: 300
+            }
+          })
+        });
+        if (!res.ok) return [];
+        const rows = await res.json();
+        if (!Array.isArray(rows)) return [];
+        const out = [];
+        for (const row of rows) {
+          if (row && row.document) {
+            const parsed = parseFirestoreRestDoc(row.document);
+            if (parsed && parsed._docId && !JUNK_TEST_UIDS.has(parsed._docId) && !JUNK_TEST_UIDS.has(parsed.userId)) {
+              out.push(parsed);
+            }
+          }
+        }
+        return out;
+      } catch (e) {
+        return [];
+      }
+    }
+
+    async function writePlayerDocViaRest(uid, data, isCreate = false) {
+      if (!uid || JUNK_TEST_UIDS.has(uid) || !data) return null;
+      try {
+        const nowIso = new Date().toISOString();
+        const fields = {
+          userId: { stringValue: String(uid) },
+          displayName: { stringValue: String(data.displayName || 'Doodle Player').trim().slice(0, 50) || 'Doodle Player' },
+          authMethod: { stringValue: normalizeAuthMethodWeb(data.authMethod || 'account') },
+          campaignLevelIndex: { integerValue: String(Math.max(0, Math.min(1000, Math.floor(Number(data.campaignLevelIndex) || 0)))) },
+          coins: { integerValue: String(Math.max(0, Math.min(10000000, Math.floor(Number(data.coins) || 0)))) },
+          perfectCount: { integerValue: String(Math.max(0, Math.min(1000000, Math.floor(Number(data.perfectCount) || 0)))) },
+          currentStreak: { integerValue: String(Math.max(0, Math.min(1000000, Math.floor(Number(data.currentStreak) || 0)))) },
+          maxStreak: { integerValue: String(Math.max(0, Math.min(1000000, Math.floor(Number(data.maxStreak) || 0)))) },
+          completedLevelsCount: { integerValue: String(Math.max(0, Math.min(1000, Math.floor(Number(data.completedLevelsCount) || 0)))) },
+          updatedAt: { timestampValue: nowIso }
+        };
+        const maskPaths = [
+          'userId',
+          'displayName',
+          'authMethod',
+          'campaignLevelIndex',
+          'coins',
+          'perfectCount',
+          'currentStreak',
+          'maxStreak',
+          'completedLevelsCount',
+          'updatedAt'
+        ];
+        if (data.email && String(data.email).trim()) {
+          fields.email = { stringValue: String(data.email).trim().slice(0, 150) };
+          maskPaths.push('email');
+        }
+        if (data.passwordHash && String(data.passwordHash).trim()) {
+          fields.passwordHash = { stringValue: String(data.passwordHash).trim().slice(0, 128) };
+          maskPaths.push('passwordHash');
+        }
+        if (isCreate) {
+          fields.createdAt = { timestampValue: nowIso };
+          maskPaths.push('createdAt');
+        }
+        const queryParams = maskPaths.map((p) => `updateMask.fieldPaths=${encodeURIComponent(p)}`).join('&');
+        const res = await fetch(`${FIRESTORE_REST_BASE}/${FIRESTORE_COLLECTION}/${encodeURIComponent(uid)}?${queryParams}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields })
+        });
+        if (!res.ok) return null;
+        const json = await res.json();
+        return parseFirestoreRestDoc(json);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function findAccountInFirestore(identifier, passwordOpt = '') {
       if (firebaseInitPromise) {
         try { await firebaseInitPromise; } catch (e) {}
       }
-      if (!fbDb || !fbMod) return null;
       const raw = String(identifier || '').trim();
       const lower = raw.toLowerCase();
       if (!lower) return null;
@@ -2048,86 +2186,126 @@
       if (JUNK_TEST_UIDS.has(directUid) || JUNK_TEST_UIDS.has(lower)) {
         return null;
       }
+      const enteredHash = passwordOpt ? computePasswordHash(passwordOpt) : '';
 
-      const matches = [];
-      try {
-        const colRef = fbMod.collection(fbDb, FIRESTORE_COLLECTION);
-        const querySnap = await fbMod.getDocs(colRef);
-        querySnap.forEach((docSnap) => {
-          const docId = docSnap.id;
-          if (JUNK_TEST_UIDS.has(docId)) return;
-          const data = docSnap.data() || {};
-          const uidVal = String(data.userId || docId).trim();
-          if (JUNK_TEST_UIDS.has(uidVal)) return;
-          const emailVal = String(data.email || '').trim().toLowerCase();
-          const nameVal = String(data.displayName || '').trim().toLowerCase();
-          const uidLower = uidVal.toLowerCase();
-          const emailPrefix = emailVal ? emailVal.split('@')[0] : '';
+      const matchesById = new Map();
+      const addCandidateIfMatches = (data, fallbackDocId) => {
+        if (!data) return;
+        const docId = String(data._docId || fallbackDocId || data.userId || '').trim();
+        const uidVal = String(data.userId || docId).trim();
+        if (!uidVal || JUNK_TEST_UIDS.has(docId) || JUNK_TEST_UIDS.has(uidVal)) return;
+        const emailVal = String(data.email || '').trim().toLowerCase();
+        const nameVal = String(data.displayName || '').trim().toLowerCase();
+        const uidLower = uidVal.toLowerCase();
+        const docIdLower = docId.toLowerCase();
+        const emailPrefix = emailVal ? emailVal.split('@')[0] : '';
 
-          if (
-            emailVal === lower ||
-            nameVal === lower ||
-            uidLower === lower ||
-            uidLower === directUid ||
-            (emailPrefix && emailPrefix === lower)
-          ) {
-            matches.push({
-              ...data,
-              userId: uidVal || docId,
-              _docId: docId
-            });
-          }
-        });
-      } catch (listErr) {
-        try {
-          const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, directUid);
-          const snap = await fbMod.getDoc(docRef);
-          if (snap && snap.exists()) {
-            const data = snap.data() || {};
-            if (!JUNK_TEST_UIDS.has(directUid)) {
-              matches.push({
-                ...data,
-                userId: data.userId || directUid,
-                _docId: directUid
-              });
+        if (
+          emailVal === lower ||
+          nameVal === lower ||
+          uidLower === lower ||
+          uidLower === directUid ||
+          docIdLower === directUid ||
+          (emailPrefix && emailPrefix === lower)
+        ) {
+          const key = docId || uidVal;
+          const prev = matchesById.get(key) || {};
+          matchesById.set(key, {
+            ...prev,
+            ...data,
+            userId: uidVal,
+            _docId: key
+          });
+        }
+      };
+
+      // 1. Direct UID lookup via both REST API and Firebase JS SDK in parallel
+      const [restDirect, sdkDirect] = await Promise.all([
+        fetchPlayerDocViaRest(directUid),
+        (async () => {
+          if (!fbDb || !fbMod) return null;
+          try {
+            const snap = await fbMod.getDoc(fbMod.doc(fbDb, FIRESTORE_COLLECTION, directUid));
+            if (snap && snap.exists()) {
+              return { ...snap.data(), userId: snap.data().userId || directUid, _docId: directUid };
             }
+          } catch (e) {}
+          return null;
+        })()
+      ]);
+      if (restDirect) addCandidateIfMatches(restDirect, directUid);
+      if (sdkDirect) addCandidateIfMatches(sdkDirect, directUid);
+
+      // 2. Collection query via both REST API and Firebase JS SDK in parallel
+      const [restList, sdkList] = await Promise.all([
+        queryAllPlayersViaRest(),
+        (async () => {
+          if (!fbDb || !fbMod) return [];
+          try {
+            const querySnap = await fbMod.getDocs(fbMod.collection(fbDb, FIRESTORE_COLLECTION));
+            const arr = [];
+            querySnap.forEach((docSnap) => {
+              arr.push({ ...docSnap.data(), userId: docSnap.data().userId || docSnap.id, _docId: docSnap.id });
+            });
+            return arr;
+          } catch (e) {
+            return [];
           }
-        } catch (getErr) {}
+        })()
+      ]);
+      for (const item of restList) addCandidateIfMatches(item, item._docId);
+      for (const item of sdkList) addCandidateIfMatches(item, item._docId);
+
+      // 3. Local mirror / registry fallback if offline or not yet propagated
+      if (matchesById.size === 0) {
+        const localReg = findRegisteredAccount(raw);
+        if (localReg && localReg.uid && !JUNK_TEST_UIDS.has(localReg.uid)) {
+          let mirrorData = null;
+          try {
+            mirrorData = JSON.parse(localStorage.getItem(FIRESTORE_MIRROR_PREFIX + localReg.uid) || 'null');
+          } catch (e) {}
+          addCandidateIfMatches({
+            ...(mirrorData || {}),
+            userId: localReg.uid,
+            displayName: (mirrorData && mirrorData.displayName) || localReg.nick || raw,
+            email: (mirrorData && mirrorData.email) || localReg.email || '',
+            passwordHash: (mirrorData && mirrorData.passwordHash) || (localReg.password ? computePasswordHash(localReg.password) : ''),
+            authMethod: (mirrorData && mirrorData.authMethod) || localReg.mode || 'account',
+            _docId: localReg.uid
+          }, localReg.uid);
+        }
       }
 
+      const matches = Array.from(matchesById.values());
       if (matches.length === 0) return null;
 
-      // Sort so canonical email-backed accounts (e.g. usr_jcvcreatives_gmail_com) take priority over nickname-only duplicates
       matches.sort((a, b) => {
-        const aHasEmail = Boolean(a.email && String(a.email).includes('@'));
-        const bHasEmail = Boolean(b.email && String(b.email).includes('@'));
-        if (aHasEmail !== bHasEmail) return aHasEmail ? -1 : 1;
+        // 1. If user entered a password during login, prioritize the account whose passwordHash matches!
+        if (enteredHash) {
+          const aPassMatch = Boolean(a.passwordHash && a.passwordHash === enteredHash);
+          const bPassMatch = Boolean(b.passwordHash && b.passwordHash === enteredHash);
+          if (aPassMatch !== bPassMatch) return aPassMatch ? -1 : 1;
+        }
+        // 2. Prioritize exact email match if identifier is an email
         const aExactEmail = String(a.email || '').toLowerCase() === lower;
         const bExactEmail = String(b.email || '').toLowerCase() === lower;
         if (aExactEmail !== bExactEmail) return aExactEmail ? -1 : 1;
+        // 3. Prioritize exact directUid document match (e.g. usr_jcv when identifier is "JCV")
+        const aExactUid = String(a._docId || a.userId || '').toLowerCase() === directUid;
+        const bExactUid = String(b._docId || b.userId || '').toLowerCase() === directUid;
+        if (aExactUid !== bExactUid) return aExactUid ? -1 : 1;
+        // 4. Otherwise prioritize higher campaign progress
         return Number(b.campaignLevelIndex || 0) - Number(a.campaignLevelIndex || 0);
       });
 
-      const primary = matches[0];
-      // If a duplicate nickname-only doc existed alongside the primary email-backed doc, clean up the duplicate
-      if (matches.length > 1 && primary.email) {
-        for (let i = 1; i < matches.length; i++) {
-          const dup = matches[i];
-          if (dup._docId && dup._docId !== primary._docId && !dup.email) {
-            try {
-              await fbMod.deleteDoc(fbMod.doc(fbDb, FIRESTORE_COLLECTION, dup._docId));
-            } catch (e) {}
-          }
-        }
-      }
-      return primary;
+      return matches[0];
     }
 
     async function pullLatestAccountStateFromFirestore(explicitUid) {
       if (firebaseInitPromise) {
         try { await firebaseInitPromise; } catch (e) {}
       }
-      if (!fbDb || !fbMod || !isUserSignedInViaRegistration()) return null;
+      if (!isUserSignedInViaRegistration()) return null;
 
       const savedEmail = (localStorage.getItem('doodle_account_email') || '').trim();
       const savedName = (localStorage.getItem('doodle_account_name') || '').trim();
@@ -2137,17 +2315,30 @@
         return null;
       }
 
-      let remoteData = null;
-      try {
-        const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
-        const snap = await fbMod.getDoc(docRef);
-        if (snap && snap.exists()) {
-          remoteData = { ...snap.data(), userId: snap.data().userId || uid };
-        }
-      } catch (e) {}
+      const [restDoc, sdkDoc] = await Promise.all([
+        fetchPlayerDocViaRest(uid),
+        (async () => {
+          if (!fbDb || !fbMod) return null;
+          try {
+            const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
+            const snap = await fbMod.getDoc(docRef);
+            if (snap && snap.exists()) {
+              return { ...snap.data(), userId: snap.data().userId || uid };
+            }
+          } catch (e) {}
+          return null;
+        })()
+      ]);
 
-      // Also check if a canonical email-backed document exists for the same player (e.g. logged in on phone via nickname "jcv")
-      if (!remoteData || (!remoteData.email && (savedEmail || savedName))) {
+      let remoteData = null;
+      if (restDoc && sdkDoc) {
+        remoteData = (Number(restDoc.campaignLevelIndex || 0) >= Number(sdkDoc.campaignLevelIndex || 0)) ? restDoc : sdkDoc;
+      } else {
+        remoteData = restDoc || sdkDoc;
+      }
+
+      // Only search by email/name if the current uid document does not exist yet
+      if (!remoteData && (savedEmail || savedName)) {
         const canonical = await findAccountInFirestore(savedEmail || savedName || uid);
         if (canonical && canonical.userId) {
           remoteData = canonical;
@@ -2176,26 +2367,40 @@
         : ((targetUser && targetUser.uid)
             ? targetUser.uid
             : (isUserSignedInViaRegistration() ? getSignedInUserId() : null));
-      if (!fbDb || !fbMod || !resolvedUid || JUNK_TEST_UIDS.has(resolvedUid)) {
+      if (!resolvedUid || JUNK_TEST_UIDS.has(resolvedUid)) {
         return Promise.resolve(null);
       }
       firestoreWriteQueue = firestoreWriteQueue.then(async () => {
         const uid = resolvedUid;
         const docPath = `${FIRESTORE_COLLECTION}/${uid}`;
-        const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
         let snap = null;
-        try {
-          snap = await fbMod.getDoc(docRef);
-        } catch (getErr) {
-          handleFirestoreErrorWeb(getErr, 'get', docPath);
+        let existingData = null;
+
+        if (fbDb && fbMod) {
+          try {
+            const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
+            snap = await fbMod.getDoc(docRef);
+            if (snap && snap.exists()) {
+              existingData = snap.data();
+            }
+          } catch (getErr) {
+            handleFirestoreErrorWeb(getErr, 'get', docPath);
+          }
+        }
+        if (!existingData) {
+          existingData = await fetchPlayerDocViaRest(uid);
         }
 
-        const existingData = (snap && snap.exists()) ? snap.data() : null;
-
-        // If pulling on sign-in or when remote exists and forcePullFromCloud is set, adopt remote state instead of overwriting it
+        // If pulling on sign-in or when remote exists and adoptCloudProgressFirst is set, adopt remote state instead of overwriting it
         if (existingData && profileOverrides.adoptCloudProgressFirst) {
           applyCloudDocAsSourceOfTruth({ ...existingData, userId: uid });
         }
+
+        let mirrorExisting = null;
+        try {
+          mirrorExisting = JSON.parse(localStorage.getItem(FIRESTORE_MIRROR_PREFIX + uid) || 'null');
+        } catch (e) {}
+        const regExisting = findRegisteredAccount(uid);
 
         const rawName = (
           profileOverrides.displayName ||
@@ -2205,11 +2410,13 @@
           (targetUser && targetUser.email ? targetUser.email.split('@')[0] : 'Doodle Player')
         ).trim().slice(0, 50) || 'Doodle Player';
 
-        const candidateEmail = (
-          profileOverrides.email !== undefined && profileOverrides.email !== ''
-            ? profileOverrides.email
-            : ((existingData && existingData.email) || localStorage.getItem('doodle_account_email') || (targetUser && targetUser.email) || '')
-        ).trim().slice(0, 150);
+        const candidateEmail = profileOverrides.clearEmail
+          ? ''
+          : (
+              profileOverrides.email !== undefined && profileOverrides.email !== ''
+                ? profileOverrides.email
+                : ((existingData && existingData.email) || localStorage.getItem('doodle_account_email') || (targetUser && targetUser.email) || '')
+            ).trim().slice(0, 150);
 
         const cleanEmail = (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidateEmail) && !candidateEmail.endsWith('@doodleword.app'))
           ? candidateEmail
@@ -2225,10 +2432,12 @@
         const passwordHashVal = (
           profileOverrides.passwordHash ||
           (existingData && existingData.passwordHash) ||
+          (mirrorExisting && mirrorExisting.passwordHash) ||
+          (regExisting && regExisting.password ? computePasswordHash(regExisting.password) : '') ||
           ''
         ).trim().slice(0, 128);
 
-        const payload = {
+        const baseFields = {
           userId: uid,
           displayName: rawName,
           authMethod,
@@ -2237,43 +2446,57 @@
           perfectCount: Math.max(0, Math.min(1000000, Math.floor(Number(perfectCount) || 0))),
           currentStreak: Math.max(0, Math.min(1000000, Math.floor(Number(streak) || 0))),
           maxStreak: Math.max(0, Math.min(1000000, Math.floor(Number(maxStreak) || 0))),
-          completedLevelsCount: Math.max(0, Math.min(1000, Math.floor(Number(completedCampaignSet.size) || 0))),
-          updatedAt: fbMod.serverTimestamp()
+          completedLevelsCount: Math.max(0, Math.min(1000, Math.floor(Number(completedCampaignSet.size) || 0)))
         };
 
         if (cleanEmail) {
-          payload.email = cleanEmail;
+          baseFields.email = cleanEmail;
         }
         if (passwordHashVal) {
-          payload.passwordHash = passwordHashVal;
-        }
-        if (!snap || !snap.exists()) {
-          payload.createdAt = fbMod.serverTimestamp();
+          baseFields.passwordHash = passwordHashVal;
         }
 
-        try {
-          lastLocalStateWriteMs = Date.now();
-          await fbMod.setDoc(docRef, payload, { merge: true });
-          const nowIso = new Date().toISOString();
-          const mirrorDoc = {
-            ...payload,
-            createdAt: (existingData && existingData.createdAt) ? existingData.createdAt : nowIso,
-            updatedAt: nowIso
+        lastLocalStateWriteMs = Date.now();
+        const isCreate = !existingData;
+
+        // Write via both REST API and Firebase JS SDK so mobile Safari & desktop browsers always persist immediately
+        const restWritePromise = writePlayerDocViaRest(uid, baseFields, isCreate);
+        const sdkWritePromise = (async () => {
+          if (!fbDb || !fbMod) return null;
+          const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
+          const sdkPayload = {
+            ...baseFields,
+            updatedAt: fbMod.serverTimestamp()
           };
-          localStorage.setItem(FIRESTORE_MIRROR_PREFIX + uid, JSON.stringify(mirrorDoc));
-          if (!profileOverrides.skipActiveUidUpdate) {
-            localStorage.setItem('doodle_account_uid', uid);
+          if (isCreate) {
+            sdkPayload.createdAt = fbMod.serverTimestamp();
           }
-          lastCloudSyncTimestamp = Date.now();
-          updateCloudSyncUIStatus(
-            'SAVED ✓',
-            `Lv ${campaignIdx + 1} • ⭐ ${coins}`
-          );
-          return payload;
-        } catch (writeErr) {
-          handleFirestoreErrorWeb(writeErr, (!snap || !snap.exists()) ? 'create' : 'update', docPath);
-          throw writeErr;
+          try {
+            await fbMod.setDoc(docRef, sdkPayload, { merge: true });
+            return sdkPayload;
+          } catch (writeErr) {
+            handleFirestoreErrorWeb(writeErr, isCreate ? 'create' : 'update', docPath);
+            return null;
+          }
+        })();
+
+        const [restRes, sdkRes] = await Promise.all([restWritePromise, sdkWritePromise]);
+        const nowIso = new Date().toISOString();
+        const mirrorDoc = {
+          ...baseFields,
+          createdAt: (existingData && existingData.createdAt) ? existingData.createdAt : nowIso,
+          updatedAt: nowIso
+        };
+        localStorage.setItem(FIRESTORE_MIRROR_PREFIX + uid, JSON.stringify(mirrorDoc));
+        if (!profileOverrides.skipActiveUidUpdate) {
+          localStorage.setItem('doodle_account_uid', uid);
         }
+        lastCloudSyncTimestamp = Date.now();
+        updateCloudSyncUIStatus(
+          'SAVED ✓',
+          `Lv ${campaignIdx + 1} • ⭐ ${coins}`
+        );
+        return restRes || sdkRes || mirrorDoc;
       }).catch((err) => {
         console.warn('Firestore sync error:', err);
         return null;
@@ -2282,11 +2505,12 @@
     }
 
     async function pushDocToRealFirestore(firestoreDoc) {
-      if (!fbDb || !fbMod || !firestoreDoc || !firestoreDoc.userId) return;
+      if (!firestoreDoc || !firestoreDoc.userId) return;
       await syncPlayerToFirestore(fbAuth ? fbAuth.currentUser : null, {
         uid: firestoreDoc.userId,
         displayName: firestoreDoc.displayName,
         email: firestoreDoc.email,
+        passwordHash: firestoreDoc.passwordHash,
         authMethod: firestoreDoc.authMethod
       });
     }
@@ -2309,8 +2533,8 @@
             localStorage.setItem(mirrorKey, JSON.stringify(firestoreDoc));
             lastCloudSyncTimestamp = nowMs;
 
-            // Only push local state changes to Firestore when triggered by an actual local gameplay/profile action
-            if (fbDb && fbMod && reason !== 'initial_load' && reason !== 'storage_event' && reason !== 'remote_snapshot') {
+            // Push local state changes to Firestore when triggered by any gameplay/profile action
+            if (reason !== 'initial_load' && reason !== 'storage_event' && reason !== 'remote_snapshot') {
               lastLocalStateWriteMs = nowMs;
               pushDocToRealFirestore(firestoreDoc);
             }
@@ -6443,6 +6667,7 @@
         uid,
         displayName: (options.remoteDoc && options.remoteDoc.displayName) ? options.remoteDoc.displayName : cleanNick,
         email: (options.remoteDoc && options.remoteDoc.email) ? options.remoteDoc.email : cleanEmail,
+        clearEmail: Boolean(options.clearEmail),
         authMethod: cleanMode,
         passwordHash: pwdHash,
         adoptCloudProgressFirst: Boolean(options.remoteDoc)
@@ -6467,8 +6692,8 @@
         try { await firebaseInitPromise; } catch (e) {}
       }
 
-      // 1. Strictly verify that the account actually exists in Cloud Firestore!
-      const remoteAccount = await findAccountInFirestore(identifier);
+      // 1. Strictly verify that the account actually exists in Cloud Firestore (passing password so matching passwordHash is prioritized)!
+      const remoteAccount = await findAccountInFirestore(identifier, password);
       if (!remoteAccount || !remoteAccount.userId) {
         showToast('❌ Account "' + identifier + '" not found! Check your spelling or tap "Create new account".');
         return;
@@ -6537,7 +6762,7 @@
         try { await firebaseInitPromise; } catch (e) {}
       }
 
-      const remoteAccount = await findAccountInFirestore(identifier);
+      const remoteAccount = await findAccountInFirestore(identifier, newPassword);
       if (!remoteAccount || !remoteAccount.userId) {
         showToast('❌ Account "' + identifier + '" not found! Please check your spelling.');
         return;
@@ -6587,15 +6812,10 @@
         try { await firebaseInitPromise; } catch (e) {}
       }
 
-      // Check if an account with this email or nickname already exists in Cloud Firestore
-      const existingByEmail = email ? await findAccountInFirestore(email) : null;
-      const existingByNick = await findAccountInFirestore(nick);
-      const existingCloud = existingByEmail || existingByNick;
-      if (existingCloud && existingCloud.userId) {
-        showToast('⚠️ Account "' + (existingCloud.displayName || nick) + '" already exists! Please log in instead.');
-        const loginIdEl = document.getElementById('loginIdentifierInput');
-        if (loginIdEl) loginIdEl.value = email || nick;
-        switchAuthCardView('login');
+      const pwdHash = computePasswordHash(password);
+      const uid = 'usr_' + ((email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) || 'doodle');
+      if (JUNK_TEST_UIDS.has(uid)) {
+        showToast('Please choose a valid nickname or email.');
         return;
       }
 
@@ -6605,9 +6825,6 @@
         resetLocalGameStateToFresh();
       }
 
-      const pwdHash = computePasswordHash(password);
-      const uid = 'usr_' + ((email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) || 'doodle');
-
       await completeAccountSession(
         uid,
         nick,
@@ -6615,7 +6832,7 @@
         'account',
         '✨ Account created! Welcome, ' + nick + '!',
         password,
-        { passwordHash: pwdHash }
+        { passwordHash: pwdHash, clearEmail: !email }
       );
     }
 
@@ -6748,6 +6965,18 @@
 
     async function handleSignOut() {
       const prevIdent = localStorage.getItem('doodle_account_email') || localStorage.getItem('doodle_account_name') || '';
+      const activeUid = localStorage.getItem('doodle_account_uid') || '';
+      if (isUserSignedInViaRegistration() && activeUid && !JUNK_TEST_UIDS.has(activeUid)) {
+        try {
+          await syncPlayerToFirestore(fbAuth ? fbAuth.currentUser : null, {
+            uid: activeUid,
+            displayName: localStorage.getItem('doodle_account_name') || undefined,
+            email: localStorage.getItem('doodle_account_email') || undefined,
+            authMethod: localStorage.getItem('doodle_account_mode') || 'account',
+            skipActiveUidUpdate: true
+          });
+        } catch (e) {}
+      }
       if (activeFirestoreUnsubscribe) {
         activeFirestoreUnsubscribe();
         activeFirestoreUnsubscribe = null;

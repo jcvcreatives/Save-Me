@@ -58,14 +58,13 @@ service cloud.firestore {
              (!('currentStreak' in data) || (data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 1000000)) &&
              (!('maxStreak' in data) || (data.maxStreak is int && data.maxStreak >= 0 && data.maxStreak <= 1000000)) &&
              (!('completedLevelsCount' in data) || (data.completedLevelsCount is int && data.completedLevelsCount >= 0 && data.completedLevelsCount <= 1000)) &&
-             (!('createdAt' in data) || data.createdAt == null || (data.createdAt is timestamp && data.createdAt <= request.time)) &&
-             data.updatedAt is timestamp &&
-             data.updatedAt <= request.time;
+             (!('createdAt' in data) || data.createdAt == null || data.createdAt is timestamp) &&
+             data.updatedAt is timestamp;
     }
 
     match /players/{userId} {
       allow get: if isAuthorizedPlayerAccess(userId);
-      allow list: if isValidId(userId);
+      allow list: if true;
 
       allow create: if isAuthorizedPlayerAccess(userId) &&
                        incoming().keys().hasAll([
@@ -95,7 +94,6 @@ service cloud.firestore {
       allow update: if isAuthorizedPlayerAccess(userId) &&
                        isValidPlayerAccount(incoming(), userId) &&
                        (!('userId' in existing()) || !('userId' in incoming()) || incoming().userId == existing().userId) &&
-                       (!('createdAt' in existing()) || existing().createdAt == null || incoming().createdAt == existing().createdAt) &&
                        incoming().diff(existing()).affectedKeys().hasOnly([
                          'userId',
                          'displayName',
