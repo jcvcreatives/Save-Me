@@ -194,13 +194,13 @@ fun RegistrationAuthScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Top Header Row: Optional Back Button + Firebase Spark Plan Badge
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            if (currentUser != null || isGuestSession) {
+        // Top Header Row: Optional Back Button
+        if (currentUser != null || isGuestSession) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
                 SketchyContainer(
                     fillColor = Color.White,
                     borderColor = DoodleColors.InkBlack,
@@ -219,33 +219,7 @@ fun RegistrationAuthScreen(
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )
                 }
-            } else {
-                Spacer(modifier = Modifier.width(1.dp))
             }
-
-            SketchyContainer(
-                fillColor = Color(0xFFFFF8E1),
-                borderColor = DoodleColors.InkBlack,
-                cornerRadius = 18.dp,
-                strokeWidth = 2.dp
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(text = "🔥", fontSize = 15.sp)
-                    Text(
-                        text = "FIREBASE SPARK PLAN • NO-COST CLOUD SYNC",
-                        fontFamily = fontFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 11.sp,
-                        color = DoodleColors.InkBlack
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(1.dp))
         }
 
         // Doodle Stickman Welcome Illustration + WORD Header
@@ -339,9 +313,9 @@ fun RegistrationAuthScreen(
 
         Text(
             text = if (currentUser != null) {
-                "Signed in & Cloud-Synced on Firebase Spark!"
+                "Welcome back! Ready to play."
             } else {
-                "Register an Account, Sign in with Gmail, or Play as Guest"
+                "Log in to your Account, Create a New Account, or Play as Guest"
             },
             fontFamily = fontFamily,
             fontWeight = FontWeight.Bold,
@@ -399,19 +373,22 @@ fun RegistrationAuthScreen(
                     ) {
                         Column {
                             Text(
-                                text = "☁️ ${cloudAccount?.displayName ?: currentUser.displayName ?: "Doodle Player"}",
+                                text = "👤 ${cloudAccount?.displayName ?: currentUser.displayName ?: "Doodle Player"}",
                                 fontFamily = fontFamily,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 18.sp,
                                 color = DoodleColors.InkBlack
                             )
-                            Text(
-                                text = cloudAccount?.email ?: currentUser.email ?: "Connected via Google Auth",
-                                fontFamily = fontFamily,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp,
-                                color = DoodleColors.InkBlue
-                            )
+                            val activeEmail = cloudAccount?.email ?: currentUser.email
+                            if (!activeEmail.isNullOrBlank()) {
+                                Text(
+                                    text = activeEmail,
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 12.sp,
+                                    color = DoodleColors.InkBlue
+                                )
+                            }
                         }
                         Box(
                             modifier = Modifier
@@ -702,7 +679,7 @@ fun RegistrationAuthScreen(
                                     color = DoodleColors.InkBlack
                                 )
                                 Text(
-                                    text = "Custom Doodle Nickname + Cloud Backup",
+                                    text = "Create your Doodle Word player profile",
                                     fontFamily = fontFamily,
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 11.sp,
@@ -883,75 +860,5 @@ fun RegistrationAuthScreen(
                 }
             }
         }
-
-        // Live localStorage <-> Firestore Parity Status Card
-        val activeDisplayName = cloudAccount?.displayName
-            ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
-            ?: "Cloud"
-        SketchyContainer(
-            fillColor = Color(0xFFE8F5E9),
-            borderColor = DoodleColors.InkBlack,
-            cornerRadius = 14.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("reg_parity_banner")
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (currentUser != null) {
-                            "☁️ Firestore ⇄ localStorage Parity Active ($activeDisplayName)"
-                        } else {
-                            "💾 Local Device Save Active"
-                        },
-                        fontFamily = fontFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 12.sp,
-                        color = Color(0xFF1B5E20)
-                    )
-                    Text(
-                        text = if (currentUser != null) {
-                            "Synced Lv $localLevelNumber/1000 • ⭐ $localCoins Coins • $completedLevelsCount Solved"
-                        } else {
-                            "localStorage Lv $localLevelNumber/1000 • ⭐ $localCoins Coins (Sign in to sync with Firestore)"
-                        },
-                        fontFamily = fontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        color = DoodleColors.InkBlue
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (currentUser != null) Color(0xFFC8E6C9) else Color(0xFFFFF9C4))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = if (currentUser != null) "PARITY ✓" else "LOCAL",
-                        fontFamily = fontFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 10.sp,
-                        color = DoodleColors.InkBlack
-                    )
-                }
-            }
-        }
-
-        Text(
-            text = "Guest progress saves on your device. Sign in with Gmail anytime to back up your 1,000-level progress to Firebase Firestore (Spark Plan).",
-            fontFamily = fontFamily,
-            fontSize = 11.sp,
-            color = DoodleColors.InkBlack.copy(alpha = 0.65f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
-        )
     }
 }

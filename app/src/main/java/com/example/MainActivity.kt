@@ -1611,7 +1611,7 @@ class WordGameViewModel : ViewModel() {
     ) {
         val auth = authInstance ?: runCatching { Firebase.auth }.getOrNull()
         if (auth == null) {
-            authErrorMessage = "Firebase Auth is not initialized."
+            authErrorMessage = "Authentication service is not initialized."
             return
         }
         isSyncingCloud = true
@@ -1644,7 +1644,7 @@ class WordGameViewModel : ViewModel() {
                             cloudAccount = synced
                             lastCloudSyncEpochMs = System.currentTimeMillis()
                             writeLocalStorageOnly()
-                            statusBannerMessage = "☁️ Welcome, ${synced.displayName}! Cloud Sync Active."
+                            statusBannerMessage = "👋 Welcome, ${synced.displayName}!"
                             currentScreen = ScreenState.MAIN_MENU
                         }.onFailure { err ->
                             authErrorMessage = err.localizedMessage ?: "Failed to save cloud profile."
@@ -1661,7 +1661,7 @@ class WordGameViewModel : ViewModel() {
             .addOnFailureListener { e ->
                 isExplicitSignInInFlight = false
                 isSyncingCloud = false
-                authErrorMessage = e.localizedMessage ?: "Google Sign-In with Firebase failed."
+                authErrorMessage = e.localizedMessage ?: "Google Sign-In failed."
             }
     }
 

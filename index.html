@@ -703,14 +703,10 @@
   <div class="app-shell">
     <!-- ================= SCREEN 0: REGISTRATION & AUTH SCREEN (FIREBASE SPARK PLAN) ================= -->
     <div id="regScreen" class="screen active" style="overflow-y:auto;padding-bottom:18px;">
-      <div style="width:100%;max-width:360px;margin:4px auto 0;display:flex;justify-content:center;align-items:center;position:relative;min-height:36px;">
-        <button id="regBackToMenuBtn" class="sketch-box sketch-btn" style="display:none;position:absolute;left:0;height:34px;padding:0 10px;border-radius:12px;font-size:12px;background:#FFF;" onclick="continueToGameFromReg()">
+      <div style="width:100%;max-width:360px;margin:4px auto 0;display:flex;justify-content:flex-start;align-items:center;position:relative;min-height:36px;">
+        <button id="regBackToMenuBtn" class="sketch-box sketch-btn" style="display:none;height:34px;padding:0 10px;border-radius:12px;font-size:12px;background:#FFF;" onclick="continueToGameFromReg()">
           ← Back
         </button>
-        <div class="sketch-box" style="background:#FFF8E1;padding:5px 14px;border-radius:16px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:6px;">
-          <span>🔥</span>
-          <span>FIREBASE SPARK PLAN • NO-COST CLOUD SYNC</span>
-        </div>
       </div>
 
       <div style="width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;margin:6px auto 2px;">
@@ -730,8 +726,8 @@
         <div id="signedInAccountCard" class="sketch-box" style="display:none;padding:15px;border-radius:18px;background:#E8F5E9;text-align:left;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">
             <div>
-              <div id="signedInDisplayName" style="font-size:18px;font-weight:700;color:var(--ink-black);">☁️ Doodle Player</div>
-              <div id="signedInEmailText" style="font-size:12px;font-weight:700;color:var(--ink-blue);margin-top:2px;">Connected via Firebase Spark</div>
+              <div id="signedInDisplayName" style="font-size:18px;font-weight:700;color:var(--ink-black);">Doodle Player</div>
+              <div id="signedInEmailText" style="font-size:12px;font-weight:700;color:var(--ink-blue);margin-top:2px;"></div>
             </div>
             <span id="signedInBadgePill" style="background:#C8E6C9;color:#1B5E20;border:1.8px solid var(--ink-black);border-radius:10px;padding:3px 8px;font-size:10px;font-weight:800;white-space:nowrap;">SYNCED ✓</span>
           </div>
@@ -791,7 +787,7 @@
               <span style="font-size:18px;">✏️</span>
               <div style="text-align:left;">
                 <div style="font-size:17px;font-weight:700;">Create Account</div>
-                <div style="font-size:11px;color:var(--ink-blue);font-weight:700;">Custom Doodle Nickname + Cloud Backup</div>
+                <div style="font-size:11px;color:var(--ink-blue);font-weight:700;">Create your Doodle Word player profile</div>
               </div>
             </div>
             <input id="regNicknameInput" class="input-sketch" placeholder="Doodle Nickname (e.g. SharkSlayer)" maxlength="50" style="margin-bottom:8px;border-radius:14px;padding:11px 14px;" />
@@ -816,19 +812,6 @@
             <span style="font-size:18px;">🕵️</span>
             <span style="font-size:16px;font-weight:700;">Log-in as Guest</span>
           </button>
-        </div>
-
-        <!-- Live localStorage <-> Firestore Parity Status Card -->
-        <div id="regParityBanner" class="sketch-box" style="padding:10px 12px;border-radius:14px;background:#E8F5E9;font-size:11px;font-weight:700;color:var(--ink-black);text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-          <div>
-            <div id="regParityTitle" style="font-size:12px;font-weight:800;color:#1B5E20;">🔄 Cloud-Sync Parity Engine Ready</div>
-            <div id="regParitySub" style="font-size:11px;color:var(--ink-blue);margin-top:2px;">Sign in above to keep localStorage &amp; Firestore in real-time parity.</div>
-          </div>
-          <span id="regParityPill" style="background:#FFF;padding:3px 8px;border-radius:10px;border:1.5px solid var(--ink-black);font-size:10px;white-space:nowrap;">LOCAL</span>
-        </div>
-
-        <div style="font-size:11px;color:var(--ink-black);opacity:0.7;text-align:center;padding:0 8px;">
-          Guest progress saves on your device. Sign in with Gmail anytime to back up your 1,000-level progress to Firebase Firestore (Spark Plan).
         </div>
       </div>
     </div>
@@ -1842,7 +1825,7 @@
       const subtitleEl = document.getElementById('regStatusSubtitle');
       if (subtitleEl) {
         subtitleEl.textContent = signedIn
-          ? 'Signed in & Cloud-Synced on Firebase Spark!'
+          ? 'Welcome back! Ready to play.'
           : 'Log in to your Account, Create a New Account, or Play as Guest';
       }
 
@@ -1856,11 +1839,10 @@
           const emailEl = document.getElementById('signedInEmailText');
           const statsEl = document.getElementById('signedInStatsLine');
           const contBtn = document.getElementById('continueToGameBtn');
-          if (dispEl) dispEl.textContent = `☁️ ${name}`;
+          if (dispEl) dispEl.textContent = `👤 ${name}`;
           if (emailEl) {
-            emailEl.textContent = email
-              ? `${email} • ${fbAuth && fbAuth.currentUser ? 'Firebase Auth Verified' : 'Cloud Profile Active'}`
-              : 'Connected via Doodle Account';
+            emailEl.textContent = email || '';
+            emailEl.style.display = email ? 'block' : 'none';
           }
           if (statsEl) {
             statsEl.textContent = `Campaign: Level ${lvlNum} / 1000  •  Coins: ⭐ ${coins}  •  Solved: ${completedCampaignSet.size}`;
@@ -1877,33 +1859,17 @@
 
     function updateCloudSyncUIStatus(syncStateLabel, detailText) {
       const btn = document.getElementById('accountStatusBtn');
-      const titleEl = document.getElementById('regParityTitle');
-      const subEl = document.getElementById('regParitySub');
-      const pillEl = document.getElementById('regParityPill');
       const signedIn = isUserSignedInViaRegistration();
-      const name = (localStorage.getItem('doodle_account_name') || 'Cloud').slice(0, 12);
+      const name = (localStorage.getItem('doodle_account_name') || 'Player').slice(0, 12);
 
       if (btn) {
         if (signedIn) {
-          btn.textContent = `☁️ ${name} ✓`;
-          btn.title = `Firestore & localStorage in Parity • Lv ${campaignIdx + 1} • ${coins} Coins`;
+          btn.textContent = `👤 ${name} ✓`;
+          btn.title = `Player: ${name} • Lv ${campaignIdx + 1} • ${coins} Coins`;
         } else if (localStorage.getItem('doodle_account_mode') === 'guest') {
           btn.textContent = '🕵️ Guest';
         } else {
           btn.textContent = '👤 Register';
-        }
-      }
-      if (titleEl && subEl && pillEl) {
-        if (signedIn) {
-          titleEl.textContent = `☁️ Firestore ⇄ localStorage Parity Active (${name})`;
-          subEl.textContent = detailText || `Synced Lv ${campaignIdx + 1}/1000 • ⭐ ${coins} Coins • ${completedCampaignSet.size} Solved`;
-          pillEl.textContent = syncStateLabel || 'PARITY ✓';
-          pillEl.style.background = '#C8E6C9';
-        } else {
-          titleEl.textContent = '💾 Local Device Save Active';
-          subEl.textContent = detailText || `localStorage Lv ${campaignIdx + 1}/1000 • ⭐ ${coins} Coins (Sign in to sync with Firestore)`;
-          pillEl.textContent = 'LOCAL';
-          pillEl.style.background = '#FFF9C4';
         }
       }
       updateRegistrationScreenCards();
@@ -2052,8 +2018,8 @@
           localStorage.setItem('doodle_account_uid', uid);
           lastCloudSyncTimestamp = Date.now();
           updateCloudSyncUIStatus(
-            'PARITY ✓',
-            `localStorage ⇄ Firestore (/players/${uid}) synced • Lv ${campaignIdx + 1} • ⭐ ${coins}`
+            'SAVED ✓',
+            `Lv ${campaignIdx + 1} • ⭐ ${coins}`
           );
           return payload;
         } catch (writeErr) {
@@ -2122,13 +2088,13 @@
           }
 
           updateCloudSyncUIStatus(
-            'PARITY ✓',
-            `localStorage ⇄ Firestore (/players/${uid}) synced • Lv ${campaignIdx + 1} • ⭐ ${coins}`
+            'SAVED ✓',
+            `Lv ${campaignIdx + 1} • ⭐ ${coins}`
           );
         } else {
           // Guest or unauthenticated session: persist to localStorage
           localStorage.setItem(STORAGE_KEY, JSON.stringify(localSnap));
-          updateCloudSyncUIStatus('LOCAL', `Saved to localStorage • Lv ${campaignIdx + 1} • ⭐ ${coins}`);
+          updateCloudSyncUIStatus('LOCAL', `Lv ${campaignIdx + 1} • ⭐ ${coins}`);
         }
 
         lastSyncedSignature = computeStateSignature();
@@ -5115,7 +5081,7 @@
         display,
         email,
         mode,
-        '☁️ Welcome back, ' + display + '! Cloud progress synced to Firestore.',
+        '👋 Welcome back, ' + display + '!',
         password
       );
     }
@@ -5211,7 +5177,7 @@
         nick,
         email,
         'account',
-        '☁️ Welcome, ' + nick + '! Account saved & synced to Firestore.',
+        '✨ Welcome, ' + nick + '!',
         password
       );
     }
@@ -5242,7 +5208,7 @@
         nick,
         email,
         mode,
-        '☁️ Profile updated for ' + nick + '! Synced to Firestore.'
+        '✅ Profile updated for ' + nick + '!'
       );
     }
 
@@ -5276,7 +5242,7 @@
               display,
               email,
               'gmail',
-              '☁️ Signed in with Google (' + (email || display) + ')! Cloud Sync Active.'
+              '✅ Signed in with Google (' + (email || display) + ')!'
             );
             return;
           }
@@ -5307,7 +5273,7 @@
           display,
           prefilledEmail,
           'gmail',
-          '☁️ Signed in with Gmail (' + prefilledEmail + ')! Cloud Sync Active.'
+          '✅ Signed in with Gmail (' + prefilledEmail + ')!'
         );
         return;
       }
@@ -5344,7 +5310,7 @@
         display,
         email,
         'gmail',
-        '☁️ Signed in with Gmail (' + email + ')! Cloud Sync Active.'
+        '✅ Signed in with Gmail (' + email + ')!'
       );
     }
 
@@ -5380,7 +5346,7 @@
 
       switchAuthCardView('login');
       updateCloudSyncUIStatus();
-      showToast('Signed out of cloud account.');
+      showToast('Signed out of account.');
     }
 
     function handleGuestLogin() {
