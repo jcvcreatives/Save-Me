@@ -1795,8 +1795,10 @@ class WordGameViewModel : ViewModel() {
         }
 
         val pwdHash = computePasswordHash(cleanPassword)
-        val uid = currentUser?.uid ?: buildDirectAccountUid(cleanEmail ?: cleanNick)
-        if (uid in JUNK_TEST_UIDS) {
+        val directNickUid = buildDirectAccountUid(cleanNick)
+        val directEmailUid = cleanEmail?.let { buildDirectAccountUid(it) }
+        val uid = currentUser?.uid ?: (directEmailUid ?: directNickUid)
+        if (uid in JUNK_TEST_UIDS || directNickUid in JUNK_TEST_UIDS) {
             authErrorMessage = "Please choose a valid nickname or email."
             return
         }
@@ -1805,6 +1807,32 @@ class WordGameViewModel : ViewModel() {
             isSyncingCloud = true
             authErrorMessage = null
             viewModelScope.launch {
+                val existingByEmail = if (!cleanEmail.isNullOrBlank()) {
+                    repo.findPlayerAccountByIdentifier(cleanEmail).getOrNull()
+                } else {
+                    null
+                }
+                if (cleanEmail != null && existingByEmail != null) {
+                    val foundEmail = existingByEmail.email?.trim()?.lowercase().orEmpty()
+                    val foundUid = existingByEmail.userId.ifBlank { existingByEmail.id }.lowercase()
+                    if (foundEmail == cleanEmail.lowercase() || (directEmailUid != null && foundUid == directEmailUid.lowercase())) {
+                        isSyncingCloud = false
+                        authErrorMessage = "Email \"$cleanEmail\" is already registered! Please log in instead."
+                        return@launch
+                    }
+                }
+
+                val existingByNick = repo.findPlayerAccountByIdentifier(cleanNick).getOrNull()
+                if (existingByNick != null) {
+                    val foundName = existingByNick.displayName.trim().lowercase()
+                    val foundUid = existingByNick.userId.ifBlank { existingByNick.id }.lowercase()
+                    if (foundName == cleanNick.lowercase() || foundUid == directNickUid.lowercase()) {
+                        isSyncingCloud = false
+                        authErrorMessage = "Nickname \"$cleanNick\" is already registered! Please log in or choose another name."
+                        return@launch
+                    }
+                }
+
                 if (!isGuestSession) {
                     resetLocalStateToFresh()
                 }
@@ -1836,7 +1864,7 @@ class WordGameViewModel : ViewModel() {
                     maxStreak = maxStreak,
                     completedLevelsCount = completedCampaignLevels.size,
                     userId = uid,
-                    overwriteIfExists = true
+                    overwriteIfExists = false
                 )
                 isSyncingCloud = false
                 res.onSuccess { created ->

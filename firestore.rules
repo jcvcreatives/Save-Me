@@ -63,8 +63,7 @@ service cloud.firestore {
     }
 
     match /players/{userId} {
-      allow get: if isAuthorizedPlayerAccess(userId);
-      allow list: if true;
+      allow read: if true;
 
       allow create: if isAuthorizedPlayerAccess(userId) &&
                        incoming().keys().hasAll([

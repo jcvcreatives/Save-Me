@@ -1982,8 +1982,9 @@
     }
 
     let lastLocalStateWriteMs = 0;
+    let lastCloudPullMs = 0;
 
-    function applyCloudDocAsSourceOfTruth(remoteDoc) {
+    function applyCloudDocAsSourceOfTruth(remoteDoc, options = {}) {
       if (!remoteDoc) return;
       isReconcilingState = true;
       try {
@@ -1997,13 +1998,32 @@
           Math.max(0, Math.min(1000, Math.floor(Number(remoteDoc.completedLevelsCount ?? 0))))
         );
 
-        campaignIdx = remoteIdx;
-        coins = remoteCoins;
-        perfectCount = remotePerfect;
-        streak = remoteStreak;
-        maxStreak = remoteMaxStreak;
-        completedCampaignSet = new Set();
-        for (let lv = 1; lv <= remoteCompletedCount; lv++) {
+        const activeUid = localStorage.getItem('doodle_account_uid') || '';
+        const isSameActiveUser = Boolean(activeUid && remoteDoc.userId && activeUid === String(remoteDoc.userId));
+        const shouldProtectHigherLocal = isSameActiveUser && !options.isInitialLogin;
+
+        const localOutpacedCloud = shouldProtectHigherLocal && (
+          campaignIdx > remoteIdx ||
+          (campaignIdx === remoteIdx && coins > remoteCoins)
+        );
+
+        if (shouldProtectHigherLocal) {
+          campaignIdx = Math.max(campaignIdx, remoteIdx);
+          coins = campaignIdx > remoteIdx ? coins : Math.max(coins, remoteCoins);
+          perfectCount = Math.max(perfectCount, remotePerfect);
+          streak = Math.max(streak, remoteStreak);
+          maxStreak = Math.max(maxStreak, remoteMaxStreak);
+        } else {
+          campaignIdx = remoteIdx;
+          coins = remoteCoins;
+          perfectCount = remotePerfect;
+          streak = remoteStreak;
+          maxStreak = remoteMaxStreak;
+          completedCampaignSet = new Set();
+        }
+
+        const targetCompleted = Math.max(remoteCompletedCount, shouldProtectHigherLocal ? campaignIdx : remoteIdx);
+        for (let lv = 1; lv <= targetCompleted; lv++) {
           completedCampaignSet.add(lv);
         }
 
@@ -2015,7 +2035,15 @@
         }
         if (remoteDoc.userId) {
           localStorage.setItem('doodle_account_uid', String(remoteDoc.userId));
-          localStorage.setItem(FIRESTORE_MIRROR_PREFIX + remoteDoc.userId, JSON.stringify(remoteDoc));
+          localStorage.setItem(FIRESTORE_MIRROR_PREFIX + remoteDoc.userId, JSON.stringify({
+            ...remoteDoc,
+            campaignLevelIndex: campaignIdx,
+            coins,
+            perfectCount,
+            currentStreak: streak,
+            maxStreak,
+            completedLevelsCount: completedCampaignSet.size
+          }));
         }
 
         const nowMs = Date.now();
@@ -2030,6 +2058,11 @@
         );
         if (typeof updateMenuUI === 'function') {
           updateMenuUI();
+        }
+        if (localOutpacedCloud && remoteDoc.userId) {
+          setTimeout(() => {
+            syncPlayerToFirestore(fbAuth ? fbAuth.currentUser : null, { uid: String(remoteDoc.userId) });
+          }, 50);
         }
       } catch (e) {
       } finally {
@@ -2219,60 +2252,61 @@
         }
       };
 
-      // 1. Direct UID lookup via both REST API and Firebase JS SDK in parallel
-      const [restDirect, sdkDirect] = await Promise.all([
-        fetchPlayerDocViaRest(directUid),
-        (async () => {
-          if (!fbDb || !fbMod) return null;
-          try {
-            const snap = await fbMod.getDoc(fbMod.doc(fbDb, FIRESTORE_COLLECTION, directUid));
-            if (snap && snap.exists()) {
-              return { ...snap.data(), userId: snap.data().userId || directUid, _docId: directUid };
-            }
-          } catch (e) {}
-          return null;
-        })()
-      ]);
-      if (restDirect) addCandidateIfMatches(restDirect, directUid);
-      if (sdkDirect) addCandidateIfMatches(sdkDirect, directUid);
+      // 1. Fast single-document lookup for directUid first (saves Firestore quota!)
+      let directDoc = await fetchPlayerDocViaRest(directUid);
+      if (!directDoc && fbDb && fbMod) {
+        try {
+          const snap = await fbMod.getDoc(fbMod.doc(fbDb, FIRESTORE_COLLECTION, directUid));
+          if (snap && snap.exists()) {
+            directDoc = { ...snap.data(), userId: snap.data().userId || directUid, _docId: directUid };
+          }
+        } catch (e) {}
+      }
+      if (directDoc) {
+        addCandidateIfMatches(directDoc, directUid);
+      }
 
-      // 2. Collection query via both REST API and Firebase JS SDK in parallel
-      const [restList, sdkList] = await Promise.all([
-        queryAllPlayersViaRest(),
-        (async () => {
-          if (!fbDb || !fbMod) return [];
+      // If directUid matched and either no password was supplied or its passwordHash matches, we don't need to scan the whole collection
+      const directCandidate = matchesById.get(directUid);
+      const needCollectionScan = !directCandidate || (enteredHash && directCandidate.passwordHash && directCandidate.passwordHash !== enteredHash);
+
+      if (needCollectionScan) {
+        let collectionList = await queryAllPlayersViaRest();
+        if ((!collectionList || collectionList.length === 0) && fbDb && fbMod) {
           try {
             const querySnap = await fbMod.getDocs(fbMod.collection(fbDb, FIRESTORE_COLLECTION));
-            const arr = [];
+            collectionList = [];
             querySnap.forEach((docSnap) => {
-              arr.push({ ...docSnap.data(), userId: docSnap.data().userId || docSnap.id, _docId: docSnap.id });
+              collectionList.push({ ...docSnap.data(), userId: docSnap.data().userId || docSnap.id, _docId: docSnap.id });
             });
-            return arr;
           } catch (e) {
-            return [];
+            collectionList = [];
           }
-        })()
-      ]);
-      for (const item of restList) addCandidateIfMatches(item, item._docId);
-      for (const item of sdkList) addCandidateIfMatches(item, item._docId);
+        }
+        for (const item of (collectionList || [])) {
+          addCandidateIfMatches(item, item._docId);
+        }
+      }
 
-      // 3. Local mirror / registry fallback if offline or not yet propagated
-      if (matchesById.size === 0) {
-        const localReg = findRegisteredAccount(raw);
+      // 3. Always merge local mirror / registry candidates so offline or quota-throttled sessions still find the account
+      const localRegs = findAllRegisteredAccounts(raw);
+      for (const localReg of localRegs) {
         if (localReg && localReg.uid && !JUNK_TEST_UIDS.has(localReg.uid)) {
           let mirrorData = null;
           try {
             mirrorData = JSON.parse(localStorage.getItem(FIRESTORE_MIRROR_PREFIX + localReg.uid) || 'null');
           } catch (e) {}
-          addCandidateIfMatches({
-            ...(mirrorData || {}),
-            userId: localReg.uid,
-            displayName: (mirrorData && mirrorData.displayName) || localReg.nick || raw,
-            email: (mirrorData && mirrorData.email) || localReg.email || '',
-            passwordHash: (mirrorData && mirrorData.passwordHash) || (localReg.password ? computePasswordHash(localReg.password) : ''),
-            authMethod: (mirrorData && mirrorData.authMethod) || localReg.mode || 'account',
-            _docId: localReg.uid
-          }, localReg.uid);
+          if (!matchesById.has(localReg.uid)) {
+            addCandidateIfMatches({
+              ...(mirrorData || {}),
+              userId: localReg.uid,
+              displayName: (mirrorData && mirrorData.displayName) || localReg.nick || raw,
+              email: (mirrorData && mirrorData.email) || localReg.email || '',
+              passwordHash: (mirrorData && mirrorData.passwordHash) || (localReg.password ? computePasswordHash(localReg.password) : ''),
+              authMethod: (mirrorData && mirrorData.authMethod) || localReg.mode || 'account',
+              _docId: localReg.uid
+            }, localReg.uid);
+          }
         }
       }
 
@@ -2301,7 +2335,7 @@
       return matches[0];
     }
 
-    async function pullLatestAccountStateFromFirestore(explicitUid) {
+    async function pullLatestAccountStateFromFirestore(explicitUid, isInitial = false) {
       if (firebaseInitPromise) {
         try { await firebaseInitPromise; } catch (e) {}
       }
@@ -2315,26 +2349,16 @@
         return null;
       }
 
-      const [restDoc, sdkDoc] = await Promise.all([
-        fetchPlayerDocViaRest(uid),
-        (async () => {
-          if (!fbDb || !fbMod) return null;
-          try {
-            const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
-            const snap = await fbMod.getDoc(docRef);
-            if (snap && snap.exists()) {
-              return { ...snap.data(), userId: snap.data().userId || uid };
-            }
-          } catch (e) {}
-          return null;
-        })()
-      ]);
-
-      let remoteData = null;
-      if (restDoc && sdkDoc) {
-        remoteData = (Number(restDoc.campaignLevelIndex || 0) >= Number(sdkDoc.campaignLevelIndex || 0)) ? restDoc : sdkDoc;
-      } else {
-        remoteData = restDoc || sdkDoc;
+      lastCloudPullMs = Date.now();
+      let remoteData = await fetchPlayerDocViaRest(uid);
+      if (!remoteData && fbDb && fbMod) {
+        try {
+          const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
+          const snap = await fbMod.getDoc(docRef);
+          if (snap && snap.exists()) {
+            remoteData = { ...snap.data(), userId: snap.data().userId || uid };
+          }
+        } catch (e) {}
       }
 
       // Only search by email/name if the current uid document does not exist yet
@@ -2350,7 +2374,7 @@
       }
 
       if (remoteData) {
-        applyCloudDocAsSourceOfTruth(remoteData);
+        applyCloudDocAsSourceOfTruth(remoteData, { isInitialLogin: isInitial });
         return remoteData;
       }
       return null;
@@ -2370,42 +2394,50 @@
       if (!resolvedUid || JUNK_TEST_UIDS.has(resolvedUid)) {
         return Promise.resolve(null);
       }
+
+      // CRITICAL: Capture gameplay state SYNCHRONOUSLY before entering the async write queue
+      // so subsequent local resets (e.g. during Sign Out) never overwrite an in-flight cloud save!
+      lastLocalStateWriteMs = Date.now();
+      const capturedCampaignIdx = Math.max(0, Math.min(1000, Math.floor(Number(
+        profileOverrides.campaignLevelIndex !== undefined ? profileOverrides.campaignLevelIndex : campaignIdx
+      ) || 0)));
+      const capturedCoins = Math.max(0, Math.min(10000000, Math.floor(Number(
+        profileOverrides.coins !== undefined ? profileOverrides.coins : coins
+      ) || 0)));
+      const capturedPerfect = Math.max(0, Math.min(1000000, Math.floor(Number(
+        profileOverrides.perfectCount !== undefined ? profileOverrides.perfectCount : perfectCount
+      ) || 0)));
+      const capturedStreak = Math.max(0, Math.min(1000000, Math.floor(Number(
+        profileOverrides.currentStreak !== undefined ? profileOverrides.currentStreak : streak
+      ) || 0)));
+      const capturedMaxStreak = Math.max(0, Math.min(1000000, Math.floor(Number(
+        profileOverrides.maxStreak !== undefined ? profileOverrides.maxStreak : maxStreak
+      ) || 0)));
+      const capturedCompletedCount = Math.max(
+        capturedCampaignIdx,
+        Math.max(0, Math.min(1000, Math.floor(Number(
+          profileOverrides.completedLevelsCount !== undefined ? profileOverrides.completedLevelsCount : completedCampaignSet.size
+        ) || 0)))
+      );
+      const capturedStorageName = localStorage.getItem('doodle_account_name') || '';
+      const capturedStorageEmail = localStorage.getItem('doodle_account_email') || '';
+      const capturedStorageMode = localStorage.getItem('doodle_account_mode') || 'account';
+
       firestoreWriteQueue = firestoreWriteQueue.then(async () => {
         const uid = resolvedUid;
         const docPath = `${FIRESTORE_COLLECTION}/${uid}`;
-        let snap = null;
-        let existingData = null;
-
-        if (fbDb && fbMod) {
-          try {
-            const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
-            snap = await fbMod.getDoc(docRef);
-            if (snap && snap.exists()) {
-              existingData = snap.data();
-            }
-          } catch (getErr) {
-            handleFirestoreErrorWeb(getErr, 'get', docPath);
-          }
-        }
-        if (!existingData) {
-          existingData = await fetchPlayerDocViaRest(uid);
-        }
-
-        // If pulling on sign-in or when remote exists and adoptCloudProgressFirst is set, adopt remote state instead of overwriting it
-        if (existingData && profileOverrides.adoptCloudProgressFirst) {
-          applyCloudDocAsSourceOfTruth({ ...existingData, userId: uid });
-        }
 
         let mirrorExisting = null;
         try {
           mirrorExisting = JSON.parse(localStorage.getItem(FIRESTORE_MIRROR_PREFIX + uid) || 'null');
         } catch (e) {}
         const regExisting = findRegisteredAccount(uid);
+        const existingData = profileOverrides.remoteDoc || mirrorExisting || null;
 
         const rawName = (
           profileOverrides.displayName ||
           (existingData && existingData.displayName) ||
-          localStorage.getItem('doodle_account_name') ||
+          capturedStorageName ||
           (targetUser && targetUser.displayName) ||
           (targetUser && targetUser.email ? targetUser.email.split('@')[0] : 'Doodle Player')
         ).trim().slice(0, 50) || 'Doodle Player';
@@ -2415,7 +2447,7 @@
           : (
               profileOverrides.email !== undefined && profileOverrides.email !== ''
                 ? profileOverrides.email
-                : ((existingData && existingData.email) || localStorage.getItem('doodle_account_email') || (targetUser && targetUser.email) || '')
+                : ((existingData && existingData.email) || capturedStorageEmail || (targetUser && targetUser.email) || '')
             ).trim().slice(0, 150);
 
         const cleanEmail = (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidateEmail) && !candidateEmail.endsWith('@doodleword.app'))
@@ -2425,7 +2457,7 @@
         const authMethod = normalizeAuthMethodWeb(
           profileOverrides.authMethod ||
           (existingData && existingData.authMethod) ||
-          localStorage.getItem('doodle_account_mode') ||
+          capturedStorageMode ||
           'account'
         );
 
@@ -2441,12 +2473,12 @@
           userId: uid,
           displayName: rawName,
           authMethod,
-          campaignLevelIndex: Math.max(0, Math.min(1000, Math.floor(Number(campaignIdx) || 0))),
-          coins: Math.max(0, Math.min(10000000, Math.floor(Number(coins) || 0))),
-          perfectCount: Math.max(0, Math.min(1000000, Math.floor(Number(perfectCount) || 0))),
-          currentStreak: Math.max(0, Math.min(1000000, Math.floor(Number(streak) || 0))),
-          maxStreak: Math.max(0, Math.min(1000000, Math.floor(Number(maxStreak) || 0))),
-          completedLevelsCount: Math.max(0, Math.min(1000, Math.floor(Number(completedCampaignSet.size) || 0)))
+          campaignLevelIndex: capturedCampaignIdx,
+          coins: capturedCoins,
+          perfectCount: capturedPerfect,
+          currentStreak: capturedStreak,
+          maxStreak: capturedMaxStreak,
+          completedLevelsCount: capturedCompletedCount
         };
 
         if (cleanEmail) {
@@ -2457,12 +2489,11 @@
         }
 
         lastLocalStateWriteMs = Date.now();
-        const isCreate = !existingData;
+        const isCreate = Boolean(profileOverrides.isCreate || (!existingData && !mirrorExisting));
 
-        // Write via both REST API and Firebase JS SDK so mobile Safari & desktop browsers always persist immediately
-        const restWritePromise = writePlayerDocViaRest(uid, baseFields, isCreate);
-        const sdkWritePromise = (async () => {
-          if (!fbDb || !fbMod) return null;
+        // Write via REST PATCH first (1 lightweight quota-friendly write); fall back to JS SDK if needed
+        let writeRes = await writePlayerDocViaRest(uid, baseFields, isCreate);
+        if (!writeRes && fbDb && fbMod) {
           const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
           const sdkPayload = {
             ...baseFields,
@@ -2473,14 +2504,12 @@
           }
           try {
             await fbMod.setDoc(docRef, sdkPayload, { merge: true });
-            return sdkPayload;
+            writeRes = sdkPayload;
           } catch (writeErr) {
             handleFirestoreErrorWeb(writeErr, isCreate ? 'create' : 'update', docPath);
-            return null;
           }
-        })();
+        }
 
-        const [restRes, sdkRes] = await Promise.all([restWritePromise, sdkWritePromise]);
         const nowIso = new Date().toISOString();
         const mirrorDoc = {
           ...baseFields,
@@ -2494,9 +2523,9 @@
         lastCloudSyncTimestamp = Date.now();
         updateCloudSyncUIStatus(
           'SAVED ✓',
-          `Lv ${campaignIdx + 1} • ⭐ ${coins}`
+          `Lv ${capturedCampaignIdx + 1} • ⭐ ${capturedCoins}`
         );
-        return restRes || sdkRes || mirrorDoc;
+        return writeRes || mirrorDoc;
       }).catch((err) => {
         console.warn('Firestore sync error:', err);
         return null;
@@ -2565,8 +2594,8 @@
       activeFirestoreUnsubscribe = fbMod.onSnapshot(docRef, (snap) => {
         if (snap.exists()) {
           const data = snap.data();
-          // Ignore echo from our own immediate local write within 800ms
-          if (Date.now() - lastLocalStateWriteMs < 800) {
+          // Ignore echo from our own recent local write within 2500ms
+          if (Date.now() - lastLocalStateWriteMs < 2500) {
             return;
           }
           applyCloudDocAsSourceOfTruth({ ...data, userId: data.userId || user.uid });
@@ -2708,27 +2737,25 @@
     });
 
     window.addEventListener('focus', () => {
-      if (isUserSignedInViaRegistration() && Date.now() - lastLocalStateWriteMs > 1500) {
+      if (
+        isUserSignedInViaRegistration() &&
+        Date.now() - lastLocalStateWriteMs > 4000 &&
+        Date.now() - lastCloudPullMs > 20000
+      ) {
         pullLatestAccountStateFromFirestore();
       }
     });
 
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && isUserSignedInViaRegistration() && Date.now() - lastLocalStateWriteMs > 1500) {
-        pullLatestAccountStateFromFirestore();
-      }
-    });
-
-    // Periodic cross-device cloud sync check when on Menu/Map screen so Phone and PC stay locked in sync
-    setInterval(() => {
       if (
+        document.visibilityState === 'visible' &&
         isUserSignedInViaRegistration() &&
-        Date.now() - lastLocalStateWriteMs > 2500 &&
-        !document.getElementById('gameScreen')?.classList.contains('active')
+        Date.now() - lastLocalStateWriteMs > 4000 &&
+        Date.now() - lastCloudPullMs > 20000
       ) {
         pullLatestAccountStateFromFirestore();
       }
-    }, 4000);
+    });
 
     loadSavedState();
 
@@ -2869,8 +2896,11 @@
       return Boolean(level.isAdventure || (level.number > 0 && level.number % 5 === 0));
     }
 
+    let levelVictoryRewarded = false;
+
     function loadLevel(level) {
       activeLevel = level;
+      levelVictoryRewarded = false;
       lives = 6;
       smoothLives = 6.0;
       mistakes = 0;
@@ -3221,18 +3251,29 @@
     function checkVictory() {
       const uniqueChars = Array.from(new Set(activeLevel.word.toUpperCase().split('')));
       if (uniqueChars.every(c => revealed.has(c))) {
-        if (!activeLevel.isAdventure && activeLevel.number > 0) {
-          const normLvl = ((activeLevel.number - 1) % CAMPAIGN_LEVELS.length) + 1;
-          completedCampaignSet.add(normLvl);
-          const earnedStars = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
-          levelStarsMap[normLvl] = Math.max(levelStarsMap[normLvl] || 0, earnedStars);
+        if (!levelVictoryRewarded) {
+          levelVictoryRewarded = true;
+          const reward = isBoss(activeLevel) ? 50 : 25;
+          if (!activeLevel.isAdventure && activeLevel.number > 0) {
+            const normLvl = ((activeLevel.number - 1) % CAMPAIGN_LEVELS.length) + 1;
+            completedCampaignSet.add(normLvl);
+            const earnedStars = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
+            levelStarsMap[normLvl] = Math.max(levelStarsMap[normLvl] || 0, earnedStars);
+            const nextIdx = normLvl % CAMPAIGN_LEVELS.length;
+            if (nextIdx > campaignIdx || (normLvl === CAMPAIGN_LEVELS.length)) {
+              campaignIdx = nextIdx;
+            }
+          } else if (activeLevel.isAdventure) {
+            adventureIdx++;
+          }
+          if (mistakes === 0) perfectCount++;
+          streak++;
+          if (streak > maxStreak) maxStreak = streak;
+          chestProg = (chestProg % 4) + 1;
+          themeProg = (themeProg % 10) + 1;
+          coins += reward + (chestProg === 4 ? 100 : 0);
+          saveState('level_victory');
         }
-        if (mistakes === 0) perfectCount++;
-        streak++;
-        if (streak > maxStreak) maxStreak = streak;
-        chestProg = (chestProg % 4) + 1;
-        themeProg = (themeProg % 10) + 1;
-        saveState();
         playProceduralSound('victory');
         showVictoryModal();
       }
@@ -3344,16 +3385,21 @@
     }
 
     function nextLevelAfterVictory() {
-      const reward = isBoss(activeLevel) ? 50 : 25;
-      coins += reward + (chestProg === 4 ? 100 : 0);
+      if (!levelVictoryRewarded) {
+        levelVictoryRewarded = true;
+        const reward = isBoss(activeLevel) ? 50 : 25;
+        coins += reward + (chestProg === 4 ? 100 : 0);
+        if (activeLevel.isAdventure) {
+          adventureIdx++;
+        } else {
+          campaignIdx = (campaignIdx + 1) % CAMPAIGN_LEVELS.length;
+        }
+      }
       closeAllModals();
+      saveState('next_level');
       if (activeLevel.isAdventure) {
-        adventureIdx++;
-        saveState();
         startAdventure();
       } else {
-        campaignIdx = (campaignIdx + 1) % CAMPAIGN_LEVELS.length;
-        saveState();
         startCampaign();
       }
     }
@@ -6417,44 +6463,57 @@
       } catch (e) {}
     }
 
-    function findRegisteredAccount(identifier) {
+    function findAllRegisteredAccounts(identifier) {
       const clean = (identifier || '').trim().toLowerCase();
-      if (!clean) return null;
+      if (!clean) return [];
+      const slug = clean.replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32);
+      const directUid = clean.startsWith('usr_') ? clean : (slug ? 'usr_' + slug : '');
+      const results = [];
+      const seenUids = new Set();
       const map = getRegisteredAccountsMap();
       for (const uid of Object.keys(map)) {
         const acc = map[uid];
-        if (!acc) continue;
+        if (!acc || JUNK_TEST_UIDS.has(uid)) continue;
         if (
           (acc.email && acc.email.toLowerCase() === clean) ||
           (acc.nick && acc.nick.toLowerCase() === clean) ||
-          uid.toLowerCase() === clean
+          uid.toLowerCase() === clean ||
+          (directUid && uid.toLowerCase() === directUid)
         ) {
-          return acc;
+          results.push(acc);
+          seenUids.add(uid);
         }
       }
-      // Also check existing Firestore player mirrors in localStorage for previously created accounts
       try {
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
           if (k && k.startsWith(FIRESTORE_MIRROR_PREFIX)) {
             const doc = JSON.parse(localStorage.getItem(k) || 'null');
             if (doc) {
+              const docUid = doc.userId || k.slice(FIRESTORE_MIRROR_PREFIX.length);
+              if (!docUid || seenUids.has(docUid) || JUNK_TEST_UIDS.has(docUid)) continue;
               const docEmail = (doc.email || '').toLowerCase();
               const docName = (doc.displayName || '').toLowerCase();
-              if (docEmail === clean || docName === clean) {
-                return {
-                  uid: doc.userId || k.slice(FIRESTORE_MIRROR_PREFIX.length),
+              if (docEmail === clean || docName === clean || docUid.toLowerCase() === clean || (directUid && docUid.toLowerCase() === directUid)) {
+                results.push({
+                  uid: docUid,
                   nick: doc.displayName || identifier.trim(),
                   email: doc.email || '',
                   password: '',
                   mode: doc.authMethod || 'account'
-                };
+                });
+                seenUids.add(docUid);
               }
             }
           }
         }
       } catch (e) {}
-      return null;
+      return results;
+    }
+
+    function findRegisteredAccount(identifier) {
+      const all = findAllRegisteredAccounts(identifier);
+      return all.length > 0 ? all[0] : null;
     }
 
     function switchAuthCardView(mode) {
@@ -6660,7 +6719,7 @@
           userId: uid,
           displayName: options.remoteDoc.displayName || cleanNick,
           email: options.remoteDoc.email || cleanEmail
-        });
+        }, { isInitialLogin: true });
       }
 
       await syncPlayerToFirestore(fbAuth ? fbAuth.currentUser : null, {
@@ -6670,7 +6729,8 @@
         clearEmail: Boolean(options.clearEmail),
         authMethod: cleanMode,
         passwordHash: pwdHash,
-        adoptCloudProgressFirst: Boolean(options.remoteDoc)
+        remoteDoc: options.remoteDoc || null,
+        isCreate: Boolean(options.isCreate)
       });
       attachRealtimePlayerListener({ uid });
       enterMenuWithAccount('👤 ' + cleanNick.slice(0, 12) + ' ✓', toastMsg);
@@ -6701,7 +6761,7 @@
 
       // 2. Strictly verify the password!
       const enteredHash = computePasswordHash(password);
-      const localRecord = findRegisteredAccount(identifier) || findRegisteredAccount(remoteAccount.userId);
+      const localRecord = findRegisteredAccount(remoteAccount.userId) || findRegisteredAccount(identifier);
       if (remoteAccount.passwordHash) {
         if (remoteAccount.passwordHash !== enteredHash) {
           showToast('❌ Incorrect password for "' + (remoteAccount.displayName || identifier) + '"! Tap "Forgot password?" to reset.');
@@ -6721,7 +6781,7 @@
       const mode = remoteAccount.authMethod || 'account';
 
       // 3. Apply authoritative Cloud Firestore level & coins before entering the game
-      applyCloudDocAsSourceOfTruth(remoteAccount);
+      applyCloudDocAsSourceOfTruth(remoteAccount, { isInitialLogin: true });
 
       await completeAccountSession(
         uid,
@@ -6779,7 +6839,7 @@
       const newHash = computePasswordHash(newPassword);
 
       closeAllModals();
-      applyCloudDocAsSourceOfTruth(remoteAccount);
+      applyCloudDocAsSourceOfTruth(remoteAccount, { isInitialLogin: true });
       await completeAccountSession(
         uid,
         nick,
@@ -6812,12 +6872,50 @@
         try { await firebaseInitPromise; } catch (e) {}
       }
 
-      const pwdHash = computePasswordHash(password);
-      const uid = 'usr_' + ((email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) || 'doodle');
-      if (JUNK_TEST_UIDS.has(uid)) {
+      const nickLower = nick.toLowerCase();
+      const emailLower = email.toLowerCase();
+      const nickSlug = nickLower.replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32);
+      const emailSlug = emailLower ? emailLower.replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) : '';
+      const directNickUid = 'usr_' + (nickSlug || 'doodle');
+      const directEmailUid = emailSlug ? ('usr_' + emailSlug) : '';
+
+      const uid = directEmailUid || directNickUid;
+      if (JUNK_TEST_UIDS.has(uid) || JUNK_TEST_UIDS.has(directNickUid)) {
         showToast('Please choose a valid nickname or email.');
         return;
       }
+
+      // STRICT DUPLICATE CHECK: Do NOT allow registration if nickname OR email already exists in Cloud Firestore or local registry!
+      const [existingByNick, existingByEmail] = await Promise.all([
+        findAccountInFirestore(nick),
+        email ? findAccountInFirestore(email) : Promise.resolve(null)
+      ]);
+
+      if (email && existingByEmail && existingByEmail.userId) {
+        const foundEmail = String(existingByEmail.email || '').trim().toLowerCase();
+        const foundUid = String(existingByEmail._docId || existingByEmail.userId || '').trim().toLowerCase();
+        if (foundEmail === emailLower || foundUid === directEmailUid) {
+          showToast('⚠️ Email "' + email + '" is already registered! Please log in instead.');
+          const loginIdEl = document.getElementById('loginIdentifierInput');
+          if (loginIdEl) loginIdEl.value = email;
+          switchAuthCardView('login');
+          return;
+        }
+      }
+
+      if (existingByNick && existingByNick.userId) {
+        const foundName = String(existingByNick.displayName || '').trim().toLowerCase();
+        const foundUid = String(existingByNick._docId || existingByNick.userId || '').trim().toLowerCase();
+        if (foundName === nickLower || foundUid === directNickUid) {
+          showToast('⚠️ Nickname "' + nick + '" is already registered! Please log in or choose another name.');
+          const loginIdEl = document.getElementById('loginIdentifierInput');
+          if (loginIdEl) loginIdEl.value = nick;
+          switchAuthCardView('login');
+          return;
+        }
+      }
+
+      const pwdHash = computePasswordHash(password);
 
       // Fresh account creation starts at Level 1 unless the player was actively playing as Guest in this session
       const currentMode = localStorage.getItem('doodle_account_mode');
@@ -6832,7 +6930,7 @@
         'account',
         '✨ Account created! Welcome, ' + nick + '!',
         password,
-        { passwordHash: pwdHash, clearEmail: !email }
+        { passwordHash: pwdHash, clearEmail: !email, isCreate: true }
       );
     }
 

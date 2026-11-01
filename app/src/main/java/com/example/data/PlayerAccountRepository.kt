@@ -209,7 +209,7 @@ class PlayerAccountRepository(
             }
         }
 
-        // 1. Direct UID lookup first
+        // 1. Direct UID lookup first (saves Firestore quota)
         try {
             val directSnap = db.collection(COLLECTION_PLAYERS).document(directUid).get().await()
             if (directSnap.exists()) {
@@ -226,20 +226,26 @@ class PlayerAccountRepository(
         } catch (_: Exception) {
         }
 
-        // 2. Collection query
-        try {
-            val querySnap = db.collection(COLLECTION_PLAYERS).get().await()
-            for (docSnap in querySnap.documents) {
-                val docId = docSnap.id
-                val account = docSnap.toObject(
-                    PlayerAccount::class.java,
-                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                ) ?: continue
-                addIfMatches(docId, account)
+        val directCandidate = matchesById[directUid]
+        val needCollectionScan = directCandidate == null ||
+            (cleanPwdHash != null && !directCandidate.passwordHash.isNullOrBlank() && directCandidate.passwordHash.trim() != cleanPwdHash)
+
+        // 2. Collection query only when needed
+        if (needCollectionScan) {
+            try {
+                val querySnap = db.collection(COLLECTION_PLAYERS).get().await()
+                for (docSnap in querySnap.documents) {
+                    val docId = docSnap.id
+                    val account = docSnap.toObject(
+                        PlayerAccount::class.java,
+                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                    ) ?: continue
+                    addIfMatches(docId, account)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
         }
 
         val matches = matchesById.values.toMutableList()
