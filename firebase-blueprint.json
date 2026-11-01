@@ -11,20 +11,20 @@
         },
         "displayName": {
           "type": "string",
-          "description": "Player's chosen doodle nickname or Gmail display name (1 to 50 chars)."
+          "description": "Player's chosen doodle nickname or Google display name (1 to 50 chars)."
         },
         "email": {
           "type": "string",
-          "description": "Optional Gmail address associated with the account (up to 150 chars)."
+          "description": "Optional email or Gmail address associated with the account (up to 150 chars)."
         },
         "authMethod": {
           "type": "string",
-          "enum": ["gmail", "account"],
-          "description": "How the account profile was registered ('gmail' or 'account')."
+          "enum": ["gmail", "account", "email", "google"],
+          "description": "How the account profile was authenticated ('gmail', 'account', 'email', or 'google')."
         },
         "campaignLevelIndex": {
           "type": "integer",
-          "description": "Current 0-based campaign level index (0 to 999)."
+          "description": "Current 0-based campaign level index (0 to 1000)."
         },
         "coins": {
           "type": "integer",
@@ -58,16 +58,10 @@
         }
       },
       "required": [
-        "userId",
         "displayName",
         "authMethod",
         "campaignLevelIndex",
         "coins",
-        "perfectCount",
-        "currentStreak",
-        "maxStreak",
-        "completedLevelsCount",
-        "createdAt",
         "updatedAt"
       ]
     }

@@ -24,56 +24,42 @@ service cloud.firestore {
     }
 
     function isValidPlayerAccount(data) {
-      return data.userId is string &&
-             data.userId == request.auth.uid &&
+      return (!('userId' in data) || (data.userId is string && data.userId == request.auth.uid)) &&
              data.displayName is string &&
              data.displayName.size() >= 1 &&
              data.displayName.size() <= 50 &&
              (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 150)) &&
              data.authMethod is string &&
-             (data.authMethod == 'gmail' || data.authMethod == 'account') &&
+             data.authMethod.size() >= 1 &&
+             data.authMethod.size() <= 20 &&
+             (data.authMethod == 'gmail' || data.authMethod == 'account' || data.authMethod == 'email' || data.authMethod == 'google') &&
              data.campaignLevelIndex is int &&
              data.campaignLevelIndex >= 0 &&
              data.campaignLevelIndex <= 1000 &&
              data.coins is int &&
              data.coins >= 0 &&
              data.coins <= 10000000 &&
-             data.perfectCount is int &&
-             data.perfectCount >= 0 &&
-             data.perfectCount <= 1000000 &&
-             data.currentStreak is int &&
-             data.currentStreak >= 0 &&
-             data.currentStreak <= 1000000 &&
-             data.maxStreak is int &&
-             data.maxStreak >= 0 &&
-             data.maxStreak <= 1000000 &&
-             data.completedLevelsCount is int &&
-             data.completedLevelsCount >= 0 &&
-             data.completedLevelsCount <= 1000 &&
-             data.createdAt is timestamp &&
-             data.createdAt <= request.time &&
+             (!('perfectCount' in data) || (data.perfectCount is int && data.perfectCount >= 0 && data.perfectCount <= 1000000)) &&
+             (!('currentStreak' in data) || (data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 1000000)) &&
+             (!('maxStreak' in data) || (data.maxStreak is int && data.maxStreak >= 0 && data.maxStreak <= 1000000)) &&
+             (!('completedLevelsCount' in data) || (data.completedLevelsCount is int && data.completedLevelsCount >= 0 && data.completedLevelsCount <= 1000)) &&
+             (!('createdAt' in data) || data.createdAt == null || (data.createdAt is timestamp && data.createdAt <= request.time)) &&
              data.updatedAt is timestamp &&
              data.updatedAt <= request.time;
     }
 
     match /players/{userId} {
       allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
-      allow list: if isSignedIn() && request.auth.uid == userId && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && request.auth.uid == userId && (!('userId' in existing()) || existing().userId == request.auth.uid);
 
       allow create: if isSignedIn() &&
                        isValidId(userId) &&
                        request.auth.uid == userId &&
                        incoming().keys().hasAll([
-                         'userId',
                          'displayName',
                          'authMethod',
                          'campaignLevelIndex',
                          'coins',
-                         'perfectCount',
-                         'currentStreak',
-                         'maxStreak',
-                         'completedLevelsCount',
-                         'createdAt',
                          'updatedAt'
                        ]) &&
                        incoming().keys().hasOnly([
@@ -96,9 +82,10 @@ service cloud.firestore {
                        isValidId(userId) &&
                        request.auth.uid == userId &&
                        isValidPlayerAccount(incoming()) &&
-                       incoming().userId == existing().userId &&
-                       incoming().createdAt == existing().createdAt &&
+                       (!('userId' in existing()) || !('userId' in incoming()) || incoming().userId == existing().userId) &&
+                       (!('createdAt' in existing()) || existing().createdAt == null || incoming().createdAt == existing().createdAt) &&
                        incoming().diff(existing()).affectedKeys().hasOnly([
+                         'userId',
                          'displayName',
                          'email',
                          'authMethod',
@@ -108,6 +95,7 @@ service cloud.firestore {
                          'currentStreak',
                          'maxStreak',
                          'completedLevelsCount',
+                         'createdAt',
                          'updatedAt'
                        ]);
 

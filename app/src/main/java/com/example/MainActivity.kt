@@ -1451,6 +1451,8 @@ class WordGameViewModel : ViewModel() {
         }
     }
 
+    private var isExplicitSignInInFlight: Boolean = false
+
     private fun initFirebaseSync(context: Context) {
         runCatching {
             val databaseId = context.getString(R.string.firestore_database_id)
@@ -1463,9 +1465,11 @@ class WordGameViewModel : ViewModel() {
                 currentUser = user
                 if (user != null) {
                     isGuestSession = false
-                    startObservingCloudAccount(user)
-                    if (currentScreen == ScreenState.REGISTRATION) {
-                        currentScreen = ScreenState.MAIN_MENU
+                    if (!isExplicitSignInInFlight) {
+                        startObservingCloudAccount(user)
+                        if (currentScreen == ScreenState.REGISTRATION) {
+                            currentScreen = ScreenState.MAIN_MENU
+                        }
                     }
                 } else {
                     accountSnapshotJob?.cancel()
@@ -1484,6 +1488,27 @@ class WordGameViewModel : ViewModel() {
         val repo = playerAccountRepo ?: return
         accountSnapshotJob?.cancel()
         accountSnapshotJob = viewModelScope.launch {
+            // Ensure /players/{userId} exists or is merged immediately when session starts
+            if (cloudAccount == null) {
+                val initRes = repo.createOrSyncPlayerAccount(
+                    displayName = user.displayName?.takeIf { it.isNotBlank() } ?: "Doodle Player",
+                    email = user.email,
+                    authMethod = "gmail",
+                    campaignLevelIndex = campaignLevelIndex,
+                    coins = coins,
+                    perfectCount = perfectCount,
+                    currentStreak = currentStreak,
+                    maxStreak = maxStreak,
+                    completedLevelsCount = completedCampaignLevels.size,
+                    userId = user.uid
+                )
+                initRes.onSuccess { synced ->
+                    cloudAccount = synced
+                    lastCloudSyncEpochMs = System.currentTimeMillis()
+                    writeLocalStorageOnly()
+                }
+            }
+
             repo.observePlayerAccount(user.uid)
                 .catch { e ->
                     authErrorMessage = e.localizedMessage ?: "Failed to sync cloud profile"
@@ -1543,7 +1568,8 @@ class WordGameViewModel : ViewModel() {
                             perfectCount = perfectCount,
                             currentStreak = currentStreak,
                             maxStreak = maxStreak,
-                            completedLevelsCount = completedCampaignLevels.size
+                            completedLevelsCount = completedCampaignLevels.size,
+                            userId = user.uid
                         )
                         createRes.onSuccess { created ->
                             cloudAccount = created
@@ -1589,6 +1615,7 @@ class WordGameViewModel : ViewModel() {
             return
         }
         isSyncingCloud = true
+        isExplicitSignInInFlight = true
         authErrorMessage = null
         val credential = GoogleAuthProvider.getCredential(idToken, null)
         auth.signInWithCredential(credential)
@@ -1610,22 +1637,29 @@ class WordGameViewModel : ViewModel() {
                             perfectCount = perfectCount,
                             currentStreak = currentStreak,
                             maxStreak = maxStreak,
-                            completedLevelsCount = completedCampaignLevels.size
+                            completedLevelsCount = completedCampaignLevels.size,
+                            userId = user.uid
                         )
                         syncRes.onSuccess { synced ->
                             cloudAccount = synced
+                            lastCloudSyncEpochMs = System.currentTimeMillis()
+                            writeLocalStorageOnly()
                             statusBannerMessage = "☁️ Welcome, ${synced.displayName}! Cloud Sync Active."
                             currentScreen = ScreenState.MAIN_MENU
                         }.onFailure { err ->
                             authErrorMessage = err.localizedMessage ?: "Failed to save cloud profile."
                         }
+                        isExplicitSignInInFlight = false
+                        startObservingCloudAccount(user)
                     } else {
+                        isExplicitSignInInFlight = false
                         currentScreen = ScreenState.MAIN_MENU
                     }
                     isSyncingCloud = false
                 }
             }
             .addOnFailureListener { e ->
+                isExplicitSignInInFlight = false
                 isSyncingCloud = false
                 authErrorMessage = e.localizedMessage ?: "Google Sign-In with Firebase failed."
             }

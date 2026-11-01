@@ -1909,36 +1909,171 @@
       updateRegistrationScreenCards();
     }
 
-    async function pushDocToRealFirestore(firestoreDoc) {
-      if (!fbDb || !fbMod || !fbAuth || !fbAuth.currentUser) return;
-      try {
-        const uid = fbAuth.currentUser.uid;
+    let firebaseInitPromise = null;
+    let firestoreWriteQueue = Promise.resolve();
+
+    function normalizeAuthMethodWeb(mode) {
+      const m = String(mode || '').trim().toLowerCase();
+      if (m === 'account' || m === 'email' || m === 'gmail' || m === 'google') return m;
+      return 'account';
+    }
+
+    function normalizeFirebasePassword(rawPassword, emailFallback) {
+      const raw = String(rawPassword || '');
+      if (raw.length >= 6) return raw;
+      if (raw.length > 0) return raw + '_doodle99';
+      const slug = String(emailFallback || 'doodle').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16) || 'player';
+      return 'DoodleCloud#' + slug + '!99';
+    }
+
+    function toValidAuthEmail(emailOrNick) {
+      const trimmed = String(emailOrNick || '').trim().toLowerCase();
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        return trimmed;
+      }
+      const slug = trimmed.replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) || 'doodle_player';
+      return slug + '@doodleword.app';
+    }
+
+    function handleFirestoreErrorWeb(err, operationType, path) {
+      const currentUser = fbAuth ? fbAuth.currentUser : null;
+      const errInfo = {
+        error: err && err.message ? String(err.message) : String(err),
+        code: err && err.code ? String(err.code) : 'unknown',
+        operationType,
+        path,
+        authInfo: {
+          userId: currentUser ? currentUser.uid : null,
+          email: currentUser ? currentUser.email : null,
+          emailVerified: currentUser ? Boolean(currentUser.emailVerified) : null,
+          isAnonymous: currentUser ? Boolean(currentUser.isAnonymous) : null,
+          providerInfo: currentUser && Array.isArray(currentUser.providerData)
+            ? currentUser.providerData.map((p) => ({
+                providerId: p.providerId,
+                displayName: p.displayName,
+                email: p.email
+              }))
+            : []
+        }
+      };
+      console.error('Firestore Error:', JSON.stringify(errInfo));
+      return errInfo;
+    }
+
+    /**
+     * Explicitly writes or merges the signed-in player's profile and game state
+     * into Cloud Firestore at `/players/{userId}` with security rules compliance.
+     */
+    function syncPlayerToFirestore(user, profileOverrides = {}) {
+      const targetUser = user || (fbAuth && fbAuth.currentUser);
+      if (!fbDb || !fbMod || !targetUser || !targetUser.uid) {
+        return Promise.resolve(null);
+      }
+      firestoreWriteQueue = firestoreWriteQueue.then(async () => {
+        const uid = targetUser.uid;
+        const docPath = `${FIRESTORE_COLLECTION}/${uid}`;
         const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
-        const snap = await fbMod.getDoc(docRef);
+        let snap = null;
+        try {
+          snap = await fbMod.getDoc(docRef);
+        } catch (getErr) {
+          handleFirestoreErrorWeb(getErr, 'get', docPath);
+        }
+
+        const existingData = (snap && snap.exists()) ? snap.data() : null;
+        if (existingData) {
+          campaignIdx = Math.max(campaignIdx, Number(existingData.campaignLevelIndex || 0));
+          coins = Math.max(coins, Number(existingData.coins || 0));
+          perfectCount = Math.max(perfectCount, Number(existingData.perfectCount || 0));
+          maxStreak = Math.max(maxStreak, Number(existingData.maxStreak || 0));
+          streak = Math.max(streak, Number(existingData.currentStreak || 0));
+          const remoteCompletedCount = Number(existingData.completedLevelsCount || 0);
+          if (completedCampaignSet.size < remoteCompletedCount) {
+            for (let lv = 1; lv <= remoteCompletedCount; lv++) {
+              completedCampaignSet.add(lv);
+            }
+          }
+        }
+
+        const rawName = (
+          profileOverrides.displayName ||
+          localStorage.getItem('doodle_account_name') ||
+          targetUser.displayName ||
+          (existingData && existingData.displayName) ||
+          (targetUser.email ? targetUser.email.split('@')[0] : 'Doodle Player')
+        ).trim().slice(0, 50) || 'Doodle Player';
+
+        const candidateEmail = (
+          profileOverrides.email !== undefined
+            ? profileOverrides.email
+            : (localStorage.getItem('doodle_account_email') || targetUser.email || (existingData && existingData.email) || '')
+        ).trim().slice(0, 150);
+
+        const cleanEmail = (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidateEmail) && !candidateEmail.endsWith('@doodleword.app'))
+          ? candidateEmail
+          : ((/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidateEmail)) ? candidateEmail : '');
+
+        const authMethod = normalizeAuthMethodWeb(
+          profileOverrides.authMethod ||
+          localStorage.getItem('doodle_account_mode') ||
+          (existingData && existingData.authMethod) ||
+          'account'
+        );
+
         const payload = {
           userId: uid,
-          displayName: firestoreDoc.displayName,
-          authMethod: firestoreDoc.authMethod === 'account' ? 'account' : 'gmail',
-          campaignLevelIndex: Number(firestoreDoc.campaignLevelIndex),
-          coins: Number(firestoreDoc.coins),
-          perfectCount: Number(firestoreDoc.perfectCount),
-          currentStreak: Number(firestoreDoc.currentStreak),
-          maxStreak: Number(firestoreDoc.maxStreak),
-          completedLevelsCount: Number(firestoreDoc.completedLevelsCount),
+          displayName: rawName,
+          authMethod,
+          campaignLevelIndex: Math.max(0, Math.min(1000, Math.floor(Number(campaignIdx) || 0))),
+          coins: Math.max(0, Math.min(10000000, Math.floor(Number(coins) || 0))),
+          perfectCount: Math.max(0, Math.min(1000000, Math.floor(Number(perfectCount) || 0))),
+          currentStreak: Math.max(0, Math.min(1000000, Math.floor(Number(streak) || 0))),
+          maxStreak: Math.max(0, Math.min(1000000, Math.floor(Number(maxStreak) || 0))),
+          completedLevelsCount: Math.max(0, Math.min(1000, Math.floor(Number(completedCampaignSet.size) || 0))),
           updatedAt: fbMod.serverTimestamp()
         };
-        if (firestoreDoc.email) {
-          payload.email = firestoreDoc.email;
+
+        if (cleanEmail) {
+          payload.email = cleanEmail;
         }
-        if (!snap.exists()) {
+        if (!snap || !snap.exists()) {
           payload.createdAt = fbMod.serverTimestamp();
-          await fbMod.setDoc(docRef, payload);
-        } else {
-          await fbMod.updateDoc(docRef, payload);
         }
-      } catch (err) {
-        console.warn('Firestore write warning:', err);
-      }
+
+        try {
+          await fbMod.setDoc(docRef, payload, { merge: true });
+          const nowIso = new Date().toISOString();
+          const mirrorDoc = {
+            ...payload,
+            createdAt: (existingData && existingData.createdAt) ? existingData.createdAt : nowIso,
+            updatedAt: nowIso
+          };
+          localStorage.setItem(FIRESTORE_MIRROR_PREFIX + uid, JSON.stringify(mirrorDoc));
+          localStorage.setItem('doodle_account_uid', uid);
+          lastCloudSyncTimestamp = Date.now();
+          updateCloudSyncUIStatus(
+            'PARITY ✓',
+            `localStorage ⇄ Firestore (/players/${uid}) synced • Lv ${campaignIdx + 1} • ⭐ ${coins}`
+          );
+          return payload;
+        } catch (writeErr) {
+          handleFirestoreErrorWeb(writeErr, (!snap || !snap.exists()) ? 'create' : 'update', docPath);
+          throw writeErr;
+        }
+      }).catch((err) => {
+        console.warn('Firestore sync error:', err);
+        return null;
+      });
+      return firestoreWriteQueue;
+    }
+
+    async function pushDocToRealFirestore(firestoreDoc) {
+      if (!fbDb || !fbMod || !fbAuth || !fbAuth.currentUser) return;
+      await syncPlayerToFirestore(fbAuth.currentUser, {
+        displayName: firestoreDoc.displayName,
+        email: firestoreDoc.email,
+        authMethod: firestoreDoc.authMethod
+      });
     }
 
     function reconcileLocalAndFirestoreParity(reason = 'state_change') {
@@ -1984,36 +2119,6 @@
           // 3. Push to live Firebase Firestore SDK (named database: ai-studio-android-doodlewo-e3227616-d2d4-458e-8bb7-b7a283c81613)
           if (fbDb && fbAuth && fbAuth.currentUser) {
             pushDocToRealFirestore(firestoreDoc);
-          } else {
-            // REST bridge fallback using ID token if present
-            const idToken = localStorage.getItem('doodle_firebase_id_token');
-            if (idToken && typeof fetch === 'function') {
-              const url = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/${FIRESTORE_DATABASE_ID}/documents/${FIRESTORE_COLLECTION}/${encodeURIComponent(uid)}`;
-              const fields = {
-                userId: { stringValue: firestoreDoc.userId },
-                displayName: { stringValue: firestoreDoc.displayName },
-                authMethod: { stringValue: firestoreDoc.authMethod },
-                campaignLevelIndex: { integerValue: String(firestoreDoc.campaignLevelIndex) },
-                coins: { integerValue: String(firestoreDoc.coins) },
-                perfectCount: { integerValue: String(firestoreDoc.perfectCount) },
-                currentStreak: { integerValue: String(firestoreDoc.currentStreak) },
-                maxStreak: { integerValue: String(firestoreDoc.maxStreak) },
-                completedLevelsCount: { integerValue: String(firestoreDoc.completedLevelsCount) },
-                createdAt: { timestampValue: firestoreDoc.createdAt },
-                updatedAt: { timestampValue: firestoreDoc.updatedAt }
-              };
-              if (firestoreDoc.email) {
-                fields.email = { stringValue: firestoreDoc.email };
-              }
-              fetch(url, {
-                method: 'PATCH',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${idToken}`
-                },
-                body: JSON.stringify({ fields })
-              }).catch(() => {});
-            }
           }
 
           updateCloudSyncUIStatus(
@@ -2033,8 +2138,29 @@
       }
     }
 
+    function attachRealtimePlayerListener(user) {
+      if (!fbDb || !fbMod || !user || !user.uid) return;
+      if (activeFirestoreUnsubscribe) {
+        activeFirestoreUnsubscribe();
+        activeFirestoreUnsubscribe = null;
+      }
+      const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, user.uid);
+      activeFirestoreUnsubscribe = fbMod.onSnapshot(docRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          localStorage.setItem(FIRESTORE_MIRROR_PREFIX + user.uid, JSON.stringify(data));
+          reconcileLocalAndFirestoreParity('storage_event');
+          updateMenuUI();
+        } else {
+          syncPlayerToFirestore(user);
+        }
+      }, (err) => {
+        handleFirestoreErrorWeb(err, 'list', `${FIRESTORE_COLLECTION}/${user.uid}`);
+      });
+    }
+
     // Initialize Real Firebase Modular JS SDK for Web & attach Auth + Named Firestore listener
-    (async function initFirebaseWebSDK() {
+    firebaseInitPromise = (async function initFirebaseWebSDK() {
       try {
         const [appMod, authMod, fsMod] = await Promise.all([
           import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
@@ -2060,28 +2186,32 @@
             if (!localStorage.getItem('doodle_account_name') && user.displayName) {
               localStorage.setItem('doodle_account_name', user.displayName);
             }
-            if (!localStorage.getItem('doodle_account_email') && user.email) {
+            if (!localStorage.getItem('doodle_account_email') && user.email && !user.email.endsWith('@doodleword.app')) {
               localStorage.setItem('doodle_account_email', user.email);
             }
             if (!isUserSignedInViaRegistration()) {
               localStorage.setItem('doodle_account_mode', 'gmail');
             }
 
-            const docRef = fsMod.doc(fbDb, FIRESTORE_COLLECTION, user.uid);
-            activeFirestoreUnsubscribe = fsMod.onSnapshot(docRef, (snap) => {
-              if (snap.exists()) {
-                const data = snap.data();
-                localStorage.setItem(FIRESTORE_MIRROR_PREFIX + user.uid, JSON.stringify(data));
-                reconcileLocalAndFirestoreParity('storage_event');
-                updateMenuUI();
-              } else {
-                reconcileLocalAndFirestoreParity('auth_signin');
-              }
-            }, (err) => {
-              console.warn('Firestore snapshot listener error:', err);
-            });
+            await syncPlayerToFirestore(user);
+            attachRealtimePlayerListener(user);
           } else {
             localStorage.removeItem('doodle_firebase_id_token');
+            // If player already registered in localStorage before Firebase Auth session existed, auto-authenticate & sync to Firestore
+            if (isUserSignedInViaRegistration()) {
+              const savedEmail = localStorage.getItem('doodle_account_email') || '';
+              const savedName = localStorage.getItem('doodle_account_name') || 'Doodle Player';
+              const savedMode = localStorage.getItem('doodle_account_mode') || 'account';
+              const savedRecord = findRegisteredAccount(savedEmail || savedName);
+              const savedPass = savedRecord && savedRecord.password ? savedRecord.password : '';
+              ensureFirebaseAuthenticatedUser({
+                email: savedEmail,
+                nick: savedName,
+                password: savedPass,
+                authMethod: savedMode,
+                preferCreate: false
+              }).catch(() => {});
+            }
           }
           updateCloudSyncUIStatus();
         });
@@ -4817,15 +4947,113 @@
       if (toastMsg) showToast(toastMsg);
     }
 
-    function completeAccountSession(uid, nick, email, mode, toastMsg, passwordOpt) {
+    async function ensureFirebaseAuthenticatedUser({ email, nick, password, authMethod, preferCreate }) {
+      if (firebaseInitPromise) {
+        try { await firebaseInitPromise; } catch (e) {}
+      }
+      if (!fbAuth || !fbMod) return null;
+
       const cleanNick = (nick || '').trim().slice(0, 50) || (email ? email.split('@')[0] : 'Doodle Player');
       const cleanEmail = (email || '').trim().slice(0, 150);
+      const authEmail = toValidAuthEmail(cleanEmail || cleanNick);
+      const existingLocal = findRegisteredAccount(cleanEmail || cleanNick);
+      const primaryPass = normalizeFirebasePassword(password || (existingLocal && existingLocal.password), authEmail);
+      const fallbackPass = normalizeFirebasePassword('', authEmail);
+
+      const candidatePasswords = [];
+      [primaryPass, password, existingLocal && existingLocal.password, fallbackPass].forEach((p) => {
+        if (p && String(p).length >= 6 && !candidatePasswords.includes(String(p))) {
+          candidatePasswords.push(String(p));
+        }
+      });
+
+      let authedUser = null;
+
+      // If already signed in as this exact email, reuse the active Firebase user
+      if (fbAuth.currentUser && fbAuth.currentUser.email && fbAuth.currentUser.email.toLowerCase() === authEmail.toLowerCase()) {
+        authedUser = fbAuth.currentUser;
+      }
+
+      if (!authedUser && preferCreate && fbMod.createUserWithEmailAndPassword) {
+        try {
+          const cred = await fbMod.createUserWithEmailAndPassword(fbAuth, authEmail, primaryPass);
+          if (cred && cred.user) authedUser = cred.user;
+        } catch (createErr) {
+          const code = (createErr && createErr.code) ? String(createErr.code) : '';
+          if (code === 'auth/email-already-in-use' && fbMod.signInWithEmailAndPassword) {
+            for (const cand of candidatePasswords) {
+              try {
+                const signInCred = await fbMod.signInWithEmailAndPassword(fbAuth, authEmail, cand);
+                if (signInCred && signInCred.user) {
+                  authedUser = signInCred.user;
+                  break;
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      }
+
+      if (!authedUser && fbMod.signInWithEmailAndPassword) {
+        let lastCode = '';
+        for (const cand of candidatePasswords) {
+          try {
+            const signInCred = await fbMod.signInWithEmailAndPassword(fbAuth, authEmail, cand);
+            if (signInCred && signInCred.user) {
+              authedUser = signInCred.user;
+              break;
+            }
+          } catch (signInErr) {
+            lastCode = (signInErr && signInErr.code) ? String(signInErr.code) : '';
+          }
+        }
+
+        // If the account was previously saved only in localStorage and not yet provisioned in Firebase Auth, create it now
+        if (!authedUser && fbMod.createUserWithEmailAndPassword && (
+          lastCode === 'auth/user-not-found' ||
+          lastCode === 'auth/invalid-credential' ||
+          lastCode === 'auth/invalid-login-credentials'
+        )) {
+          try {
+            const created = await fbMod.createUserWithEmailAndPassword(fbAuth, authEmail, primaryPass);
+            if (created && created.user) {
+              authedUser = created.user;
+            }
+          } catch (createFallbackErr) {}
+        }
+      }
+
+      if (authedUser) {
+        try {
+          if (fbMod.updateProfile && cleanNick && authedUser.displayName !== cleanNick) {
+            await fbMod.updateProfile(authedUser, { displayName: cleanNick });
+          }
+        } catch (e) {}
+        try {
+          const token = await authedUser.getIdToken();
+          localStorage.setItem('doodle_firebase_id_token', token);
+        } catch (e) {}
+        await syncPlayerToFirestore(authedUser, {
+          displayName: cleanNick,
+          email: cleanEmail,
+          authMethod: normalizeAuthMethodWeb(authMethod)
+        });
+        attachRealtimePlayerListener(authedUser);
+      }
+
+      return authedUser;
+    }
+
+    async function completeAccountSession(uid, nick, email, mode, toastMsg, passwordOpt) {
+      const cleanNick = (nick || '').trim().slice(0, 50) || (email ? email.split('@')[0] : 'Doodle Player');
+      const cleanEmail = (email || '').trim().slice(0, 150);
+      const cleanMode = normalizeAuthMethodWeb(mode);
       saveRegisteredAccountRecord({
         uid,
         nick: cleanNick,
         email: cleanEmail,
         password: passwordOpt,
-        mode
+        mode: cleanMode === 'gmail' || cleanMode === 'google' ? 'gmail' : 'account'
       });
       localStorage.setItem('doodle_account_uid', uid);
       localStorage.setItem('doodle_account_name', cleanNick);
@@ -4834,7 +5062,15 @@
       } else {
         localStorage.removeItem('doodle_account_email');
       }
-      localStorage.setItem('doodle_account_mode', mode);
+      localStorage.setItem('doodle_account_mode', cleanMode === 'gmail' || cleanMode === 'google' ? 'gmail' : 'account');
+
+      if (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid === uid) {
+        await syncPlayerToFirestore(fbAuth.currentUser, {
+          displayName: cleanNick,
+          email: cleanEmail,
+          authMethod: cleanMode
+        });
+      }
       reconcileLocalAndFirestoreParity('auth_signin');
       enterMenuWithAccount('☁️ ' + cleanNick.slice(0, 12) + ' ✓', toastMsg);
     }
@@ -4852,66 +5088,34 @@
       }
 
       const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
-
-      // 1. If Email + Firebase Auth Email/Password is available, attempt live Firebase sign-in
-      if (isEmail && fbAuth && fbMod && fbMod.signInWithEmailAndPassword) {
-        try {
-          const cred = await fbMod.signInWithEmailAndPassword(fbAuth, identifier, password);
-          if (cred && cred.user) {
-            const token = await cred.user.getIdToken();
-            localStorage.setItem('doodle_firebase_id_token', token);
-            const existing = findRegisteredAccount(identifier);
-            const display = (existing && existing.nick) || cred.user.displayName || identifier.split('@')[0];
-            completeAccountSession(
-              cred.user.uid,
-              display,
-              identifier,
-              'account',
-              '☁️ Welcome back, ' + display + '! Cloud progress synced.',
-              password
-            );
-            return;
-          }
-        } catch (err) {
-          const code = (err && err.code) ? String(err.code) : '';
-          if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-            const localMatch = findRegisteredAccount(identifier);
-            if (localMatch && localMatch.password && localMatch.password !== password) {
-              showToast('Incorrect password. Tap "Forgot password?" to reset.');
-              return;
-            }
-          }
-        }
-      }
-
-      // 2. Check registered accounts in localStorage / Firestore mirror
-      const found = findRegisteredAccount(identifier);
-      if (found) {
-        if (found.password && found.password !== password) {
-          showToast('Incorrect password for "' + found.nick + '". Tap "Forgot password?" to reset.');
-          return;
-        }
-        completeAccountSession(
-          found.uid,
-          found.nick,
-          found.email,
-          found.mode || 'account',
-          '☁️ Welcome back, ' + found.nick + '! Account synced.',
-          password
-        );
+      const existing = findRegisteredAccount(identifier);
+      if (existing && existing.password && existing.password !== password) {
+        showToast('Incorrect password for "' + existing.nick + '". Tap "Forgot password?" to reset.');
         return;
       }
 
-      // 3. Returning player signing in on this browser for the first time
-      const derivedNick = isEmail ? identifier.split('@')[0] : identifier;
-      const derivedEmail = isEmail ? identifier : '';
-      const uid = 'usr_' + (identifier.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle');
-      completeAccountSession(
+      const display = (existing && existing.nick) || (isEmail ? identifier.split('@')[0] : identifier);
+      const email = isEmail ? identifier : ((existing && existing.email) || '');
+      const mode = (existing && existing.mode) || 'account';
+
+      const authedUser = await ensureFirebaseAuthenticatedUser({
+        email,
+        nick: display,
+        password,
+        authMethod: mode,
+        preferCreate: false
+      });
+
+      const uid = (authedUser && authedUser.uid)
+        ? authedUser.uid
+        : ((existing && existing.uid) || ('usr_' + (identifier.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle')));
+
+      await completeAccountSession(
         uid,
-        derivedNick,
-        derivedEmail,
-        'account',
-        '☁️ Logged in as ' + derivedNick + '! localStorage ⇄ Firestore synced.',
+        display,
+        email,
+        mode,
+        '☁️ Welcome back, ' + display + '! Cloud progress synced to Firestore.',
         password
       );
     }
@@ -4940,16 +5144,28 @@
         showToast('Please enter a new password (at least 3 characters)!');
         return;
       }
+      if (firebaseInitPromise) {
+        try { await firebaseInitPromise; } catch (e) {}
+      }
       const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
       if (isEmail && fbAuth && fbMod && fbMod.sendPasswordResetEmail) {
         try { await fbMod.sendPasswordResetEmail(fbAuth, identifier); } catch (e) {}
       }
       const found = findRegisteredAccount(identifier);
-      const uid = found ? found.uid : ('usr_' + (identifier.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle'));
       const nick = found ? found.nick : (isEmail ? identifier.split('@')[0] : identifier);
       const email = found ? found.email : (isEmail ? identifier : '');
+      const authedUser = await ensureFirebaseAuthenticatedUser({
+        email,
+        nick,
+        password: newPassword,
+        authMethod: found?.mode || 'account',
+        preferCreate: false
+      });
+      const uid = (authedUser && authedUser.uid)
+        ? authedUser.uid
+        : (found ? found.uid : ('usr_' + (identifier.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle')));
       closeAllModals();
-      completeAccountSession(
+      await completeAccountSession(
         uid,
         nick,
         email,
@@ -4976,39 +5192,31 @@
         return;
       }
 
-      if (email && password.length >= 6 && fbAuth && fbMod && fbMod.createUserWithEmailAndPassword) {
-        try {
-          const cred = await fbMod.createUserWithEmailAndPassword(fbAuth, email, password);
-          if (cred && cred.user) {
-            const token = await cred.user.getIdToken();
-            localStorage.setItem('doodle_firebase_id_token', token);
-            completeAccountSession(
-              cred.user.uid,
-              nick,
-              email,
-              'account',
-              '☁️ Welcome, ' + nick + '! Account created & synced to Firestore.',
-              password
-            );
-            return;
-          }
-        } catch (e) {}
-      }
+      const authedUser = await ensureFirebaseAuthenticatedUser({
+        email,
+        nick,
+        password,
+        authMethod: 'account',
+        preferCreate: true
+      });
 
-      const uid = (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid)
-        ? fbAuth.currentUser.uid
-        : 'usr_' + ((email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle');
-      completeAccountSession(
+      const uid = (authedUser && authedUser.uid)
+        ? authedUser.uid
+        : ((fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid)
+            ? fbAuth.currentUser.uid
+            : 'usr_' + ((email || nick).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'doodle'));
+
+      await completeAccountSession(
         uid,
         nick,
         email,
         'account',
-        '☁️ Welcome, ' + nick + '! localStorage ⇄ Firestore synced.',
+        '☁️ Welcome, ' + nick + '! Account saved & synced to Firestore.',
         password
       );
     }
 
-    function handleUpdateSignedInProfile() {
+    async function handleUpdateSignedInProfile() {
       const nick = (document.getElementById('signedInNicknameInput').value || '').trim();
       const email = (document.getElementById('signedInEmailInput').value || '').trim();
       if (!nick) {
@@ -5020,8 +5228,16 @@
         return;
       }
       const mode = localStorage.getItem('doodle_account_mode') || 'account';
-      const uid = getSignedInUserId();
-      completeAccountSession(
+      const existing = findRegisteredAccount(email || nick);
+      const authedUser = await ensureFirebaseAuthenticatedUser({
+        email,
+        nick,
+        password: existing && existing.password ? existing.password : '',
+        authMethod: mode,
+        preferCreate: false
+      });
+      const uid = (authedUser && authedUser.uid) ? authedUser.uid : getSignedInUserId();
+      await completeAccountSession(
         uid,
         nick,
         email,
@@ -5031,6 +5247,9 @@
     }
 
     async function handleGmailSignIn(forceAccountPicker = false) {
+      if (firebaseInitPromise) {
+        try { await firebaseInitPromise; } catch (e) {}
+      }
       const prefilledNick = (document.getElementById('regNicknameInput')?.value || '').trim();
       const prefilledEmail = (document.getElementById('regEmailInput')?.value || '').trim();
 
@@ -5046,7 +5265,13 @@
             localStorage.setItem('doodle_firebase_id_token', token);
             const display = prefilledNick || user.displayName || (user.email ? user.email.split('@')[0] : 'GmailPlayer');
             const email = user.email || prefilledEmail;
-            completeAccountSession(
+            await syncPlayerToFirestore(user, {
+              displayName: display,
+              email,
+              authMethod: 'gmail'
+            });
+            attachRealtimePlayerListener(user);
+            await completeAccountSession(
               user.uid,
               display,
               email,
@@ -5065,12 +5290,20 @@
         }
       }
 
-      // 2. If the user already typed a valid email in the form and didn't request switching, use it directly
+      // 2. If the user already typed a valid email in the form and didn't request switching, authenticate & sync it to Firestore
       if (!forceAccountPicker && prefilledEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prefilledEmail)) {
         const display = prefilledNick || prefilledEmail.split('@')[0];
+        const authedUser = await ensureFirebaseAuthenticatedUser({
+          email: prefilledEmail,
+          nick: display,
+          password: '',
+          authMethod: 'gmail',
+          preferCreate: true
+        });
         const cleanId = prefilledEmail.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'gmail';
-        completeAccountSession(
-          'usr_' + cleanId,
+        const uid = (authedUser && authedUser.uid) ? authedUser.uid : ('usr_' + cleanId);
+        await completeAccountSession(
+          uid,
           display,
           prefilledEmail,
           'gmail',
@@ -5079,7 +5312,7 @@
         return;
       }
 
-      // 3. Otherwise open the Gmail Sign-In Modal so the user can enter their actual Gmail address (never hardcode player@gmail.com)
+      // 3. Otherwise open the Gmail Sign-In Modal so the user can enter their actual Gmail address
       const modalEmail = document.getElementById('gmailModalEmailInput');
       const modalNick = document.getElementById('gmailModalNickInput');
       if (modalEmail) modalEmail.value = prefilledEmail || (localStorage.getItem('doodle_account_email') || '');
@@ -5088,7 +5321,7 @@
       setTimeout(() => { if (modalEmail) modalEmail.focus(); }, 60);
     }
 
-    function confirmGmailModalSignIn() {
+    async function confirmGmailModalSignIn() {
       const email = (document.getElementById('gmailModalEmailInput').value || '').trim();
       const nick = (document.getElementById('gmailModalNickInput').value || '').trim();
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -5096,10 +5329,18 @@
         return;
       }
       const display = nick || email.split('@')[0];
-      const cleanId = email.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'gmail';
       closeAllModals();
-      completeAccountSession(
-        'usr_' + cleanId,
+      const authedUser = await ensureFirebaseAuthenticatedUser({
+        email,
+        nick: display,
+        password: '',
+        authMethod: 'gmail',
+        preferCreate: true
+      });
+      const cleanId = email.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32) || 'gmail';
+      const uid = (authedUser && authedUser.uid) ? authedUser.uid : ('usr_' + cleanId);
+      await completeAccountSession(
+        uid,
         display,
         email,
         'gmail',

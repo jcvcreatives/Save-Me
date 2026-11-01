@@ -164,8 +164,60 @@ class PlayerAccountRepositoryRuleTest : FirestoreEmulatorTestBase() {
         assertEquals(8L, remote?.completedLevelsCount)
     }
 
+    @Test
+    fun createOrSyncPlayerAccount_repeatSignIn_mergesProfileAndGameState() = runBlocking {
+        val email = uniqueEmail("alice_merge")
+        val uid = signInTestUser(email)
+        val repository = PlayerAccountRepository(firestore)
+
+        withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.createOrSyncPlayerAccount(
+                displayName = "Alice Initial",
+                email = email,
+                authMethod = "email",
+                campaignLevelIndex = 10,
+                coins = 1800,
+                perfectCount = 6,
+                currentStreak = 4,
+                maxStreak = 8,
+                completedLevelsCount = 10,
+                userId = uid
+            ).getOrThrow()
+        }
+
+        val merged = withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.createOrSyncPlayerAccount(
+                displayName = "Alice Merged",
+                email = email,
+                authMethod = "google",
+                campaignLevelIndex = 14,
+                coins = 2200,
+                perfectCount = 9,
+                currentStreak = 7,
+                maxStreak = 9,
+                completedLevelsCount = 14,
+                userId = uid
+            ).getOrThrow()
+        }
+        assertEquals("Alice Merged", merged.displayName)
+        assertEquals("google", merged.authMethod)
+        assertEquals(14L, merged.campaignLevelIndex)
+        assertEquals(2200L, merged.coins)
+
+        val remote = withTimeout(DEFAULT_TIMEOUT_MS) {
+            repository.getPlayerAccount(uid).getOrThrow()
+        }
+        assertNotNull(remote)
+        assertEquals("Alice Merged", remote?.displayName)
+        assertEquals(email, remote?.email)
+        assertEquals("google", remote?.authMethod)
+        assertEquals(14L, remote?.campaignLevelIndex)
+        assertEquals(2200L, remote?.coins)
+    }
+
     private companion object {
         const val DEFAULT_TIMEOUT_MS = 5000L
         const val FLOW_TIMEOUT_MS = 3000L
     }
 }
+
