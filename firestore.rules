@@ -2,114 +2,81 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Global default-deny safety net
+
+    // Helper: Block known junk/test UIDs from PlayerAccountRepository.kt
+    function isNotJunkUid(uid) {
+      return !(uid in [
+        'usr_asdasda',
+        'usr_irbdhejebdiensishdbsiej',
+        'usr_jrjdhdhdhisdj',
+        'usr_jsjsjsj',
+        'usr_ndjdjsjd',
+        'usr_nsjsj',
+        'usr_sdfdsfsd',
+        'usr_udjdjd'
+      ]);
+    }
+
+    // Helper: Validate PlayerAccount schema & value ranges
+    function isValidPlayerAccount(data, docId) {
+      return data.keys().hasAll([
+          'userId', 'displayName', 'authMethod',
+          'campaignLevelIndex', 'coins', 'perfectCount',
+          'currentStreak', 'maxStreak', 'completedLevelsCount'
+        ])
+        && data.userId is string
+        && data.userId == docId
+        && data.userId.size() >= 3
+        && data.userId.size() <= 64
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 50
+        && data.authMethod in ['gmail', 'account', 'email', 'google']
+        && data.campaignLevelIndex is int
+        && data.campaignLevelIndex >= 0
+        && data.campaignLevelIndex <= 1000
+        && data.coins is int
+        && data.coins >= 0
+        && data.coins <= 10000000
+        && data.perfectCount is int
+        && data.perfectCount >= 0
+        && data.perfectCount <= 1000000
+        && data.currentStreak is int
+        && data.currentStreak >= 0
+        && data.currentStreak <= 1000000
+        && data.maxStreak is int
+        && data.maxStreak >= 0
+        && data.maxStreak <= 1000000
+        && data.completedLevelsCount is int
+        && data.completedLevelsCount >= 0
+        && data.completedLevelsCount <= 1000;
+    }
+
+    match /players/{playerId} {
+      // 1. Direct single-document lookup (`docRef.get()`)
+      allow get: if isNotJunkUid(playerId);
+
+      // 2. Collection queries (`whereEqualTo` in findPlayerAccountByIdentifier):
+      // CRITICAL QUOTA GUARD: Only allow queries that set `.limit(5)` or less!
+      // This completely blocks full-collection scans from draining your 50K free reads.
+      allow list: if request.query.limit != null && request.query.limit <= 5;
+
+      // 3. Account creation: Must pass schema validation & not be a junk UID
+      allow create: if isNotJunkUid(playerId)
+        && isValidPlayerAccount(request.resource.data, playerId);
+
+      // 4. Progress updates: Must pass schema validation & cannot alter userId
+      allow update: if isNotJunkUid(playerId)
+        && isValidPlayerAccount(request.resource.data, playerId)
+        && request.resource.data.userId == resource.data.userId;
+
+      // 5. Never allow client-side deletes
+      allow delete: if false;
+    }
+
+    // Deny access to any other unknown collections by default
     match /{document=**} {
       allow read, write: if false;
-    }
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function isDirectRegisteredId(id) {
-      return id is string &&
-             id.size() >= 5 &&
-             id.size() <= 84 &&
-             id.matches('^(usr|reg)_[a-zA-Z0-9_\\-]+$');
-    }
-
-    function isAuthorizedPlayerAccess(userId) {
-      return isValidId(userId) && (
-        (isSignedIn() && request.auth.uid == userId) ||
-        isDirectRegisteredId(userId)
-      );
-    }
-
-    function isValidPlayerAccount(data, userId) {
-      return (!('userId' in data) || (data.userId is string && data.userId == userId)) &&
-             data.displayName is string &&
-             data.displayName.size() >= 1 &&
-             data.displayName.size() <= 50 &&
-             (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 150)) &&
-             (!('passwordHash' in data) || data.passwordHash == null || (data.passwordHash is string && data.passwordHash.size() <= 128)) &&
-             data.authMethod is string &&
-             data.authMethod.size() >= 1 &&
-             data.authMethod.size() <= 20 &&
-             (data.authMethod == 'gmail' || data.authMethod == 'account' || data.authMethod == 'email' || data.authMethod == 'google') &&
-             data.campaignLevelIndex is int &&
-             data.campaignLevelIndex >= 0 &&
-             data.campaignLevelIndex <= 1000 &&
-             data.coins is int &&
-             data.coins >= 0 &&
-             data.coins <= 10000000 &&
-             (!('perfectCount' in data) || (data.perfectCount is int && data.perfectCount >= 0 && data.perfectCount <= 1000000)) &&
-             (!('currentStreak' in data) || (data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 1000000)) &&
-             (!('maxStreak' in data) || (data.maxStreak is int && data.maxStreak >= 0 && data.maxStreak <= 1000000)) &&
-             (!('completedLevelsCount' in data) || (data.completedLevelsCount is int && data.completedLevelsCount >= 0 && data.completedLevelsCount <= 1000)) &&
-             (!('createdAt' in data) || data.createdAt == null || data.createdAt is timestamp) &&
-             data.updatedAt is timestamp;
-    }
-
-    match /players/{userId} {
-      allow read: if true;
-
-      allow create: if isAuthorizedPlayerAccess(userId) &&
-                       incoming().keys().hasAll([
-                         'displayName',
-                         'authMethod',
-                         'campaignLevelIndex',
-                         'coins',
-                         'updatedAt'
-                       ]) &&
-                       incoming().keys().hasOnly([
-                         'userId',
-                         'displayName',
-                         'email',
-                         'passwordHash',
-                         'authMethod',
-                         'campaignLevelIndex',
-                         'coins',
-                         'perfectCount',
-                         'currentStreak',
-                         'maxStreak',
-                         'completedLevelsCount',
-                         'createdAt',
-                         'updatedAt'
-                       ]) &&
-                       isValidPlayerAccount(incoming(), userId);
-
-      allow update: if isAuthorizedPlayerAccess(userId) &&
-                       isValidPlayerAccount(incoming(), userId) &&
-                       (!('userId' in existing()) || !('userId' in incoming()) || incoming().userId == existing().userId) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly([
-                         'userId',
-                         'displayName',
-                         'email',
-                         'passwordHash',
-                         'authMethod',
-                         'campaignLevelIndex',
-                         'coins',
-                         'perfectCount',
-                         'currentStreak',
-                         'maxStreak',
-                         'completedLevelsCount',
-                         'createdAt',
-                         'updatedAt'
-                       ]);
-
-      allow delete: if isAuthorizedPlayerAccess(userId);
     }
   }
 }

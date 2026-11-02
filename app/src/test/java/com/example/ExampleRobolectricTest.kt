@@ -136,4 +136,66 @@ class ExampleRobolectricTest {
         assertEquals(4, vm.balloonsRemaining)
         assertEquals(2, vm.lastDamageAmount)
     }
+
+    @Test
+    fun `arcade word battler ki combo counter pushback boss chains shield tactical powerups and double down work`() {
+        val vm = WordGameViewModel()
+        vm.selectCampaignLevelNumber(5) // Level 5 is GIRAFFE (Boss Level)
+        assertEquals(4, vm.chainedBossKeys.size)
+        assertEquals(2, vm.bossArmorShieldHits)
+
+        // Take 1 damage first (6 -> 5 lives)
+        val wrongNonBomb = ('A'..'Z').first { it !in "GIRAFFE" && it !in vm.bombLetters }
+        vm.onLetterTapped(wrongNonBomb)
+        assertEquals(5, vm.balloonsRemaining)
+        assertEquals(0, vm.comboCount)
+
+        // Guess 1st correct letter ('G'): 1x combo, fuse starts at 4000ms
+        vm.onLetterTapped('G')
+        assertEquals(1, vm.comboCount)
+        assertEquals(4000L, vm.comboFuseRemainingMs)
+
+        // Guess 2nd correct letter ('I'): 2x combo -> shatters Boss Keyboard Chains!
+        vm.onLetterTapped('I')
+        assertEquals(2, vm.comboCount)
+        assertTrue(vm.bossChainsShattered)
+        assertEquals(0, vm.chainedBossKeys.size)
+
+        // Guess 3rd correct letter ('R'): 3-streak triggers KI COUNTER-PUSHBACK! (+1 life -> 6, +10 Stars)
+        val coinsBeforePushback = vm.coins
+        vm.onLetterTapped('R')
+        assertEquals(3, vm.comboCount)
+        assertEquals(6, vm.balloonsRemaining)
+        assertTrue(vm.coins >= coinsBeforePushback + 10)
+        assertTrue(vm.counterPushbackTrigger > 0)
+
+        // Activate Ink Shield (Cost: 40 Stars) -> absorbs next wrong guess without losing life or breaking combo!
+        vm.useInkShieldPowerUp()
+        assertTrue(vm.inkShieldActive)
+        val anotherWrong = ('A'..'Z').first {
+            it !in "GIRAFFE" && it !in vm.bombLetters && vm.keyStatuses[it] == null
+        }
+        vm.onLetterTapped(anotherWrong)
+        assertEquals(false, vm.inkShieldActive)
+        assertEquals(6, vm.balloonsRemaining)
+        assertEquals(3, vm.comboCount) // Combo preserved!
+
+        // Hint Spark (Cost: 20 Stars) -> highlights an unguessed letter in gold for 3000ms
+        vm.useHintSparkPowerUp()
+        assertTrue(vm.hintSparkChar != null)
+        assertEquals(3000L, vm.hintSparkRemainingMs)
+
+        // Ki Blast (Cost: 30 Stars) -> vaporizes up to 3 wrong letters and reveals 1 correct letter
+        vm.useKiBlastPowerUp()
+        assertTrue(vm.lastVaporizedKeys.isNotEmpty())
+
+        // Finish solving Level 5 and trigger Double-Down for Level 6
+        "GIRAFFE".toSet().forEach { vm.onLetterTapped(it) }
+        assertEquals(RoundOutcome.VICTORY, vm.roundOutcome)
+
+        vm.proceedAfterVictory(doubleDownNextLevel = true)
+        assertTrue(vm.isDoubleDownActive)
+        assertEquals(2, vm.comboCount) // Starts next level at instant x2 Ki Combo!
+        assertEquals(62, vm.currentLevelStarPayout) // 25 * 2.5 = 62 Stars on normal level
+    }
 }

@@ -11,10 +11,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
@@ -137,20 +136,13 @@ class PlayerAccountRepository(
         }
     }
 
-    fun observePlayerAccount(userId: String = currentUid()): Flow<PlayerAccount?> {
-        return db.collection(COLLECTION_PLAYERS)
-            .document(userId)
-            .snapshots()
-            .map { snapshot ->
-                if (snapshot.exists()) {
-                    snapshot.toObject(
-                        PlayerAccount::class.java,
-                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                    )
-                } else {
-                    null
-                }
-            }
+    /**
+     * Replaced continuous `.snapshots()` real-time WebSocket listener with a safe one-shot emission
+     * so callers never trigger infinite real-time read loops.
+     */
+    fun observePlayerAccount(userId: String = currentUid()): Flow<PlayerAccount?> = flow {
+        val account = getPlayerAccount(userId).getOrNull()
+        emit(account)
     }
 
     suspend fun getPlayerAccount(userId: String = currentUid()): Result<PlayerAccount?> = runCatching {
@@ -209,7 +201,7 @@ class PlayerAccountRepository(
             }
         }
 
-        // 1. Direct UID lookup first (saves Firestore quota)
+        // 1. Direct UID lookup first (1 read)
         try {
             val directSnap = db.collection(COLLECTION_PLAYERS).document(directUid).get().await()
             if (directSnap.exists()) {
@@ -227,24 +219,36 @@ class PlayerAccountRepository(
         }
 
         val directCandidate = matchesById[directUid]
-        val needCollectionScan = directCandidate == null ||
+        val needTargetedQuery = directCandidate == null ||
             (cleanPwdHash != null && !directCandidate.passwordHash.isNullOrBlank() && directCandidate.passwordHash.trim() != cleanPwdHash)
 
-        // 2. Collection query only when needed
-        if (needCollectionScan) {
-            try {
-                val querySnap = db.collection(COLLECTION_PLAYERS).get().await()
-                for (docSnap in querySnap.documents) {
-                    val docId = docSnap.id
-                    val account = docSnap.toObject(
-                        PlayerAccount::class.java,
-                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                    ) ?: continue
-                    addIfMatches(docId, account)
+        // 2. Targeted indexed queries with .limit(3) instead of downloading the entire collection!
+        if (needTargetedQuery) {
+            val col = db.collection(COLLECTION_PLAYERS)
+            val queries = buildList {
+                if (raw.contains("@")) {
+                    add(col.whereEqualTo("email", raw).limit(3))
+                    if (lower != raw) add(col.whereEqualTo("email", lower).limit(3))
+                } else {
+                    add(col.whereEqualTo("displayName", raw).limit(3))
+                    add(col.whereEqualTo("email", lower).limit(2))
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
+            }
+            for (q in queries) {
+                try {
+                    val querySnap = q.get().await()
+                    for (docSnap in querySnap.documents) {
+                        val account = docSnap.toObject(
+                            PlayerAccount::class.java,
+                            DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                        ) ?: continue
+                        addIfMatches(docSnap.id, account)
+                    }
+                    if (matchesById.isNotEmpty()) break
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                }
             }
         }
 
@@ -367,7 +371,8 @@ class PlayerAccountRepository(
                         maxStreak.toLong().coerceIn(0L, 1000000L)
                     } else {
                         maxOf(existing.maxStreak, maxStreak.toLong()).coerceIn(0L, 1000000L)
-                    },
+                    }
+                    ,
                     completedLevelsCount = if (overwriteIfExists) {
                         completedLevelsCount.toLong().coerceIn(0L, 1000L)
                     } else {
@@ -422,12 +427,8 @@ class PlayerAccountRepository(
                 completedLevelsCount = completedLevelsCount.toLong().coerceIn(0L, 1000L)
             )
             try {
-                val snap = docRef.get().await()
-                if (snap.exists()) {
-                    docRef.set(updated.toUpdateMap(), SetOptions.merge()).await()
-                } else {
-                    docRef.set(updated.toCreateMap(), SetOptions.merge()).await()
-                }
+                // Direct single merge write — zero extra .get() read before writing!
+                docRef.set(updated.toUpdateMap(), SetOptions.merge()).await()
                 updated
             } catch (e: CancellationException) {
                 throw e
@@ -442,4 +443,3 @@ class PlayerAccountRepository(
         const val COLLECTION_PLAYERS = "players"
     }
 }
-

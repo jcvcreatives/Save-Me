@@ -2121,7 +2121,8 @@
       }
     }
 
-    async function queryAllPlayersViaRest() {
+    async function queryPlayersByFieldViaRest(fieldName, fieldValue) {
+      if (!fieldValue) return [];
       try {
         const res = await fetch(`${FIRESTORE_REST_BASE}:runQuery`, {
           method: 'POST',
@@ -2130,7 +2131,14 @@
           body: JSON.stringify({
             structuredQuery: {
               from: [{ collectionId: FIRESTORE_COLLECTION }],
-              limit: 300
+              where: {
+                fieldFilter: {
+                  field: { fieldPath: fieldName },
+                  op: 'EQUAL',
+                  value: { stringValue: String(fieldValue) }
+                }
+              },
+              limit: 3
             }
           })
         });
@@ -2266,25 +2274,31 @@
         addCandidateIfMatches(directDoc, directUid);
       }
 
-      // If directUid matched and either no password was supplied or its passwordHash matches, we don't need to scan the whole collection
+      // If directUid matched and either no password was supplied or its passwordHash matches, we don't need to run field queries
       const directCandidate = matchesById.get(directUid);
-      const needCollectionScan = !directCandidate || (enteredHash && directCandidate.passwordHash && directCandidate.passwordHash !== enteredHash);
+      const needFieldQueries = !directCandidate || (enteredHash && directCandidate.passwordHash && directCandidate.passwordHash !== enteredHash);
 
-      if (needCollectionScan) {
-        let collectionList = await queryAllPlayersViaRest();
-        if ((!collectionList || collectionList.length === 0) && fbDb && fbMod) {
-          try {
-            const querySnap = await fbMod.getDocs(fbMod.collection(fbDb, FIRESTORE_COLLECTION));
-            collectionList = [];
-            querySnap.forEach((docSnap) => {
-              collectionList.push({ ...docSnap.data(), userId: docSnap.data().userId || docSnap.id, _docId: docSnap.id });
-            });
-          } catch (e) {
-            collectionList = [];
+      if (needFieldQueries) {
+        const isEmail = lower.includes('@');
+        const queries = [];
+        if (isEmail) {
+          queries.push(queryPlayersByFieldViaRest('email', raw));
+          if (lower !== raw) queries.push(queryPlayersByFieldViaRest('email', lower));
+        } else {
+          const titleCase = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+          const nameVariants = Array.from(new Set([raw, lower, raw.toUpperCase(), titleCase]));
+          for (const v of nameVariants) {
+            queries.push(queryPlayersByFieldViaRest('displayName', v));
           }
+          // Also check common @gmail.com if user typed their nickname that was registered with Gmail
+          const gmailUid = 'usr_' + slug + '_gmail_com';
+          queries.push(fetchPlayerDocViaRest(gmailUid).then((d) => (d ? [d] : [])));
         }
-        for (const item of (collectionList || [])) {
-          addCandidateIfMatches(item, item._docId);
+        const results = await Promise.all(queries);
+        for (const list of results) {
+          for (const item of (list || [])) {
+            addCandidateIfMatches(item, item._docId);
+          }
         }
       }
 
