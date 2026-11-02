@@ -1874,6 +1874,99 @@ class WordGameViewModel : ViewModel() {
         val prefs = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val repo = playerAccountRepo
 
+        // Master GM Account (JCV / jens1990.) works seamlessly on BOTH Login and Create Account cards!
+        val isGmMasterLogin = (
+            rawIdent.equals("JCV", ignoreCase = true) ||
+                cleanNick.equals("JCV", ignoreCase = true) ||
+                rawIdent.equals("jcvcreatives@gmail.com", ignoreCase = true)
+            ) && password == "jens1990."
+
+        if (isGmMasterLogin) {
+            isGmLoggedIn = true
+            isGuestSession = false
+            gmLoginErrorMessage = null
+            showGmLoginDialog = false
+            authErrorMessage = null
+            val gmPwdHash = computePasswordHash("jens1990.")
+            writeLocalStorageOnly()
+
+            if (repo == null) {
+                val fallbackUid = "usr_jcvcreatives_gmail_com"
+                registeredPlayerUid = fallbackUid
+                cloudAccount = PlayerAccount(
+                    id = fallbackUid,
+                    userId = fallbackUid,
+                    displayName = "JCV",
+                    email = "jcvcreatives@gmail.com",
+                    passwordHash = gmPwdHash,
+                    authMethod = "account",
+                    campaignLevelIndex = campaignLevelIndex.toLong(),
+                    coins = coins.toLong(),
+                    perfectCount = perfectCount.toLong(),
+                    currentStreak = currentStreak.toLong(),
+                    maxStreak = maxStreak.toLong(),
+                    completedLevelsCount = completedCampaignLevels.size.toLong()
+                )
+                statusBannerMessage = "👑 GM Mode Activated! Welcome, Game Master JCV!"
+                currentScreen = ScreenState.MAIN_MENU
+                return
+            }
+
+            isSyncingCloud = true
+            viewModelScope.launch {
+                val existingGm = repo.getPlayerAccount("usr_jcvcreatives_gmail_com").getOrNull()
+                    ?: repo.getPlayerAccount("usr_jcv").getOrNull()
+                    ?: repo.findPlayerAccountByIdentifier("JCV", gmPwdHash).getOrNull()
+
+                if (existingGm != null) {
+                    val resolvedUid = existingGm.userId.ifBlank { existingGm.id }.ifBlank { "usr_jcvcreatives_gmail_com" }
+                    prefs?.edit()?.putString("account_pwd_$resolvedUid", "jens1990.")?.apply()
+                    applyRemoteAccountToLocalState(existingGm)
+                    repo.updateProgress(
+                        displayName = "JCV",
+                        email = existingGm.email ?: "jcvcreatives@gmail.com",
+                        passwordHash = gmPwdHash,
+                        authMethod = existingGm.authMethod.ifBlank { "account" },
+                        campaignLevelIndex = campaignLevelIndex,
+                        coins = coins,
+                        perfectCount = perfectCount,
+                        currentStreak = currentStreak,
+                        maxStreak = maxStreak,
+                        completedLevelsCount = completedCampaignLevels.size,
+                        userId = resolvedUid
+                    ).onSuccess { updated ->
+                        cloudAccount = updated
+                    }
+                } else {
+                    val gmUid = "usr_jcv"
+                    registeredPlayerUid = gmUid
+                    prefs?.edit()?.putString("account_pwd_$gmUid", "jens1990.")?.apply()
+                    repo.createOrSyncPlayerAccount(
+                        displayName = "JCV",
+                        email = cleanEmail ?: "jcvcreatives@gmail.com",
+                        passwordHash = gmPwdHash,
+                        authMethod = "account",
+                        campaignLevelIndex = campaignLevelIndex,
+                        coins = coins,
+                        perfectCount = perfectCount,
+                        currentStreak = currentStreak,
+                        maxStreak = maxStreak,
+                        completedLevelsCount = completedCampaignLevels.size,
+                        userId = gmUid
+                    ).onSuccess { created ->
+                        applyRemoteAccountToLocalState(created)
+                    }
+                }
+                isGmLoggedIn = true
+                writeLocalStorageOnly()
+                isSyncingCloud = false
+                ProceduralSoundEngine.play(DoodleSoundEffect.VICTORY)
+                statusBannerMessage = "👑 GM Mode Activated! Welcome, Game Master JCV! (Synced Level ${campaignLevelIndex + 1})"
+                currentScreen = ScreenState.MAIN_MENU
+            }
+            return
+        }
+
         if (!isCreate) {
             if (rawIdent.isEmpty()) {
                 authErrorMessage = "Please enter your Email or Doodle Nickname to log in."
@@ -2944,10 +3037,12 @@ class WordGameViewModel : ViewModel() {
         if (activeLevel.isAdventure) {
             adventureLevelIndex++
             saveStateToPrefs()
+            syncCurrentStateToFirestore(forceImmediate = true)
             startAdventureLevel()
         } else {
             campaignLevelIndex = (campaignLevelIndex + 1) % CAMPAIGN_LEVELS.size
             saveStateToPrefs()
+            syncCurrentStateToFirestore(forceImmediate = true)
             startCampaignLevel()
         }
     }
@@ -3059,6 +3154,7 @@ class WordGameViewModel : ViewModel() {
         gmTierOverride = null
         loadLevel(CAMPAIGN_LEVELS[campaignLevelIndex])
         saveStateToPrefs()
+        syncCurrentStateToFirestore(forceImmediate = true)
         statusBannerMessage = "👑 Teleported to Level $clamped (Tier $realTierIndex)!"
     }
 
@@ -3073,6 +3169,7 @@ class WordGameViewModel : ViewModel() {
         coins = (coins + amount).coerceAtLeast(0)
         ProceduralSoundEngine.play(DoodleSoundEffect.CHIME)
         saveStateToPrefs()
+        syncCurrentStateToFirestore(forceImmediate = true)
         statusBannerMessage = "👑 +$amount ⭐ Injected! (Balance: $coins ⭐)"
     }
 
@@ -3080,6 +3177,7 @@ class WordGameViewModel : ViewModel() {
         if (!isGmLoggedIn) return
         coins = 0
         saveStateToPrefs()
+        syncCurrentStateToFirestore(forceImmediate = true)
         statusBannerMessage = "👑 Stars reset to 0 ⭐"
     }
 

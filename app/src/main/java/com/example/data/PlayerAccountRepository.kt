@@ -141,7 +141,7 @@ class PlayerAccountRepository(
      * so callers never trigger infinite real-time read loops.
      */
     fun observePlayerAccount(userId: String = currentUid()): Flow<PlayerAccount?> = flow {
-        val account = getPlayerAccount(userId).getOrNull()
+        val account = getPlayerAccount(userId).getOrThrow()
         emit(account)
     }
 
@@ -225,12 +225,20 @@ class PlayerAccountRepository(
         // 2. Targeted indexed queries with .limit(3) instead of downloading the entire collection!
         if (needTargetedQuery) {
             val col = db.collection(COLLECTION_PLAYERS)
+            val titleCase = if (raw.isNotEmpty()) {
+                raw.first().uppercaseChar() + raw.drop(1).lowercase()
+            } else {
+                raw
+            }
+            val nameVariants = listOf(raw, lower, raw.uppercase(), titleCase).distinct()
             val queries = buildList {
                 if (raw.contains("@")) {
                     add(col.whereEqualTo("email", raw).limit(3))
                     if (lower != raw) add(col.whereEqualTo("email", lower).limit(3))
                 } else {
-                    add(col.whereEqualTo("displayName", raw).limit(3))
+                    for (variant in nameVariants) {
+                        add(col.whereEqualTo("displayName", variant).limit(3))
+                    }
                     add(col.whereEqualTo("email", lower).limit(2))
                 }
             }
@@ -244,10 +252,32 @@ class PlayerAccountRepository(
                         ) ?: continue
                         addIfMatches(docSnap.id, account)
                     }
-                    if (matchesById.isNotEmpty()) break
+                    if (matchesById.isNotEmpty() && (cleanPwdHash == null || matchesById.values.any { it.passwordHash?.trim() == cleanPwdHash })) {
+                        break
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
+                }
+            }
+            if (!raw.contains("@")) {
+                val gmailFallbackUid = "usr_${slug}_gmail_com"
+                if (gmailFallbackUid !in matchesById) {
+                    try {
+                        val gmailSnap = col.document(gmailFallbackUid).get().await()
+                        if (gmailSnap.exists()) {
+                            val acc = gmailSnap.toObject(
+                                PlayerAccount::class.java,
+                                DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                            )
+                            if (acc != null) {
+                                addIfMatches(gmailFallbackUid, acc)
+                            }
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                    }
                 }
             }
         }

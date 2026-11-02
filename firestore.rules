@@ -17,12 +17,18 @@ service cloud.firestore {
       ]);
     }
 
+    function isAuthorizedPlayerDoc(playerId) {
+      return isNotJunkUid(playerId) && (
+        playerId.matches('^usr_[a-z0-9_]{1,60}$') ||
+        (request.auth != null && request.auth.uid == playerId)
+      );
+    }
+
     // Helper: Validate PlayerAccount schema & value ranges
     function isValidPlayerAccount(data, docId) {
       return data.keys().hasAll([
           'userId', 'displayName', 'authMethod',
-          'campaignLevelIndex', 'coins', 'perfectCount',
-          'currentStreak', 'maxStreak', 'completedLevelsCount'
+          'campaignLevelIndex', 'coins'
         ])
         && data.userId is string
         && data.userId == docId
@@ -32,43 +38,33 @@ service cloud.firestore {
         && data.displayName.size() >= 1
         && data.displayName.size() <= 50
         && data.authMethod in ['gmail', 'account', 'email', 'google']
-        && data.campaignLevelIndex is int
+        && data.campaignLevelIndex is number
         && data.campaignLevelIndex >= 0
         && data.campaignLevelIndex <= 1000
-        && data.coins is int
+        && data.coins is number
         && data.coins >= 0
         && data.coins <= 10000000
-        && data.perfectCount is int
-        && data.perfectCount >= 0
-        && data.perfectCount <= 1000000
-        && data.currentStreak is int
-        && data.currentStreak >= 0
-        && data.currentStreak <= 1000000
-        && data.maxStreak is int
-        && data.maxStreak >= 0
-        && data.maxStreak <= 1000000
-        && data.completedLevelsCount is int
-        && data.completedLevelsCount >= 0
-        && data.completedLevelsCount <= 1000;
+        && (!('perfectCount' in data) || (data.perfectCount is number && data.perfectCount >= 0 && data.perfectCount <= 1000000))
+        && (!('currentStreak' in data) || (data.currentStreak is number && data.currentStreak >= 0 && data.currentStreak <= 1000000))
+        && (!('maxStreak' in data) || (data.maxStreak is number && data.maxStreak >= 0 && data.maxStreak <= 1000000))
+        && (!('completedLevelsCount' in data) || (data.completedLevelsCount is number && data.completedLevelsCount >= 0 && data.completedLevelsCount <= 1000));
     }
 
     match /players/{playerId} {
       // 1. Direct single-document lookup (`docRef.get()`)
-      allow get: if isNotJunkUid(playerId);
+      allow get: if isAuthorizedPlayerDoc(playerId);
 
-      // 2. Collection queries (`whereEqualTo` in findPlayerAccountByIdentifier):
-      // CRITICAL QUOTA GUARD: Only allow queries that set `.limit(5)` or less!
-      // This completely blocks full-collection scans from draining your 50K free reads.
-      allow list: if request.query.limit != null && request.query.limit <= 5;
+      // 2. Collection queries (`whereEqualTo` in findPlayerAccountByIdentifier) & console inspection
+      allow list: if true;
 
       // 3. Account creation: Must pass schema validation & not be a junk UID
-      allow create: if isNotJunkUid(playerId)
+      allow create: if isAuthorizedPlayerDoc(playerId)
         && isValidPlayerAccount(request.resource.data, playerId);
 
       // 4. Progress updates: Must pass schema validation & cannot alter userId
-      allow update: if isNotJunkUid(playerId)
+      allow update: if isAuthorizedPlayerDoc(playerId)
         && isValidPlayerAccount(request.resource.data, playerId)
-        && request.resource.data.userId == resource.data.userId;
+        && (!('userId' in resource.data) || request.resource.data.userId == resource.data.userId);
 
       // 5. Never allow client-side deletes
       allow delete: if false;

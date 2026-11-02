@@ -824,12 +824,15 @@
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="sketch-box sketch-btn icon-btn" onclick="openSettings()" title="Settings">⚙️</button>
           <button class="sketch-box sketch-btn icon-btn" onclick="openWorldMapModal()" title="1,000-Level World Map">🗺️</button>
-          <button id="accountStatusBtn" class="sketch-box sketch-btn" style="height:42px;padding:0 10px;border-radius:14px;background:#E3F2FD;font-size:12px;font-weight:700;" onclick="openRegistrationScreen()" title="Account &amp; Cloud Sync">👤 Register</button>
+          <button id="accountStatusBtn" class="sketch-box sketch-btn" style="height:42px;padding:0 10px;border-radius:14px;background:#E3F2FD;font-size:12px;font-weight:700;" onclick="handleAccountPillClick(event)" oncontextmenu="handleAccountPillLongPress(event)" title="Account &amp; Cloud Sync">👤 Register</button>
         </div>
-        <div class="sketch-box coin-pill" onclick="openCoinModal()">
-          <span>⭐</span>
-          <span id="menuCoinText">1231</span>
-          <span class="coin-plus">+</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+          <div class="sketch-box coin-pill" onclick="openCoinModal()">
+            <span>⭐</span>
+            <span id="menuCoinText">1231</span>
+            <span class="coin-plus">+</span>
+          </div>
+          <button id="menuGmBadgeBtn" class="sketch-box sketch-btn" style="display:none;height:28px;padding:0 10px;border-radius:10px;background:#FFD54F;font-size:12px;font-weight:800;color:#1E1E1E;" onclick="openGmConsoleModal()">👑 GM</button>
         </div>
       </div>
 
@@ -883,10 +886,13 @@
           <div id="gameHeaderTitle" style="font-size:22px;font-weight:700;">Level 1</div>
           <div id="gameHeaderSub" style="font-size:12px;color:var(--ink-blue);font-weight:700;">Shark &amp; Balloons</div>
         </div>
-        <div class="sketch-box coin-pill" onclick="openCoinModal()">
-          <span>⭐</span>
-          <span id="gameCoinText">1231</span>
-          <span class="coin-plus">+</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+          <div class="sketch-box coin-pill" onclick="openCoinModal()">
+            <span>⭐</span>
+            <span id="gameCoinText">1231</span>
+            <span class="coin-plus">+</span>
+          </div>
+          <button id="gameGmBadgeBtn" class="sketch-box sketch-btn" style="display:none;height:26px;padding:0 9px;border-radius:10px;background:#FFD54F;font-size:11px;font-weight:800;color:#1E1E1E;" onclick="openGmConsoleModal()">👑 GM</button>
         </div>
       </div>
 
@@ -898,6 +904,7 @@
         <div class="clue-half">
           <div id="livesDots" class="lives-dots"></div>
           <div id="bossBadge" class="boss-badge" style="display:none;">💣 BOSS: Hidden Bomb Keys = -2 ❤️</div>
+          <div id="bossArmorBadge" class="boss-badge" style="display:none;background:#FFF3E0;border-color:#E65100;color:#BF360C;">🛡️ Boss Armor: 2/2 Hits • ⛓️ Chains Active</div>
           <div id="frozenBadge" class="boss-badge" style="display:none;background:rgba(129,212,250,0.28);border-color:#0288D1;color:#01579B;">🧊 Frozen Vowels: 0/3 Consonants</div>
           <div id="clueText" class="clue-text">Guess a precious gemstone</div>
         </div>
@@ -905,20 +912,31 @@
 
       <div id="wordSlots" class="word-slots"></div>
 
+      <!-- KI COMBO SPEED FUSE BAR -->
+      <div id="kiComboFuseContainer" style="display:none;width:100%;max-width:360px;margin:2px auto 4px;padding:4px 10px;border:2px solid var(--ink-black);border-radius:12px;background:#FFF8E1;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:800;margin-bottom:3px;">
+          <span id="kiComboLabelText" style="color:#E65100;">🔥 1x KI SPARK!</span>
+          <span id="kiComboTimerText" style="color:var(--ink-blue);">4.0s • 3-Streak = Pushback!</span>
+        </div>
+        <div class="progress-track" style="height:10px;background:#FFF;border:1.5px solid var(--ink-black);">
+          <div id="kiComboFuseFill" class="progress-fill" style="background:linear-gradient(90deg,#FFD54F,#FF6D00);width:0%;"></div>
+        </div>
+      </div>
+
       <div id="keyboard" class="keyboard"></div>
 
-      <div class="powerup-bar">
-        <div class="powerup-wrap" onclick="useMagnifierHint()">
-          <div class="powerup-circle" style="background:rgba(76,175,80,0.14)">🔍</div>
-          <div class="powerup-badge">⭐ 150</div>
+      <div id="tacticalPowerupDock" class="powerup-bar">
+        <div class="powerup-wrap" onclick="useLightbulbHint()" title="Ki Strike: Vaporize 3 wrong keys &amp; reveal 1 letter">
+          <div class="powerup-circle" style="background:rgba(255,152,0,0.18)">⚡</div>
+          <div class="powerup-badge">⭐ 30</div>
         </div>
-        <div class="powerup-wrap" onclick="useExtraLifeHint()">
-          <div class="powerup-circle" style="background:rgba(33,150,243,0.14)">🛡️</div>
-          <div id="potionBadge" class="powerup-badge" style="background:var(--hint-blue);color:#fff;">2</div>
+        <div class="powerup-wrap" onclick="useExtraLifeHint()" title="Ink Shield: Absorb next wrong letter or +1 Life">
+          <div class="powerup-circle" style="background:rgba(33,150,243,0.18)">🛡️</div>
+          <div id="potionBadge" class="powerup-badge" style="background:var(--hint-blue);color:#fff;">⭐ 40</div>
         </div>
-        <div class="powerup-wrap" onclick="useLightbulbHint()">
-          <div class="powerup-circle" style="background:rgba(255,152,0,0.14)">💡</div>
-          <div class="powerup-badge">⭐ 125</div>
+        <div class="powerup-wrap" onclick="useMagnifierHint()" title="Hint Spark: Highlight &amp; reveal 1 correct letter">
+          <div class="powerup-circle" style="background:rgba(76,175,80,0.18)">💥</div>
+          <div class="powerup-badge">⭐ 50</div>
         </div>
       </div>
     </div>
@@ -952,8 +970,11 @@
           <span style="font-size:24px;">🧰</span>
         </div>
 
-        <button id="nextLevelBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-top:14px;" onclick="nextLevelAfterVictory()">
+        <button id="nextLevelBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-top:12px;" onclick="nextLevelAfterVictory(false)">
           NEXT (+25 Coins) →
+        </button>
+        <button id="doubleDownVictoryBtn" class="sketch-box sketch-btn menu-btn" style="margin-top:8px;height:44px;font-size:14px;background:#FFE0B2;color:#E65100;border-color:#E65100;" onclick="nextLevelAfterVictory(true)">
+          🔥 DOUBLE DOWN (Bet Half for 2.5x ⭐ &amp; 2x Combo!)
         </button>
       </div>
     </div>
@@ -1009,10 +1030,111 @@
         <button class="sketch-box sketch-btn quick-chip" onclick="playProceduralSound('splash')">🌊 Test Splash</button>
         <button class="sketch-box sketch-btn quick-chip" onclick="playProceduralSound('crunch')">🪨 Test Crunch</button>
       </div>
-      <button id="fontToggleBtn" class="sketch-box sketch-btn menu-btn" style="height:46px;font-size:16px;margin-bottom:12px;" onclick="toggleFont()">
+      <button id="fontToggleBtn" class="sketch-box sketch-btn menu-btn" style="height:46px;font-size:16px;margin-bottom:10px;" onclick="toggleFont()">
         Font: Comic Rounded
       </button>
+      <button id="settingsGmLoginBtn" class="sketch-box sketch-btn menu-btn" style="height:42px;font-size:14px;margin-bottom:10px;background:#FFF8E1;" onclick="closeAllModals();openGmLoginModal();">
+        👑 GM Login
+      </button>
       <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:46px;" onclick="closeAllModals()">Close</button>
+    </div>
+  </div>
+
+  <!-- ================= SECRET GM ACCESS LOGIN MODAL (JCV / jens1990.) ================= -->
+  <div id="gmLoginModal" class="modal-backdrop">
+    <div class="sketch-box dialog-card" style="max-width:380px;background:#FFFDE7;">
+      <div style="font-size:22px;font-weight:700;margin-bottom:6px;">👑 GM Access Login</div>
+      <p style="font-size:12px;color:var(--ink-blue);font-weight:700;margin:0 0 10px;">
+        Enter Game Master credentials to unlock the Live Sandbox Console:
+      </p>
+      <input id="gmUsernameInput" class="input-sketch" placeholder="GM Username (JCV)" maxlength="50" />
+      <input id="gmPasswordInput" type="password" class="input-sketch" placeholder="GM Password" maxlength="100" />
+      <div id="gmLoginErrorText" style="display:none;color:var(--wrong-red);font-size:12px;font-weight:700;margin-bottom:8px;"></div>
+      <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:46px;font-size:16px;margin-bottom:8px;" onclick="confirmGmModalLogin()">
+        <span>👑 Unlock GM Mode</span>
+      </button>
+      <button class="sketch-box sketch-btn menu-btn" style="height:42px;font-size:14px;background:#F5F5F5;" onclick="closeAllModals()">
+        Cancel
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= GM COMMAND CONSOLE DRAWER MODAL ================= -->
+  <div id="gmConsoleModal" class="modal-backdrop">
+    <div class="sketch-box dialog-card" style="width:min(440px,96vw);max-height:90vh;overflow-y:auto;text-align:left;padding:16px;background:#FFFDE7;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div>
+          <div style="font-size:19px;font-weight:800;">👑 GM Command Console</div>
+          <div style="font-size:11px;color:var(--ink-blue);font-weight:700;">Authenticated as JCV • Live Sandbox &amp; Toggles</div>
+        </div>
+        <button class="sketch-box sketch-btn icon-btn" style="width:36px;height:36px;font-size:15px;" onclick="closeAllModals()">✕</button>
+      </div>
+
+      <!-- A. HOME SCREEN & ACCOUNT MANIPULATORS -->
+      <div class="sketch-box" style="padding:10px;border-radius:14px;background:#FFF;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:var(--ink-blue);">A. Home Screen &amp; Account Manipulators</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+          <button class="sketch-box sketch-btn quick-chip" style="height:34px;padding:0 12px;" onclick="gmStepTier(-1)">◀</button>
+          <div id="gmConsoleTierLabel" style="flex:1;text-align:center;font-size:13px;font-weight:800;">Tier 1 / 20</div>
+          <button class="sketch-box sketch-btn quick-chip" style="height:34px;padding:0 12px;" onclick="gmStepTier(1)">▶</button>
+          <button class="sketch-box sketch-btn quick-chip" style="height:34px;font-size:11px;background:#E3F2FD;" onclick="gmResetTierToReal()">Reset to Real Tier</button>
+        </div>
+
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+          <button class="sketch-box sketch-btn quick-chip" style="height:36px;padding:0 10px;" onclick="gmStepLevel(-1)">-1</button>
+          <input id="gmTeleportLevelInput" type="number" min="1" max="1000" class="input-sketch" style="margin:0;height:36px;padding:4px 8px;font-size:14px;text-align:center;flex:1;" placeholder="Lv 1..1000" value="1" />
+          <button class="sketch-box sketch-btn quick-chip" style="height:36px;padding:0 10px;" onclick="gmStepLevel(1)">+1</button>
+          <button class="sketch-box sketch-btn sketch-yellow quick-chip" style="height:36px;padding:0 12px;font-weight:800;" onclick="gmTeleportFromInput()">Go</button>
+        </div>
+
+        <div style="display:flex;gap:6px;">
+          <button class="sketch-box sketch-btn sketch-yellow" style="flex:1;height:36px;font-size:12px;font-weight:800;" onclick="gmInjectStars(1000)">+1,000 ⭐</button>
+          <button class="sketch-box sketch-btn" style="flex:0.8;height:36px;font-size:12px;background:#FFF3E0;" onclick="gmResetStars()">0 ⭐</button>
+          <button class="sketch-box sketch-btn" style="flex:1;height:36px;font-size:11px;background:#FFEBEE;color:#B71C1C;" onclick="gmResetProgressToLevel1()">Reset Lv 1</button>
+        </div>
+      </div>
+
+      <!-- B. EXPERIMENTAL GAMEPLAY FEATURE TOGGLES -->
+      <div class="sketch-box" style="padding:10px;border-radius:14px;background:#FFF;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:var(--ink-blue);">B. Experimental Gameplay Feature Toggles</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" id="gmChkKiCombo" onchange="onGmToggleChanged()" checked />
+          <span>⚡ 1. Ki Combo Speed Fuse &amp; 3-Streak Counter-Pushback</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" id="gmChkKiBlasts" onchange="onGmToggleChanged()" checked />
+          <span>☄️ 2. Stickman Ki Blasts vs. Peril &amp; Danger Aura</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" id="gmChkBossChains" onchange="onGmToggleChanged()" checked />
+          <span>⛓️ 3. Boss 2-Hit Armor Shield &amp; Chained Keys</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" id="gmChkStarDock" onchange="onGmToggleChanged()" checked />
+          <span>🛠️ 4. Tactical Star Power-Up Dock (30 / 40 / 50 ⭐)</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;cursor:pointer;">
+          <input type="checkbox" id="gmChkDoubleBet" onchange="onGmToggleChanged()" checked />
+          <span>🔥 5. Victory "Double-or-Nothing" Streak Bet</span>
+        </label>
+      </div>
+
+      <!-- C. IN-GAME QUICK CHEATS -->
+      <div class="sketch-box" style="padding:10px;border-radius:14px;background:#FFF;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:var(--ink-blue);">C. In-Game Quick Cheats</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <button class="sketch-box sketch-btn" style="height:36px;font-size:12px;background:#E8F5E9;" onclick="gmCheatRevealOneLetter()">🔤 Reveal 1 Letter</button>
+          <button class="sketch-box sketch-btn sketch-yellow" style="height:36px;font-size:12px;" onclick="gmCheatInstantWinLevel()">⚡ Instant Win Level</button>
+          <button class="sketch-box sketch-btn" style="height:36px;font-size:12px;background:#FFEBEE;" onclick="gmCheatTriggerOneMistake()">💥 Trigger 1 Mistake</button>
+          <button class="sketch-box sketch-btn" style="height:36px;font-size:12px;background:#E3F2FD;" onclick="gmCheatHealAllMistakes()">❤️ Heal All Mistakes</button>
+        </div>
+        <button class="sketch-box sketch-btn" style="width:100%;height:36px;font-size:12px;margin-top:6px;background:#FFF3E0;color:#E65100;font-weight:800;" onclick="gmCheatTriggerOverdrive()">🔥 Trigger 5x Overdrive</button>
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <button class="sketch-box sketch-btn" style="flex:1;height:40px;font-size:13px;background:#FFCDD2;color:#B71C1C;" onclick="logoutGmMode()">🔒 Logout GM</button>
+        <button class="sketch-box sketch-btn sketch-yellow" style="flex:1;height:40px;font-size:14px;" onclick="closeAllModals()">Done</button>
+      </div>
     </div>
   </div>
 
@@ -1722,20 +1844,21 @@
     }
 
     function getSignedInUserId() {
-      if (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid) {
+      let uid = localStorage.getItem('doodle_account_uid');
+      if (uid && !JUNK_TEST_UIDS.has(uid)) {
+        return uid;
+      }
+      if (fbAuth && fbAuth.currentUser && fbAuth.currentUser.uid && !JUNK_TEST_UIDS.has(fbAuth.currentUser.uid)) {
         localStorage.setItem('doodle_account_uid', fbAuth.currentUser.uid);
         return fbAuth.currentUser.uid;
       }
-      let uid = localStorage.getItem('doodle_account_uid');
-      if (!uid) {
-        const rawIdentity = (
-          localStorage.getItem('doodle_account_email') ||
-          localStorage.getItem('doodle_account_name') ||
-          'doodle_player'
-        ).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32);
-        uid = 'usr_' + (rawIdentity || 'doodle');
-        localStorage.setItem('doodle_account_uid', uid);
-      }
+      const rawIdentity = (
+        localStorage.getItem('doodle_account_email') ||
+        localStorage.getItem('doodle_account_name') ||
+        'doodle_player'
+      ).toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 32);
+      uid = 'usr_' + (rawIdentity || 'doodle');
+      localStorage.setItem('doodle_account_uid', uid);
       return uid;
     }
 
@@ -2507,6 +2630,16 @@
 
         // Write via REST PATCH first (1 lightweight quota-friendly write); fall back to JS SDK if needed
         let writeRes = await writePlayerDocViaRest(uid, baseFields, isCreate);
+        // Keep JCV's primary and alias documents in sync in Firebase Console
+        if (uid === 'usr_jcv' || uid === 'usr_jcvcreatives_gmail_com' || rawName.toLowerCase() === 'jcv') {
+          const otherJcvUid = uid === 'usr_jcv' ? 'usr_jcvcreatives_gmail_com' : 'usr_jcv';
+          writePlayerDocViaRest(otherJcvUid, {
+            ...baseFields,
+            userId: otherJcvUid,
+            displayName: 'JCV',
+            email: baseFields.email || 'jcvcreatives@gmail.com'
+          }, false).catch(() => {});
+        }
         if (!writeRes && fbDb && fbMod) {
           const docRef = fbMod.doc(fbDb, FIRESTORE_COLLECTION, uid);
           const sdkPayload = {
@@ -2861,11 +2994,36 @@
       el._timer = setTimeout(() => { el.style.display = 'none'; }, 2100);
     }
 
+    // =========================================================================
+    // GM SANDBOX & ARCADE WORD-BATTLER STATE
+    // =========================================================================
+    let isGmLoggedIn = localStorage.getItem('doodle_gm_logged_in') === '1';
+    let gmTierOverride = null; // 1..20 or null
+    let enableKiComboFuse = localStorage.getItem('doodle_gm_ki_combo') !== '0';
+    let enableStickmanKiBlasts = localStorage.getItem('doodle_gm_ki_blasts') !== '0';
+    let enableBossChainedKeys = localStorage.getItem('doodle_gm_boss_chains') !== '0';
+    let enableTacticalStarDock = localStorage.getItem('doodle_gm_star_dock') !== '0';
+    let enableDoubleOrNothingBet = localStorage.getItem('doodle_gm_double_bet') !== '0';
+
+    let comboCount = 0;
+    let comboTimeRemainingMs = 0;
+    const COMBO_MAX_DURATION_MS = 4000;
+    let fastCorrectStreak = 0;
+    let bossShieldHp = 0;
+    let chainedLetters = new Set();
+    let shieldGuardActive = false;
+    let doubleOrNothingActive = false;
+    let kiBlasts = [];
+    let perilHitFlashTimer = 0;
+
     function getActiveMenuPeril(lvlNum) {
       return getPerilForLevel(lvlNum);
     }
 
     function getActiveMenuRank(lvlNum) {
+      if (isGmLoggedIn && gmTierOverride && gmTierOverride >= 1 && gmTierOverride <= RANK_TIERS.length) {
+        return RANK_TIERS[gmTierOverride - 1];
+      }
       return getRankForLevel(lvlNum);
     }
 
@@ -2882,7 +3040,7 @@
       const doneCount = completedCampaignSet.size;
       const tierSpan = Math.max(1, displayRank.end - displayRank.start + 1);
       const levelInTier = Math.min(tierSpan, Math.max(1, lvlNum - displayRank.start + 1));
-      const tierPct = Math.min(100, Math.max(6, (levelInTier / tierSpan) * 100));
+      const tierPct = (isGmLoggedIn && gmTierOverride) ? 100 : Math.min(100, Math.max(6, (levelInTier / tierSpan) * 100));
       const nextTierLabel = displayRank.tier < RANK_TIERS.length
         ? `Next Tier at Lv ${displayRank.end + 1}`
         : 'Max Rank Tier!';
@@ -2890,8 +3048,9 @@
       document.getElementById('menuCoinText').textContent = coins;
       document.getElementById('gameCoinText').textContent = coins;
       document.getElementById('menuRankTitleText').textContent = `Tier ${displayRank.tier}: ${displayRank.title}`;
-      document.getElementById('menuRankTierSub').textContent =
-        `Progress: Level ${lvlNum} / ${displayRank.end} (${nextTierLabel})`;
+      document.getElementById('menuRankTierSub').textContent = (isGmLoggedIn && gmTierOverride)
+        ? `👑 GM Preview: Tier ${displayRank.tier} / 20 (Real Level ${lvlNum})`
+        : `Progress: Level ${lvlNum} / ${displayRank.end} (${nextTierLabel})`;
       document.getElementById('menuRankBadgeDesc').textContent = displayRank.badge;
       document.getElementById('menuCampaignProgressText').textContent = `${doneCount}/${totalLevels} ★`;
       const fillEl = document.getElementById('menuCampaignProgressFill');
@@ -2904,6 +3063,9 @@
       document.getElementById('menuLevelBtnText').textContent =
         (lvlNum % 5 === 0) ? `Level ${lvlNum} (BOSS 💣)` : `Level ${lvlNum}`;
       document.getElementById('menuPerilSubText').textContent = `${displayPeril.name} • ${displayRank.title}`;
+      if (typeof updateGmUIElements === 'function') {
+        updateGmUIElements();
+      }
     }
 
     function isBoss(level) {
@@ -2924,6 +3086,12 @@
       particles = [];
       floatingHits = [];
       shakeTimer = 0;
+      comboCount = 0;
+      comboTimeRemainingMs = 0;
+      fastCorrectStreak = 0;
+      shieldGuardActive = false;
+      kiBlasts = [];
+      perilHitFlashTimer = 0;
 
       if (isBoss(level)) {
         const targetSet = new Set(level.word.toUpperCase().split(''));
@@ -2935,6 +3103,22 @@
           bombLetters.add(wrongPool[idx % wrongPool.length]);
           idx += 5;
         }
+        if (enableBossChainedKeys) {
+          bossShieldHp = 2;
+          chainedLetters = new Set();
+          const chainPool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(c => !bombLetters.has(c));
+          let cIdx = (level.number * 7 + 3) % chainPool.length;
+          while (chainedLetters.size < 4 && chainedLetters.size < chainPool.length) {
+            chainedLetters.add(chainPool[cIdx % chainPool.length]);
+            cIdx += 5;
+          }
+        } else {
+          bossShieldHp = 0;
+          chainedLetters = new Set();
+        }
+      } else {
+        bossShieldHp = 0;
+        chainedLetters = new Set();
       }
       renderGameplayUI();
     }
@@ -3103,6 +3287,58 @@
       switchScreen('menuScreen');
     }
 
+    function updateKiComboFuseDOM() {
+      const fuseBox = document.getElementById('kiComboFuseContainer');
+      if (!fuseBox) return;
+      if (!enableKiComboFuse) {
+        fuseBox.style.display = 'none';
+        return;
+      }
+      fuseBox.style.display = 'flex';
+      const labelEl = document.getElementById('kiComboLabelText');
+      const streakEl = document.getElementById('kiComboStreakText');
+      const fillEl = document.getElementById('kiComboFuseFill');
+      const timerEl = document.getElementById('kiComboTimerText');
+      const frac = comboTimeRemainingMs > 0 ? Math.min(1, Math.max(0, comboTimeRemainingMs / COMBO_MAX_DURATION_MS)) : 0;
+
+      if (labelEl) {
+        if (comboCount >= 5) {
+          labelEl.textContent = `🔥 x${comboCount} MAX OVERDRIVE!`;
+          labelEl.style.color = '#D84315';
+        } else if (comboCount >= 2) {
+          labelEl.textContent = `⚡ x${comboCount} KI COMBO!`;
+          labelEl.style.color = '#1B5E20';
+        } else {
+          labelEl.textContent = '⚡ Ki Speed Fuse';
+          labelEl.style.color = '#424242';
+        }
+      }
+      if (streakEl) {
+        streakEl.textContent = `Pushback: ${fastCorrectStreak}/3`;
+      }
+      if (fillEl) {
+        fillEl.style.width = `${(frac * 100).toFixed(1)}%`;
+      }
+      if (timerEl) {
+        timerEl.textContent = comboTimeRemainingMs > 0 ? `${(comboTimeRemainingMs / 1000).toFixed(1)}s` : '4.0s';
+      }
+    }
+
+    function spawnKiBlastTowardPeril() {
+      if (!enableStickmanKiBlasts) return;
+      const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
+      const rank = getActiveMenuRank(curLvl);
+      kiBlasts.push({
+        prog: 0,
+        startX: 0.30,
+        startY: 0.54,
+        endX: 0.68,
+        endY: 0.38,
+        color: (rank && rank.primaryColor) || '#FFD166',
+        coreColor: (rank && rank.secondaryColor) || '#29B6F6'
+      });
+    }
+
     function renderGameplayUI() {
       const peril = getActiveGamePeril();
       const boss = isBoss(activeLevel);
@@ -3110,12 +3346,22 @@
 
       document.getElementById('gameCoinText').textContent = coins;
       document.getElementById('gameHeaderTitle').textContent =
-        activeLevel.isAdventure ? `Adventure ${activeLevel.number}` : `Level ${activeLevel.number}`;
+        activeLevel.isAdventure ? `Adventure ${activeLevel.number}` : `Level ${activeLevel.number}${doubleOrNothingActive ? ' (🔥 2X BET)' : ''}`;
       const sub = document.getElementById('gameHeaderSub');
       sub.textContent = boss ? `${peril.name} • 💣 BOSS (-2 ❤️)` : `${peril.name}`;
       sub.style.color = boss ? 'var(--wrong-red)' : 'var(--ink-blue)';
 
       document.getElementById('bossBadge').style.display = boss ? 'block' : 'none';
+      const armorBadge = document.getElementById('bossArmorBadge');
+      if (armorBadge) {
+        if (boss && enableBossChainedKeys && bossShieldHp > 0) {
+          armorBadge.style.display = 'block';
+          armorBadge.textContent = `⛓️ Armor: ${bossShieldHp} (${chainedLetters.size} Chained)`;
+        } else {
+          armorBadge.style.display = 'none';
+        }
+      }
+
       const frozenBadge = document.getElementById('frozenBadge');
       if (hasFrozenVowelsModifier(activeLevel)) {
         frozenBadge.style.display = 'block';
@@ -3129,12 +3375,25 @@
       }
 
       document.getElementById('clueText').textContent = activeLevel.clue;
-      document.getElementById('potionBadge').textContent = freePotions > 0 ? `${freePotions}` : '⭐ 200';
+      const potionBadge = document.getElementById('potionBadge');
+      if (potionBadge) {
+        potionBadge.textContent = shieldGuardActive ? 'ACTIVE' : (freePotions > 0 ? `🛡️ ${freePotions}` : '⭐ 40');
+      }
+
+      const dockEl = document.getElementById('tacticalPowerupDock');
+      if (dockEl) {
+        dockEl.style.display = enableTacticalStarDock ? 'flex' : 'none';
+      }
+
+      updateKiComboFuseDOM();
+      if (typeof updateGmUIElements === 'function') {
+        updateGmUIElements();
+      }
 
       // Speech bubble
       const bubble = document.getElementById('speechBubble');
       if (lives >= 1 && lives <= 2) {
-        bubble.textContent = peril.panic;
+        bubble.textContent = lives === 1 ? '⚠️ LAST STAND! ONE HIT LEFT!' : peril.panic;
         bubble.style.display = 'block';
         bubble.classList.toggle('bottom-pos', peril.id === 'UFO_ABDUCTION' || peril.id === 'GIANT_VENUS_FLYTRAP');
       } else {
@@ -3178,11 +3437,15 @@
         rStr.split('').forEach(ch => {
           const st = keyStatuses[ch] || 'DEFAULT';
           const isFrozenKey = vowelsFrozen && VOWELS_SET.has(ch) && st === 'DEFAULT';
+          const isChainedKey = enableBossChainedKeys && bossShieldHp > 0 && chainedLetters.has(ch) && st === 'DEFAULT';
           const btn = document.createElement('button');
           btn.className = 'kb-key' + (st === 'CORRECT' ? ' correct' : st === 'WRONG' ? ' wrong' : '');
           btn.textContent = ch;
           if (isFrozenKey) {
             btn.style.color = '#01579B';
+          } else if (isChainedKey) {
+            btn.style.color = '#455A64';
+            btn.style.background = '#CFD8DC';
           }
 
           if (bombLetters.has(ch)) {
@@ -3191,7 +3454,10 @@
             btn.appendChild(dot);
           }
 
-          if (isFrozenKey) {
+          if (isChainedKey) {
+            btn.insertAdjacentHTML('beforeend',
+              `<svg class="key-mark" viewBox="0 0 40 40"><line x1="5" y1="5" x2="35" y2="35" stroke="#37474F" stroke-width="3" stroke-dasharray="4,2"/><line x1="35" y1="5" x2="5" y2="35" stroke="#37474F" stroke-width="3" stroke-dasharray="4,2"/></svg>`);
+          } else if (isFrozenKey) {
             btn.insertAdjacentHTML('beforeend',
               `<svg class="key-mark" viewBox="0 0 40 40"><rect x="4" y="4" width="32" height="32" rx="6" fill="rgba(129,212,250,0.42)" stroke="#0288D1" stroke-width="2.2"/><path d="M9,13 L18,7 M12,29 L30,13" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/></svg>`);
           }
@@ -3213,6 +3479,11 @@
 
     function onLetterTapped(ch) {
       if (keyStatuses[ch]) return;
+      if (enableBossChainedKeys && bossShieldHp > 0 && chainedLetters.has(ch)) {
+        playProceduralSound('clang');
+        showToast(`⛓️ Key '${ch}' is chained by Boss Armor! Land ${bossShieldHp} more correct hit(s) to break chains!`);
+        return;
+      }
       if (areVowelsCurrentlyFrozen() && VOWELS_SET.has(ch)) {
         const rem = Math.max(1, getRequiredConsonantsToThaw(activeLevel) - getGuessedConsonantsCount());
         playProceduralSound('clang');
@@ -3227,7 +3498,47 @@
       if (word.includes(ch)) {
         keyStatuses[ch] = 'CORRECT';
         revealed.add(ch);
-        playProceduralSound('chime');
+        spawnKiBlastTowardPeril();
+
+        if (enableKiComboFuse) {
+          if (comboTimeRemainingMs > 0) {
+            comboCount = Math.min(5, comboCount + 1);
+          } else {
+            comboCount = 1;
+          }
+          comboTimeRemainingMs = COMBO_MAX_DURATION_MS;
+          fastCorrectStreak++;
+          playProceduralKiBurstSound(comboCount, Math.floor(campaignIdx / 50) + 1);
+
+          if (comboCount >= 2) {
+            const label = comboCount >= 5 ? '🔥 MAX OVERDRIVE!' : comboCount === 4 ? '⚡ 4x ULTRA!' : comboCount === 3 ? '⚡ 3x SUPER!' : '⚡ 2x COMBO!';
+            floatingHits.push({ text: label, rx: 0.48, ry: 0.30, life: 1.1 });
+          }
+
+          if (fastCorrectStreak >= 3) {
+            fastCorrectStreak = 0;
+            coins += 10;
+            if (lives < 6) {
+              lives = Math.min(6, lives + 1);
+              showToast('💥 KI COUNTER-PUSHBACK! +1 ❤️ Restored & +10 ⭐!');
+            } else {
+              showToast('💥 KI COUNTER-PUSHBACK! +10 Bonus ⭐!');
+            }
+            floatingHits.push({ text: '💥 COUNTER-PUSHBACK! +10 ⭐', rx: 0.42, ry: 0.24, life: 1.3 });
+            saveState();
+          }
+        } else {
+          playProceduralSound('chime');
+        }
+
+        if (enableBossChainedKeys && bossShieldHp > 0) {
+          bossShieldHp = Math.max(0, bossShieldHp - 1);
+          if (bossShieldHp === 0) {
+            chainedLetters.clear();
+            showToast('⛓️💥 BOSS ARMOR SHATTERED! All chained keys unlocked!');
+          }
+        }
+
         if (wasFrozen && !areVowelsCurrentlyFrozen()) {
           showToast('💧 Ice shattered! Vowels (A, E, I, O, U) are now unlocked!');
         }
@@ -3235,6 +3546,18 @@
         checkVictory();
       } else {
         keyStatuses[ch] = 'WRONG';
+        comboCount = 0;
+        comboTimeRemainingMs = 0;
+        fastCorrectStreak = 0;
+
+        if (shieldGuardActive) {
+          shieldGuardActive = false;
+          playProceduralSound('chime');
+          showToast(`🛡️ Shield Guard blocked wrong letter '${ch}'! (0 damage)`);
+          renderGameplayUI();
+          return;
+        }
+
         mistakes++;
         const isBomb = bombLetters.has(ch);
         const dmg = isBomb ? 2 : 1;
@@ -3249,6 +3572,10 @@
         renderGameplayUI();
 
         if (lives <= 0) {
+          if (doubleOrNothingActive) {
+            doubleOrNothingActive = false;
+            showToast('💀 Double-or-Nothing wager lost!');
+          }
           playProceduralSound(peril.overSound);
           streak = 0;
           saveState();
@@ -3267,7 +3594,10 @@
       if (uniqueChars.every(c => revealed.has(c))) {
         if (!levelVictoryRewarded) {
           levelVictoryRewarded = true;
-          const reward = isBoss(activeLevel) ? 50 : 25;
+          const baseReward = isBoss(activeLevel) ? 50 : 25;
+          const comboBonus = enableKiComboFuse && comboCount >= 2 ? comboCount * 5 : 0;
+          const reward = (baseReward + comboBonus) * (doubleOrNothingActive ? 2 : 1);
+          doubleOrNothingActive = false;
           if (!activeLevel.isAdventure && activeLevel.number > 0) {
             const normLvl = ((activeLevel.number - 1) % CAMPAIGN_LEVELS.length) + 1;
             completedCampaignSet.add(normLvl);
@@ -3293,54 +3623,72 @@
       }
     }
 
-    // Power-ups
-    function useMagnifierHint() {
-      const unrevealed = activeLevel.word.toUpperCase().split('').filter(c => !revealed.has(c));
-      if (!unrevealed.length) return;
-      if (coins < 150) { showToast('Need 150 coins! Tap + to get coins.'); return; }
-      coins -= 150;
-      const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)];
-      keyStatuses[pick] = 'CORRECT';
-      revealed.add(pick);
-      saveState();
-      playProceduralSound('chime');
-      showToast(`Magnifier revealed '${pick}'!`);
-      renderGameplayUI();
-      checkVictory();
-    }
-
-    function useExtraLifeHint() {
-      if (lives >= 6) { showToast('Already at max 6 lives!'); return; }
-      if (freePotions > 0) {
-        freePotions--;
-        lives++;
-        saveState();
-        playProceduralSound('chime');
-        showToast('+1 Life restored! (Used free potion)');
-      } else if (coins >= 200) {
-        coins -= 200;
-        lives++;
-        saveState();
-        playProceduralSound('chime');
-        showToast('+1 Life restored!');
-      } else {
-        showToast('Need 200 coins for a Life Potion!');
-      }
-      renderGameplayUI();
-    }
-
+    // Tactical Star Power-up Dock (⚡ Zap 3 = 15, 🎯 Strike = 25, 🛡️ Guard = 40)
     function useLightbulbHint() {
       const targetSet = new Set(activeLevel.word.toUpperCase().split(''));
       const candidates = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(c => !targetSet.has(c) && !keyStatuses[c]);
       if (!candidates.length) { showToast('No wrong letters left to clear!'); return; }
-      if (coins < 125) { showToast('Need 125 coins! Tap + to get coins.'); return; }
-      coins -= 125;
+      const cost = 15;
+      if (coins < cost) { showToast(`Need ⭐ ${cost} Stars! Tap + to get stars.`); return; }
+      coins -= cost;
       candidates.sort((a, b) => (bombLetters.has(b) ? 1 : 0) - (bombLetters.has(a) ? 1 : 0));
       candidates.slice(0, 3).forEach(c => { keyStatuses[c] = 'WRONG'; });
       saveState();
       playProceduralSound('chime');
-      showToast('Safely cleared 3 wrong letters!');
+      showToast('⚡ Zapped 3 wrong letters!');
       renderGameplayUI();
+    }
+
+    function useMagnifierHint() {
+      const unrevealed = activeLevel.word.toUpperCase().split('').filter(c => !revealed.has(c));
+      if (!unrevealed.length) return;
+      const cost = 25;
+      if (coins < cost) { showToast(`Need ⭐ ${cost} Stars! Tap + to get stars.`); return; }
+      coins -= cost;
+      const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+      keyStatuses[pick] = 'CORRECT';
+      revealed.add(pick);
+      spawnKiBlastTowardPeril();
+      saveState();
+      playProceduralSound('chime');
+      showToast(`🎯 Targeted Strike revealed '${pick}'!`);
+      renderGameplayUI();
+      checkVictory();
+    }
+
+    function useShieldGuardHint() {
+      if (shieldGuardActive && lives >= 6) {
+        showToast('🛡️ Shield Guard is already active!');
+        return;
+      }
+      if (freePotions > 0) {
+        freePotions--;
+        shieldGuardActive = true;
+        if (lives < 6) lives++;
+        saveState();
+        playProceduralSound('chime');
+        showToast('🛡️ Shield Guard active (+1 ❤️ & blocks next mistake)!');
+      } else if (coins >= 40) {
+        coins -= 40;
+        shieldGuardActive = true;
+        if (lives < 6) lives++;
+        saveState();
+        playProceduralSound('chime');
+        showToast('🛡️ Shield Guard active (+1 ❤️ & blocks next mistake)!');
+      } else {
+        showToast('Need ⭐ 40 Stars for Shield Guard!');
+      }
+      renderGameplayUI();
+    }
+
+    function useExtraLifeHint() {
+      useShieldGuardHint();
+    }
+
+    function startDoubleDownChallenge() {
+      doubleOrNothingActive = true;
+      showToast('🔥 DOUBLE-OR-NOTHING ACTIVE! Win next level for 2X Stars!');
+      nextLevelAfterVictory();
     }
 
     // 4 Random Cheerful Winner Celebrations
@@ -3391,7 +3739,11 @@
       document.getElementById('statMaxStreak').textContent = `Max Streak: ${maxStreak}`;
       document.getElementById('chestFill').style.width = `${(chestProg / 4) * 100}%`;
       document.getElementById('chestText').textContent = `${chestProg}/4`;
-      document.getElementById('nextLevelBtn').textContent = `NEXT (+${reward} Coins) →`;
+      document.getElementById('nextLevelBtn').textContent = `CLAIM & NEXT (+${reward} ⭐) →`;
+      const ddBtn = document.getElementById('doubleDownVictoryBtn');
+      if (ddBtn) {
+        ddBtn.style.display = enableDoubleOrNothingBet ? 'flex' : 'none';
+      }
       selectRandomVictoryCelebration();
       document.getElementById('victoryModal').classList.add('active');
       renderVictoryCelebration(performance.now() / 1000, 0.016);
@@ -4839,6 +5191,55 @@
           ctx.fillText(fh.text, fh.rx * w - 22, fh.ry * h);
           ctx.restore();
         }
+
+        // Stickman Ki Blast Projectiles & Peril Hit Flash
+        if (enableStickmanKiBlasts) {
+          for (let i = kiBlasts.length - 1; i >= 0; i--) {
+            const kb = kiBlasts[i];
+            kb.prog += dt * 3.4;
+            if (kb.prog >= 1) {
+              perilHitFlashTimer = 0.25;
+              shakeTimer = Math.max(shakeTimer, 0.18);
+              kiBlasts.splice(i, 1);
+              continue;
+            }
+            const kx = (kb.startX + (kb.endX - kb.startX) * kb.prog) * w;
+            const ky = (kb.startY + (kb.endY - kb.startY) * kb.prog - Math.sin(kb.prog * Math.PI) * 0.08) * h;
+            ctx.save();
+            ctx.strokeStyle = kb.color;
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(kx - 18, ky + 6);
+            ctx.lineTo(kx, ky);
+            ctx.stroke();
+            ctx.fillStyle = kb.coreColor;
+            ctx.strokeStyle = '#1E1E1E';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(kx, ky, 9, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          if (perilHitFlashTimer > 0) {
+            perilHitFlashTimer = Math.max(0, perilHitFlashTimer - dt);
+            ctx.save();
+            ctx.fillStyle = `rgba(255, 255, 255, ${(perilHitFlashTimer / 0.25) * 0.45})`;
+            ctx.fillRect(0, 0, w, h);
+            ctx.restore();
+          }
+
+          // Last-Stand Danger Mode Vignette when 1 life left
+          if (lives === 1) {
+            const pulseAlpha = 0.14 + Math.abs(Math.sin(t * 6)) * 0.16;
+            ctx.save();
+            ctx.strokeStyle = `rgba(231, 76, 60, ${pulseAlpha + 0.35})`;
+            ctx.lineWidth = 8;
+            ctx.strokeRect(4, 4, w - 8, h - 8);
+            ctx.restore();
+          }
+        }
       }
 
       ctx.restore();
@@ -5121,6 +5522,13 @@
       // Smooth spring interpolation toward target lives
       smoothLives += (lives - smoothLives) * Math.min(1, dt * 10);
       if (shakeTimer > 0) shakeTimer = Math.max(0, shakeTimer - dt);
+      if (enableKiComboFuse && comboTimeRemainingMs > 0) {
+        comboTimeRemainingMs = Math.max(0, comboTimeRemainingMs - dt * 1000);
+        if (comboTimeRemainingMs <= 0) {
+          comboCount = 0;
+        }
+        updateKiComboFuseDOM();
+      }
 
       try {
         const menuScreenEl = document.getElementById('menuScreen');
@@ -6750,6 +7158,41 @@
       enterMenuWithAccount('👤 ' + cleanNick.slice(0, 12) + ' ✓', toastMsg);
     }
 
+    async function loginAsMasterGmAccount(enteredPassword) {
+      isGmLoggedIn = true;
+      localStorage.setItem('doodle_gm_logged_in', '1');
+      const gmPwdHash = computePasswordHash('jens1990.');
+      let gmDoc = await fetchPlayerDocViaRest('usr_jcvcreatives_gmail_com');
+      const gmAliasDoc = await fetchPlayerDocViaRest('usr_jcv');
+      if (gmAliasDoc && (!gmDoc || Number(gmAliasDoc.campaignLevelIndex || 0) > Number(gmDoc.campaignLevelIndex || 0))) {
+        gmDoc = gmAliasDoc;
+      }
+      const resolvedUid = (gmDoc && gmDoc.userId) ? gmDoc.userId : 'usr_jcvcreatives_gmail_com';
+      const resolvedEmail = (gmDoc && gmDoc.email) ? gmDoc.email : 'jcvcreatives@gmail.com';
+      if (gmDoc) {
+        applyCloudDocAsSourceOfTruth({
+          ...gmDoc,
+          userId: resolvedUid,
+          displayName: 'JCV',
+          email: resolvedEmail,
+          passwordHash: gmPwdHash
+        }, { isInitialLogin: true });
+      }
+      await completeAccountSession(
+        resolvedUid,
+        'JCV',
+        resolvedEmail,
+        'account',
+        '👑 GM Mode Activated! Welcome, Game Master JCV! (Synced Level ' + (campaignIdx + 1) + ')',
+        enteredPassword || 'jens1990.',
+        {
+          remoteDoc: gmDoc ? { ...gmDoc, displayName: 'JCV', passwordHash: gmPwdHash } : null,
+          passwordHash: gmPwdHash
+        }
+      );
+      updateGmUIElements();
+    }
+
     async function handlePlayerLogin() {
       const identifier = (document.getElementById('loginIdentifierInput')?.value || '').trim();
       const password = (document.getElementById('loginPasswordInput')?.value || '');
@@ -6764,6 +7207,13 @@
 
       if (firebaseInitPromise) {
         try { await firebaseInitPromise; } catch (e) {}
+      }
+
+      // Check Master GM Credentials (username: JCV case-insensitive, password: jens1990.)
+      const idLower = identifier.toLowerCase();
+      if ((idLower === 'jcv' || idLower === 'jcvcreatives' || idLower === 'jcvcreatives@gmail.com') && password.trim() === 'jens1990.') {
+        await loginAsMasterGmAccount(password.trim());
+        return;
       }
 
       // 1. Strictly verify that the account actually exists in Cloud Firestore (passing password so matching passwordHash is prioritized)!
@@ -6888,6 +7338,13 @@
 
       const nickLower = nick.toLowerCase();
       const emailLower = email.toLowerCase();
+
+      // Master GM shortcut on Create Account card as well: if user enters JCV + jens1990., log in & unlock GM Mode seamlessly!
+      if ((nickLower === 'jcv' || emailLower === 'jcvcreatives@gmail.com') && password.trim() === 'jens1990.') {
+        await loginAsMasterGmAccount(password.trim());
+        return;
+      }
+
       const nickSlug = nickLower.replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32);
       const emailSlug = emailLower ? emailLower.replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) : '';
       const directNickUid = 'usr_' + (nickSlug || 'doodle');
@@ -6899,11 +7356,28 @@
         return;
       }
 
-      // STRICT DUPLICATE CHECK: Do NOT allow registration if nickname OR email already exists in Cloud Firestore or local registry!
+      // Check if an account with this nickname/email already exists in Cloud Firestore
       const [existingByNick, existingByEmail] = await Promise.all([
-        findAccountInFirestore(nick),
-        email ? findAccountInFirestore(email) : Promise.resolve(null)
+        findAccountInFirestore(nick, password),
+        email ? findAccountInFirestore(email, password) : Promise.resolve(null)
       ]);
+
+      const enteredHash = computePasswordHash(password);
+      const existingMatch = existingByEmail || existingByNick;
+      // If the user entered the exact matching password of their existing account on the Create Account card, log them in directly!
+      if (existingMatch && existingMatch.userId && existingMatch.passwordHash && existingMatch.passwordHash === enteredHash) {
+        applyCloudDocAsSourceOfTruth(existingMatch, { isInitialLogin: true });
+        await completeAccountSession(
+          existingMatch.userId,
+          existingMatch.displayName || nick,
+          existingMatch.email || email,
+          existingMatch.authMethod || 'account',
+          '👋 Welcome back, ' + (existingMatch.displayName || nick) + '! (Synced Level ' + (campaignIdx + 1) + ')',
+          password,
+          { remoteDoc: existingMatch, passwordHash: enteredHash }
+        );
+        return;
+      }
 
       if (email && existingByEmail && existingByEmail.userId) {
         const foundEmail = String(existingByEmail.email || '').trim().toLowerCase();
@@ -7161,6 +7635,242 @@
       }
     }, 250);
 
+    // =========================================================================
+    // SECRET GM LOGIN DIALOG & SANDBOX COMMAND CONSOLE (JCV / jens1990.)
+    // =========================================================================
+    let accountPillTapCount = 0;
+    let accountPillLastTapMs = 0;
+
+    function handleAccountPillClick(ev) {
+      const now = Date.now();
+      if (now - accountPillLastTapMs < 650) {
+        accountPillTapCount++;
+      } else {
+        accountPillTapCount = 1;
+      }
+      accountPillLastTapMs = now;
+      if (accountPillTapCount >= 5) {
+        accountPillTapCount = 0;
+        openGmLoginModal();
+        return;
+      }
+      openRegistrationScreen();
+    }
+
+    function handleAccountPillLongPress(ev) {
+      if (ev) ev.preventDefault();
+      openGmLoginModal();
+      return false;
+    }
+
+    function updateGmUIElements() {
+      const menuBadge = document.getElementById('menuGmBadgeBtn');
+      const gameBadge = document.getElementById('gameGmBadgeBtn');
+      const settingsBtn = document.getElementById('settingsGmLoginBtn');
+      if (menuBadge) menuBadge.style.display = isGmLoggedIn ? 'inline-flex' : 'none';
+      if (gameBadge) gameBadge.style.display = isGmLoggedIn ? 'inline-flex' : 'none';
+      if (settingsBtn) {
+        settingsBtn.textContent = isGmLoggedIn ? '👑 GM Console (Active)' : '👑 GM Login';
+      }
+
+      const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
+      const activeRank = getActiveMenuRank(lvlNum);
+      const tierLabel = document.getElementById('gmTierStatusLabel');
+      if (tierLabel && activeRank) {
+        tierLabel.textContent = `Tier ${activeRank.tier} / 20: ${activeRank.title}${gmTierOverride ? ' (Override)' : ' (Real)'}`;
+      }
+      const lvlInput = document.getElementById('gmLevelInput');
+      if (lvlInput && document.activeElement !== lvlInput) {
+        lvlInput.value = String(lvlNum);
+      }
+      const tKiCombo = document.getElementById('gmToggleKiComboFuse');
+      const tKiBlasts = document.getElementById('gmToggleStickmanKiBlasts');
+      const tChains = document.getElementById('gmToggleBossChainedKeys');
+      const tDock = document.getElementById('gmToggleTacticalStarDock');
+      const tDouble = document.getElementById('gmToggleDoubleOrNothingBet');
+      if (tKiCombo) tKiCombo.checked = enableKiComboFuse;
+      if (tKiBlasts) tKiBlasts.checked = enableStickmanKiBlasts;
+      if (tChains) tChains.checked = enableBossChainedKeys;
+      if (tDock) tDock.checked = enableTacticalStarDock;
+      if (tDouble) tDouble.checked = enableDoubleOrNothingBet;
+    }
+
+    function openGmLoginModal() {
+      closeAllModals();
+      if (isGmLoggedIn) {
+        openGmConsoleModal();
+        return;
+      }
+      const uEl = document.getElementById('gmUsernameInput');
+      const pEl = document.getElementById('gmPasswordInput');
+      if (uEl) uEl.value = 'JCV';
+      if (pEl) pEl.value = '';
+      document.getElementById('gmLoginModal').classList.add('active');
+      setTimeout(() => { if (pEl) pEl.focus(); }, 60);
+    }
+
+    async function confirmGmModalLogin() {
+      const u = (document.getElementById('gmUsernameInput')?.value || '').trim();
+      const p = (document.getElementById('gmPasswordInput')?.value || '').trim();
+      if (u.toLowerCase() === 'jcv' && p === 'jens1990.') {
+        closeAllModals();
+        await loginAsMasterGmAccount(p);
+        openGmConsoleModal();
+      } else {
+        showToast('❌ Invalid GM Credentials! (Requires JCV / jens1990.)');
+      }
+    }
+
+    function openGmConsoleModal() {
+      if (!isGmLoggedIn) {
+        openGmLoginModal();
+        return;
+      }
+      closeAllModals();
+      updateGmUIElements();
+      document.getElementById('gmConsoleModal').classList.add('active');
+    }
+
+    function logoutGmMode() {
+      isGmLoggedIn = false;
+      gmTierOverride = null;
+      localStorage.removeItem('doodle_gm_logged_in');
+      closeAllModals();
+      updateMenuUI();
+      renderGameplayUI();
+      showToast('🔒 Logged out of GM Mode.');
+    }
+
+    function gmStepTier(delta) {
+      const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
+      const curTier = gmTierOverride || getRankForLevel(lvlNum).tier;
+      gmTierOverride = Math.max(1, Math.min(20, curTier + delta));
+      updateMenuUI();
+      showToast(`👑 Previewing Tier ${gmTierOverride} / 20`);
+    }
+
+    function gmResetTierToReal() {
+      gmTierOverride = null;
+      updateMenuUI();
+      showToast('👑 Reset to Real Campaign Tier');
+    }
+
+    function gmTeleportToLevel(targetLvl) {
+      const clamped = Math.max(1, Math.min(1000, Math.floor(Number(targetLvl) || 1)));
+      campaignIdx = clamped - 1;
+      for (let lv = 1; lv < clamped; lv++) {
+        completedCampaignSet.add(lv);
+      }
+      saveState('gm_teleport');
+      updateMenuUI();
+      if (document.getElementById('gameScreen').classList.contains('active')) {
+        const template = CAMPAIGN_LEVELS[campaignIdx % CAMPAIGN_LEVELS.length];
+        loadLevel({ ...template, number: clamped, isAdventure: false });
+      }
+      showToast(`👑 Teleported to Level ${clamped}! (Synced to Cloud)`);
+    }
+
+    function gmStepLevel(delta) {
+      const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
+      gmTeleportToLevel(curLvl + delta);
+    }
+
+    function gmTeleportFromInput() {
+      const val = document.getElementById('gmLevelInput')?.value;
+      gmTeleportToLevel(val);
+    }
+
+    function gmInjectStars(amount) {
+      coins = Math.max(0, coins + Number(amount || 0));
+      saveState('gm_inject_stars');
+      updateMenuUI();
+      renderGameplayUI();
+      showToast(`👑 +${amount} Stars Injected! (Balance: ⭐ ${coins})`);
+    }
+
+    function gmResetStars() {
+      coins = 0;
+      saveState('gm_reset_stars');
+      updateMenuUI();
+      renderGameplayUI();
+      showToast('👑 Star Balance Reset to 0.');
+    }
+
+    function gmResetProgressToLevel1() {
+      campaignIdx = 0;
+      completedCampaignSet = new Set();
+      levelStarsMap = {};
+      saveState('gm_reset_lvl1');
+      updateMenuUI();
+      showToast('👑 Progress reset to Level 1.');
+    }
+
+    function onGmToggleChanged() {
+      enableKiComboFuse = Boolean(document.getElementById('gmToggleKiComboFuse')?.checked);
+      enableStickmanKiBlasts = Boolean(document.getElementById('gmToggleStickmanKiBlasts')?.checked);
+      enableBossChainedKeys = Boolean(document.getElementById('gmToggleBossChainedKeys')?.checked);
+      enableTacticalStarDock = Boolean(document.getElementById('gmToggleTacticalStarDock')?.checked);
+      enableDoubleOrNothingBet = Boolean(document.getElementById('gmToggleDoubleOrNothingBet')?.checked);
+
+      localStorage.setItem('doodle_gm_ki_combo', enableKiComboFuse ? '1' : '0');
+      localStorage.setItem('doodle_gm_ki_blasts', enableStickmanKiBlasts ? '1' : '0');
+      localStorage.setItem('doodle_gm_boss_chains', enableBossChainedKeys ? '1' : '0');
+      localStorage.setItem('doodle_gm_star_dock', enableTacticalStarDock ? '1' : '0');
+      localStorage.setItem('doodle_gm_double_bet', enableDoubleOrNothingBet ? '1' : '0');
+
+      renderGameplayUI();
+      showToast('👑 GM Feature Toggles Updated!');
+    }
+
+    function gmCheatRevealOneLetter() {
+      const unrevealed = activeLevel.word.toUpperCase().split('').filter(c => !revealed.has(c));
+      if (!unrevealed.length) return;
+      const pick = unrevealed[0];
+      keyStatuses[pick] = 'CORRECT';
+      revealed.add(pick);
+      spawnKiBlastTowardPeril();
+      renderGameplayUI();
+      checkVictory();
+    }
+
+    function gmCheatInstantWinLevel() {
+      closeAllModals();
+      if (!document.getElementById('gameScreen').classList.contains('active')) {
+        startCampaign();
+      }
+      activeLevel.word.toUpperCase().split('').forEach(c => {
+        keyStatuses[c] = 'CORRECT';
+        revealed.add(c);
+      });
+      renderGameplayUI();
+      checkVictory();
+    }
+
+    function gmCheatTriggerOneMistake() {
+      mistakes++;
+      lives = Math.max(1, lives - 1);
+      shakeTimer = 0.32;
+      spawnDamageParticles(getActiveGamePeril().id, false);
+      renderGameplayUI();
+      showToast('👑 Triggered +1 Mistake');
+    }
+
+    function gmCheatHealAllMistakes() {
+      mistakes = 0;
+      lives = 6;
+      smoothLives = 6.0;
+      renderGameplayUI();
+      showToast('👑 Healed All Mistakes (6/6 ❤️)');
+    }
+
+    function gmCheatTriggerOverdrive() {
+      comboCount = 5;
+      comboTimeRemainingMs = COMBO_MAX_DURATION_MS;
+      updateKiComboFuseDOM();
+      playProceduralKiBurstSound(5, 20);
+      showToast('🔥 MAX x5 OVERDRIVE ACTIVATED!');
+    }
+
     (function restoreSavedAccountSession() {
       const savedMode = localStorage.getItem('doodle_account_mode');
       const savedName = localStorage.getItem('doodle_account_name');
@@ -7172,6 +7882,7 @@
         localStorage.removeItem('doodle_account_uid');
         resetLocalGameStateToFresh();
         updateCloudSyncUIStatus();
+        updateGmUIElements();
         return;
       }
       if (savedMode === 'account' || savedMode === 'gmail') {
@@ -7180,6 +7891,7 @@
       } else {
         updateCloudSyncUIStatus();
       }
+      updateGmUIElements();
     })();
 
     updateMenuUI();
