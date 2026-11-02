@@ -37,8 +37,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -71,7 +73,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -1381,6 +1386,29 @@ class WordGameViewModel : ViewModel() {
     var showSettingsDialog by mutableStateOf(false)
     var showCoinShopDialog by mutableStateOf(false)
 
+    // ========================================================================
+    // GM (GAME MASTER) ACCOUNT LOGIN & LIVE SANDBOX CONSOLE STATE
+    // ========================================================================
+    var isGmLoggedIn by mutableStateOf(false)
+        private set
+    var showGmLoginDialog by mutableStateOf(false)
+    var showGmConsoleDrawer by mutableStateOf(false)
+    var gmLoginErrorMessage by mutableStateOf<String?>(null)
+    var gmTierOverride by mutableStateOf<Int?>(null)
+        private set
+
+    // 5 Experimental Gameplay Feature Toggles (Default true, persisted in SharedPreferences)
+    var gmToggleKiComboFuse by mutableStateOf(true)
+        private set
+    var gmToggleStickmanKiBlasts by mutableStateOf(true)
+        private set
+    var gmToggleBossChainedKeys by mutableStateOf(true)
+        private set
+    var gmToggleTacticalStarDock by mutableStateOf(true)
+        private set
+    var gmToggleDoubleOrNothingBet by mutableStateOf(true)
+        private set
+
     // Active Round State
     var activeLevel by mutableStateOf(CAMPAIGN_LEVELS[0])
         private set
@@ -1481,8 +1509,18 @@ class WordGameViewModel : ViewModel() {
     val currentCampaignLevelNumber: Int
         get() = campaignLevelIndex + 1
 
+    val realTierIndex: Int
+        get() = ((currentCampaignLevelNumber - 1) / 50 + 1).coerceIn(1, 20)
+
+    val activeDisplayTier: Int
+        get() = if (isGmLoggedIn && gmTierOverride != null) {
+            gmTierOverride!!.coerceIn(1, 20)
+        } else {
+            realTierIndex
+        }
+
     val currentRankTier: RankTier
-        get() = RankTier.forLevel(currentCampaignLevelNumber)
+        get() = RankTier.entries[(activeDisplayTier - 1).coerceIn(0, RankTier.entries.lastIndex)]
 
     var gameplayPerilOverride by mutableStateOf<PerilType?>(null)
         private set
@@ -1534,6 +1572,14 @@ class WordGameViewModel : ViewModel() {
         chestProgress = prefs.getInt("chestProgress", 1)
         themeProgress = prefs.getInt("themeProgress", 1)
         freeShieldPotions = prefs.getInt("freeShieldPotions", 2)
+
+        // Hydrate GM authentication & experimental gameplay feature toggles
+        isGmLoggedIn = prefs.getBoolean("isGmLoggedIn", false)
+        gmToggleKiComboFuse = prefs.getBoolean("gmToggleKiComboFuse", true)
+        gmToggleStickmanKiBlasts = prefs.getBoolean("gmToggleStickmanKiBlasts", true)
+        gmToggleBossChainedKeys = prefs.getBoolean("gmToggleBossChainedKeys", true)
+        gmToggleTacticalStarDock = prefs.getBoolean("gmToggleTacticalStarDock", true)
+        gmToggleDoubleOrNothingBet = prefs.getBoolean("gmToggleDoubleOrNothingBet", true)
 
         val completedRaw = prefs.getString("completedLevels", "") ?: ""
         completedCampaignLevels.clear()
@@ -2248,6 +2294,12 @@ class WordGameViewModel : ViewModel() {
             .putInt("chestProgress", chestProgress)
             .putInt("themeProgress", themeProgress)
             .putInt("freeShieldPotions", freeShieldPotions)
+            .putBoolean("isGmLoggedIn", isGmLoggedIn)
+            .putBoolean("gmToggleKiComboFuse", gmToggleKiComboFuse)
+            .putBoolean("gmToggleStickmanKiBlasts", gmToggleStickmanKiBlasts)
+            .putBoolean("gmToggleBossChainedKeys", gmToggleBossChainedKeys)
+            .putBoolean("gmToggleTacticalStarDock", gmToggleTacticalStarDock)
+            .putBoolean("gmToggleDoubleOrNothingBet", gmToggleDoubleOrNothingBet)
             .putString("completedLevels", completedCampaignLevels.joinToString(","))
             .putString("levelStars", levelStarRatings.entries.joinToString(",") { "${it.key}:${it.value}" })
             .putString("claimedChests", claimedMilestoneChests.joinToString(","))
@@ -2416,6 +2468,26 @@ class WordGameViewModel : ViewModel() {
         startCampaignLevel()
     }
 
+    private fun populateBossChainedKeysForLevel(level: WordLevel) {
+        chainedBossKeys.clear()
+        if (!level.isBossLevel || !gmToggleBossChainedKeys || bossChainsShattered) return
+        val chainPool = ('A'..'Z').filter {
+            !bombLetters.contains(it) &&
+                (!level.hasFrozenVowels || it !in VOWELS) &&
+                (keyStatuses[it] == null || keyStatuses[it] == KeyStatus.DEFAULT)
+        }
+        val pickedChains = mutableListOf<Char>()
+        var cIdx = (level.number * 7 + 2) % chainPool.size.coerceAtLeast(1)
+        while (pickedChains.size < 4 && pickedChains.size < chainPool.size) {
+            val cand = chainPool[cIdx % chainPool.size]
+            if (!pickedChains.contains(cand)) {
+                pickedChains.add(cand)
+            }
+            cIdx += 7
+        }
+        chainedBossKeys.addAll(pickedChains)
+    }
+
     private fun loadLevel(level: WordLevel) {
         activeLevel = level
         maxBalloons = 6
@@ -2442,7 +2514,7 @@ class WordGameViewModel : ViewModel() {
         hintSparkRemainingMs = 0L
 
         // Double-or-Nothing starting Ki Combo x2 hook
-        if (isDoubleDownActive) {
+        if (isDoubleDownActive && gmToggleKiComboFuse) {
             comboCount = 2
             consecutiveFastStreak = 2
             comboFuseRemainingMs = 4000L
@@ -2475,26 +2547,13 @@ class WordGameViewModel : ViewModel() {
             bossArmorShieldMaxHits = 2
             bossArmorShieldHits = 2
 
-            // Pick 4 unguessed keyboard letters (excluding bombLetters and frozen vowels) for Boss Chains
-            val chainPool = ('A'..'Z').filter {
-                !bombLetters.contains(it) && (!level.hasFrozenVowels || it !in VOWELS)
-            }
-            val pickedChains = mutableListOf<Char>()
-            var cIdx = (level.number * 7 + 2) % chainPool.size.coerceAtLeast(1)
-            while (pickedChains.size < 4 && pickedChains.size < chainPool.size) {
-                val cand = chainPool[cIdx % chainPool.size]
-                if (!pickedChains.contains(cand)) {
-                    pickedChains.add(cand)
-                }
-                cIdx += 7
-            }
             if (comboCount >= 2) {
                 // Double-Down starts at 2x combo, immediately shattering chains!
                 bossChainsShattered = true
                 chainShatterTrigger++
             } else {
                 bossChainsShattered = false
-                chainedBossKeys.addAll(pickedChains)
+                populateBossChainedKeysForLevel(level)
             }
         } else {
             bossChainsShattered = false
@@ -2531,8 +2590,9 @@ class WordGameViewModel : ViewModel() {
     private fun updateBossArmorShieldAndChainsOnCorrectGuess() {
         if (!activeLevel.isBossLevel) return
 
-        // Shatter Boss Chains when player reaches 2x Combo
-        if (!bossChainsShattered && comboCount >= 2) {
+        // Shatter Boss Chains when player reaches 2x Combo (or after 2 correct letters if Ki Combo Fuse is toggled off)
+        val solvedDistinctCount = revealedChars.size
+        if (!bossChainsShattered && (comboCount >= 2 || (!gmToggleKiComboFuse && solvedDistinctCount >= 2))) {
             bossChainsShattered = true
             chainedBossKeys.clear()
             chainShatterTrigger++
@@ -2589,23 +2649,29 @@ class WordGameViewModel : ViewModel() {
                 hintSparkRemainingMs = 0L
             }
 
-            // 1. Real-Time Ki Combo Escalation (x1 to x5 OVERDRIVE) + 4.0s Fuse Refill
-            comboCount = (comboCount + 1).coerceAtMost(5)
-            consecutiveFastStreak++
-            comboFuseRemainingMs = 4000L
-            kiAttackTrigger++
+            // 1. Real-Time Ki Combo Escalation (x1 to x5 OVERDRIVE) + 4.0s Fuse Refill (if toggle enabled)
+            if (gmToggleKiComboFuse) {
+                comboCount = (comboCount + 1).coerceAtMost(5)
+                consecutiveFastStreak++
+                comboFuseRemainingMs = 4000L
 
-            comboPopupText = when (comboCount) {
-                1 -> "1x KI SPARK!"
-                2 -> "2x COMBO!"
-                3 -> "3x SUPER!"
-                4 -> "4x ULTRA!"
-                else -> "MAX OVERDRIVE!"
+                comboPopupText = when (comboCount) {
+                    1 -> "1x KI SPARK!"
+                    2 -> "2x COMBO!"
+                    3 -> "3x SUPER!"
+                    4 -> "4x ULTRA!"
+                    else -> "MAX OVERDRIVE!"
+                }
+                comboPopupTrigger++
             }
-            comboPopupTrigger++
+
+            // 2. Stickman Ki Blast Projectile Attack at Peril (if toggle enabled)
+            if (gmToggleStickmanKiBlasts) {
+                kiAttackTrigger++
+            }
 
             // Play ascending procedural AudioTrack power chime (also sets lastPlayedEffect = CHIME)
-            ProceduralSoundEngine.playComboPowerChime(comboCount)
+            ProceduralSoundEngine.playComboPowerChime(comboCount.coerceAtLeast(1))
 
             if (wasFrozenBefore && !areVowelsFrozen) {
                 statusBannerMessage = "💧 Ice shattered! Vowels (A, E, I, O, U) are now THAWED!"
@@ -2615,7 +2681,7 @@ class WordGameViewModel : ViewModel() {
             updateBossArmorShieldAndChainsOnCorrectGuess()
 
             // Counter-Pushback Mechanic: Every 3-streak of fast correct guesses without a mistake!
-            if (consecutiveFastStreak > 0 && consecutiveFastStreak % 3 == 0) {
+            if (gmToggleKiComboFuse && consecutiveFastStreak > 0 && consecutiveFastStreak % 3 == 0) {
                 counterPushbackTrigger++
                 if (balloonsRemaining < maxBalloons) {
                     balloonsRemaining = (balloonsRemaining + 1).coerceAtMost(maxBalloons)
@@ -2634,7 +2700,7 @@ class WordGameViewModel : ViewModel() {
                 inkShieldActive = false
                 inkShieldAbsorbTrigger++
                 keyStatuses[upper] = KeyStatus.WRONG
-                if (comboFuseRemainingMs > 0L) {
+                if (gmToggleKiComboFuse && comboFuseRemainingMs > 0L) {
                     comboFuseRemainingMs = 4000L // Keep combo streak alive!
                 }
                 comboPopupText = "🛡️ SHIELD ABSORBED '$upper'!"
@@ -2721,7 +2787,7 @@ class WordGameViewModel : ViewModel() {
     // =========================================================================
 
     /**
-     * 1. ⚡ Ki Blast (Cost: 30 Stars):
+     * 1. ⚡ Ki Strike / Ki Blast (Cost: 30 Stars):
      * Vaporizes 3 random incorrect letters from the keyboard with lightning doodle effects
      * and reveals 1 correct letter in the word.
      */
@@ -2729,7 +2795,7 @@ class WordGameViewModel : ViewModel() {
         if (roundOutcome != RoundOutcome.PLAYING) return
         val cost = 30
         if (coins < cost) {
-            statusBannerMessage = "⚡ Need $cost ★ Stars for Ki Blast! Tap + to get Stars."
+            statusBannerMessage = "⚡ Need $cost ★ Stars for Ki Strike! Tap + to get Stars."
             return
         }
         val targetChars = activeLevel.word.uppercase().filter { it in 'A'..'Z' }.toSet()
@@ -2768,17 +2834,21 @@ class WordGameViewModel : ViewModel() {
         }
 
         kiBlastVaporizeTrigger++
-        kiAttackTrigger++
-        comboCount = (comboCount + 1).coerceAtMost(5)
-        comboFuseRemainingMs = 4000L
-        comboPopupText = "⚡ KI BLAST! '${revealedLetter ?: '!'}'"
-        comboPopupTrigger++
+        if (gmToggleStickmanKiBlasts) {
+            kiAttackTrigger++
+        }
+        if (gmToggleKiComboFuse) {
+            comboCount = (comboCount + 1).coerceAtMost(5)
+            comboFuseRemainingMs = 4000L
+            comboPopupText = "⚡ KI STRIKE! '${revealedLetter ?: '!'}'"
+            comboPopupTrigger++
+        }
         updateBossArmorShieldAndChainsOnCorrectGuess()
 
         statusBannerMessage = if (revealedLetter != null) {
-            "⚡ KI BLAST! Vaporized ${toVaporize.size} wrong keys & revealed '$revealedLetter'!"
+            "⚡ KI STRIKE! Vaporized ${toVaporize.size} wrong keys & revealed '$revealedLetter'!"
         } else {
-            "⚡ KI BLAST! Vaporized ${toVaporize.size} wrong keys!"
+            "⚡ KI STRIKE! Vaporized ${toVaporize.size} wrong keys!"
         }
         ProceduralSoundEngine.play(DoodleSoundEffect.ZAP)
         saveStateToPrefs()
@@ -2859,7 +2929,7 @@ class WordGameViewModel : ViewModel() {
         val payout = currentLevelStarPayout
         val chestBonus = if (chestProgress == 4) 100 else 0
 
-        if (doubleDownNextLevel) {
+        if (doubleDownNextLevel && gmToggleDoubleOrNothingBet) {
             val wager = (payout / 2).coerceAtLeast(5)
             val bankedNow = (payout - wager).coerceAtLeast(0)
             coins += bankedNow + chestBonus
@@ -2923,6 +2993,207 @@ class WordGameViewModel : ViewModel() {
 
     fun clearBannerMessage() {
         statusBannerMessage = null
+    }
+
+    // =========================================================================
+    // GM (GAME MASTER) AUTHENTICATION, SANDBOX MANIPULATORS, TOGGLES & CHEATS
+    // =========================================================================
+
+    fun openGmLoginDialog() {
+        gmLoginErrorMessage = null
+        if (isGmLoggedIn) {
+            showGmConsoleDrawer = true
+        } else {
+            showGmLoginDialog = true
+        }
+    }
+
+    fun authenticateGm(username: String, password: String): Boolean {
+        val cleanUser = username.trim()
+        val isValid = cleanUser.equals("JCV", ignoreCase = true) && password == "jens1990."
+        return if (isValid) {
+            isGmLoggedIn = true
+            gmLoginErrorMessage = null
+            showGmLoginDialog = false
+            showGmConsoleDrawer = true
+            writeLocalStorageOnly()
+            ProceduralSoundEngine.play(DoodleSoundEffect.VICTORY)
+            statusBannerMessage = "👑 GM Mode Activated! Welcome, Game Master JCV!"
+            true
+        } else {
+            gmLoginErrorMessage = "❌ Invalid GM Credentials! (Requires JCV + exact password)"
+            false
+        }
+    }
+
+    fun logoutGm() {
+        isGmLoggedIn = false
+        showGmConsoleDrawer = false
+        showGmLoginDialog = false
+        gmLoginErrorMessage = null
+        gmTierOverride = null
+        writeLocalStorageOnly()
+        statusBannerMessage = "🔒 Logged out of GM Mode"
+    }
+
+    // --- A. Home Screen & Account Manipulators ---
+    fun gmStepTier(delta: Int) {
+        if (!isGmLoggedIn) return
+        val next = ((activeDisplayTier - 1 + delta + 20) % 20) + 1
+        gmTierOverride = next
+        val rank = RankTier.entries[(next - 1).coerceIn(0, RankTier.entries.lastIndex)]
+        ProceduralSoundEngine.play(DoodleSoundEffect.CHIME)
+        statusBannerMessage = "👑 Previewing Tier $next / 20: ${rank.title}"
+    }
+
+    fun gmResetTierToReal() {
+        if (!isGmLoggedIn) return
+        gmTierOverride = null
+        statusBannerMessage = "👑 Reset to Real Tier ($realTierIndex / 20: ${RankTier.forLevel(currentCampaignLevelNumber).title})"
+    }
+
+    fun gmTeleportToLevel(targetLevel: Int) {
+        if (!isGmLoggedIn) return
+        val clamped = targetLevel.coerceIn(1, CAMPAIGN_LEVELS.size)
+        campaignLevelIndex = clamped - 1
+        gmTierOverride = null
+        loadLevel(CAMPAIGN_LEVELS[campaignLevelIndex])
+        saveStateToPrefs()
+        statusBannerMessage = "👑 Teleported to Level $clamped (Tier $realTierIndex)!"
+    }
+
+    fun gmStepLevel(delta: Int) {
+        if (!isGmLoggedIn) return
+        val target = (currentCampaignLevelNumber + delta).coerceIn(1, CAMPAIGN_LEVELS.size)
+        gmTeleportToLevel(target)
+    }
+
+    fun gmInjectStars(amount: Int = 1000) {
+        if (!isGmLoggedIn) return
+        coins = (coins + amount).coerceAtLeast(0)
+        ProceduralSoundEngine.play(DoodleSoundEffect.CHIME)
+        saveStateToPrefs()
+        statusBannerMessage = "👑 +$amount ⭐ Injected! (Balance: $coins ⭐)"
+    }
+
+    fun gmResetStars() {
+        if (!isGmLoggedIn) return
+        coins = 0
+        saveStateToPrefs()
+        statusBannerMessage = "👑 Stars reset to 0 ⭐"
+    }
+
+    // --- B. Experimental Gameplay Feature Toggles (Persisted in SharedPreferences) ---
+    fun setGmToggleKiComboFuseState(enabled: Boolean) {
+        gmToggleKiComboFuse = enabled
+        if (!enabled) {
+            comboCount = 0
+            consecutiveFastStreak = 0
+            comboFuseRemainingMs = 0L
+            comboPopupText = null
+        }
+        writeLocalStorageOnly()
+    }
+
+    fun setGmToggleStickmanKiBlastsState(enabled: Boolean) {
+        gmToggleStickmanKiBlasts = enabled
+        writeLocalStorageOnly()
+    }
+
+    fun setGmToggleBossChainedKeysState(enabled: Boolean) {
+        gmToggleBossChainedKeys = enabled
+        if (!enabled) {
+            chainedBossKeys.clear()
+        } else if (activeLevel.isBossLevel && !bossChainsShattered) {
+            populateBossChainedKeysForLevel(activeLevel)
+        }
+        writeLocalStorageOnly()
+    }
+
+    fun setGmToggleTacticalStarDockState(enabled: Boolean) {
+        gmToggleTacticalStarDock = enabled
+        writeLocalStorageOnly()
+    }
+
+    fun setGmToggleDoubleOrNothingBetState(enabled: Boolean) {
+        gmToggleDoubleOrNothingBet = enabled
+        if (!enabled) {
+            isDoubleDownActive = false
+            doubleDownWageredStars = 0
+        }
+        writeLocalStorageOnly()
+    }
+
+    // --- C. In-Game Quick Cheats ---
+    fun gmCheatRevealOneLetter() {
+        if (!isGmLoggedIn) return
+        if (currentScreen != ScreenState.GAMEPLAY) {
+            startCampaignLevel()
+        }
+        if (roundOutcome != RoundOutcome.PLAYING) return
+        val targetChars = activeLevel.word.uppercase().filter { it in 'A'..'Z' }.toSet()
+        val unrevealed = targetChars.filter { !revealedChars.contains(it) }
+        if (unrevealed.isEmpty()) return
+        val picked = unrevealed.first()
+        keyStatuses[picked] = KeyStatus.CORRECT
+        revealedChars.add(picked)
+        chainedBossKeys.remove(picked)
+        if (gmToggleStickmanKiBlasts) kiAttackTrigger++
+        updateBossArmorShieldAndChainsOnCorrectGuess()
+        statusBannerMessage = "👑 GM Cheat: Revealed '$picked'!"
+        checkVictoryCondition()
+    }
+
+    fun gmCheatInstantWinLevel() {
+        if (!isGmLoggedIn) return
+        if (currentScreen != ScreenState.GAMEPLAY) {
+            startCampaignLevel()
+        }
+        val targetChars = activeLevel.word.uppercase().filter { it in 'A'..'Z' }.toSet()
+        targetChars.forEach { ch ->
+            keyStatuses[ch] = KeyStatus.CORRECT
+            if (!revealedChars.contains(ch)) {
+                revealedChars.add(ch)
+            }
+        }
+        chainedBossKeys.clear()
+        statusBannerMessage = "👑 GM Cheat: Instant Win Level ${activeLevel.number}!"
+        checkVictoryCondition()
+    }
+
+    fun gmCheatTriggerOneMistake() {
+        if (!isGmLoggedIn) return
+        if (currentScreen != ScreenState.GAMEPLAY) {
+            startCampaignLevel()
+        }
+        if (roundOutcome != RoundOutcome.PLAYING) return
+        mistakesThisRound++
+        lastDamageAmount = 1
+        lastHitWasBomb = false
+        if (balloonsRemaining > 0) {
+            lastPoppedBalloonIndex = (balloonsRemaining - 1).coerceAtLeast(0)
+            balloonsRemaining = (balloonsRemaining - 1).coerceAtLeast(0)
+            popAnimationTrigger++
+        }
+        statusBannerMessage = "👑 GM Cheat: Triggered 1 Mistake (${balloonsRemaining}/$maxBalloons ❤️ left)"
+        if (balloonsRemaining <= 0) {
+            roundOutcome = RoundOutcome.GAME_OVER
+            ProceduralSoundEngine.play(activePerilType.overSound)
+        } else {
+            ProceduralSoundEngine.play(activePerilType.hitSound)
+        }
+    }
+
+    fun gmCheatHealAllMistakes() {
+        if (!isGmLoggedIn) return
+        balloonsRemaining = maxBalloons
+        mistakesThisRound = 0
+        if (roundOutcome == RoundOutcome.GAME_OVER) {
+            roundOutcome = RoundOutcome.PLAYING
+        }
+        counterPushbackTrigger++
+        ProceduralSoundEngine.play(DoodleSoundEffect.CHIME)
+        statusBannerMessage = "👑 GM Cheat: Healed All Mistakes (6/6 ❤️ Restored)!"
     }
 }
 
@@ -3012,13 +3283,17 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                             val name = viewModel.cloudAccount?.displayName
                                 ?: viewModel.currentUser?.displayName
                                 ?: "Player"
-                            "👤 ${name.take(10)} ✓"
+                            "☁️ ${name.take(10)} ✓"
                         }
                         viewModel.isGuestSession -> "🕵️ Guest"
-                        else -> "👤 Register"
+                        else -> "☁️ Register"
                     }
                     HomeScreen(
                         levelNumber = viewModel.currentCampaignLevelNumber,
+                        activeTier = viewModel.activeDisplayTier,
+                        activeRank = viewModel.currentRankTier,
+                        isTierPreviewOverride = viewModel.isGmLoggedIn && viewModel.gmTierOverride != null,
+                        isGmLoggedIn = viewModel.isGmLoggedIn,
                         completedLevels = viewModel.completedCampaignCount,
                         totalCampaignLevels = viewModel.totalCampaignCount,
                         coins = viewModel.coins,
@@ -3034,7 +3309,9 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                         onSelectPerilLevel = { lvl -> viewModel.selectCampaignLevelNumber(lvl) },
                         onOpenSettings = { viewModel.showSettingsDialog = true },
                         onOpenCoinShop = { viewModel.showCoinShopDialog = true },
-                        onOpenRegistration = { viewModel.openRegistrationScreen() }
+                        onOpenRegistration = { viewModel.openRegistrationScreen() },
+                        onOpenGmLogin = { viewModel.openGmLoginDialog() },
+                        onToggleGmConsole = { viewModel.showGmConsoleDrawer = !viewModel.showGmConsoleDrawer }
                     )
                 }
 
@@ -3110,6 +3387,7 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                 themeProgress = viewModel.themeProgress,
                 starPayout = viewModel.currentLevelStarPayout,
                 isDoubleDownActive = viewModel.isDoubleDownActive,
+                showDoubleOrNothingBet = viewModel.gmToggleDoubleOrNothingBet,
                 fontFamily = activeFontFamily,
                 onNextLevel = { viewModel.proceedAfterVictory(doubleDownNextLevel = false) },
                 onDoubleDownNextLevel = { viewModel.proceedAfterVictory(doubleDownNextLevel = true) }
@@ -3132,16 +3410,21 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
             )
         }
 
-        // 5. Settings & Paper Theme Dialog
+        // 5. Settings & Paper Theme Dialog (includes discreet "GM Login" button)
         if (viewModel.showSettingsDialog) {
             SettingsDoodleDialog(
                 soundEnabled = viewModel.soundEffectsEnabled,
                 useCursive = viewModel.useCursiveFont,
                 selectedTheme = viewModel.selectedPaperTheme,
+                isGmLoggedIn = viewModel.isGmLoggedIn,
                 fontFamily = activeFontFamily,
                 onToggleSound = { viewModel.toggleSoundEffects() },
                 onToggleFont = { viewModel.toggleFontStyle() },
                 onSelectTheme = { viewModel.selectTheme(it) },
+                onOpenGmLogin = {
+                    viewModel.showSettingsDialog = false
+                    viewModel.openGmLoginDialog()
+                },
                 onDismiss = { viewModel.showSettingsDialog = false }
             )
         }
@@ -3156,6 +3439,30 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                     viewModel.showCoinShopDialog = false
                 },
                 onDismiss = { viewModel.showCoinShopDialog = false }
+            )
+        }
+
+        // 7. Secret GM Access Login Dialog ("JCV" / "jens1990.")
+        if (viewModel.showGmLoginDialog) {
+            GmAccessLoginDialog(
+                errorMessage = viewModel.gmLoginErrorMessage,
+                fontFamily = activeFontFamily,
+                onSubmit = { user, pass ->
+                    viewModel.authenticateGm(user, pass)
+                },
+                onDismiss = {
+                    viewModel.gmLoginErrorMessage = null
+                    viewModel.showGmLoginDialog = false
+                }
+            )
+        }
+
+        // 8. Live GM Sandbox Command Console Drawer ( Strictly visible only when isGmLoggedIn && showGmConsoleDrawer )
+        if (viewModel.isGmLoggedIn && viewModel.showGmConsoleDrawer) {
+            GmCommandConsoleDrawer(
+                viewModel = viewModel,
+                fontFamily = activeFontFamily,
+                onDismiss = { viewModel.showGmConsoleDrawer = false }
             )
         }
     }
@@ -3313,7 +3620,7 @@ fun MainMenuScreen(
     completedLevels: Int,
     totalCampaignLevels: Int,
     coins: Int,
-    accountBadgeLabel: String = "👤 Register",
+    accountBadgeLabel: String = "☁️ Register",
     fontFamily: FontFamily,
     onPlayCampaign: (PerilType?) -> Unit,
     onOpenWorldMap: () -> Unit,
@@ -3322,7 +3629,9 @@ fun MainMenuScreen(
     onSelectPerilLevel: (Int) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenCoinShop: () -> Unit,
-    onOpenRegistration: () -> Unit = {}
+    onOpenRegistration: () -> Unit = {},
+    onOpenGmLogin: () -> Unit = {},
+    onToggleGmConsole: () -> Unit = {}
 ) {
     HomeScreen(
         levelNumber = levelNumber,
@@ -3338,17 +3647,24 @@ fun MainMenuScreen(
         onSelectPerilLevel = onSelectPerilLevel,
         onOpenSettings = onOpenSettings,
         onOpenCoinShop = onOpenCoinShop,
-        onOpenRegistration = onOpenRegistration
+        onOpenRegistration = onOpenRegistration,
+        onOpenGmLogin = onOpenGmLogin,
+        onToggleGmConsole = onToggleGmConsole
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     levelNumber: Int,
+    activeTier: Int = ((levelNumber - 1) / 50 + 1).coerceIn(1, 20),
+    activeRank: RankTier = RankTier.forLevel(levelNumber),
+    isTierPreviewOverride: Boolean = false,
+    isGmLoggedIn: Boolean = false,
     completedLevels: Int,
     totalCampaignLevels: Int,
     coins: Int,
-    accountBadgeLabel: String = "👤 Register",
+    accountBadgeLabel: String = "☁️ Register",
     fontFamily: FontFamily,
     onPlayCampaign: (PerilType?) -> Unit,
     onOpenWorldMap: () -> Unit,
@@ -3357,11 +3673,22 @@ fun HomeScreen(
     onSelectPerilLevel: (Int) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenCoinShop: () -> Unit,
-    onOpenRegistration: () -> Unit = {}
+    onOpenRegistration: () -> Unit = {},
+    onOpenGmLogin: () -> Unit = {},
+    onToggleGmConsole: () -> Unit = {}
 ) {
     val activePeril = PerilType.forLevel(levelNumber)
-    val activeRank = RankTier.forLevel(levelNumber)
-    val currentTier = ((levelNumber - 1) / 50 + 1).coerceIn(1, 20)
+    val effectiveCardLevel = if (isTierPreviewOverride) {
+        ((activeTier - 1) * 50 + 25).coerceIn(1, 1000)
+    } else {
+        levelNumber
+    }
+
+    // Track 5 rapid taps on the top-bar cloud profile pill to unlock GM Login Dialog
+    val coroutineScope = rememberCoroutineScope()
+    var profileRapidTapCount by remember { mutableIntStateOf(0) }
+    var lastProfileTapMs by remember { mutableLongStateOf(0L) }
+    var singleTapRegistrationJob by remember { mutableStateOf<Job?>(null) }
 
     Column(
         modifier = Modifier
@@ -3371,11 +3698,11 @@ fun HomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top Bar (Settings, Map, Cloud Status, Star/Coin counter)
+        // Top Bar (Settings, Map, Cloud Status with 5-tap / long-press GM trigger, Star counter + Floating [👑 GM] badge)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -3400,12 +3727,43 @@ fun HomeScreen(
                     )
                 }
 
+                // Cloud Profile Pill:
+                // - Long-press OR 5 rapid taps opens "👑 GM Access Login" Dialog
+                // - Normal single tap opens Cloud Profile / Registration screen
                 SketchyContainer(
                     fillColor = Color(0xFFE3F2FD),
                     cornerRadius = 14.dp,
-                    onClick = onOpenRegistration,
+                    onClick = null,
                     modifier = Modifier
                         .height(44.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .combinedClickable(
+                            onClick = {
+                                val now = System.currentTimeMillis()
+                                profileRapidTapCount = if (now - lastProfileTapMs < 650L) {
+                                    profileRapidTapCount + 1
+                                } else {
+                                    1
+                                }
+                                lastProfileTapMs = now
+                                singleTapRegistrationJob?.cancel()
+                                if (profileRapidTapCount >= 5) {
+                                    profileRapidTapCount = 0
+                                    onOpenGmLogin()
+                                } else {
+                                    singleTapRegistrationJob = coroutineScope.launch {
+                                        delay(280L)
+                                        profileRapidTapCount = 0
+                                        onOpenRegistration()
+                                    }
+                                }
+                            },
+                            onLongClick = {
+                                singleTapRegistrationJob?.cancel()
+                                profileRapidTapCount = 0
+                                onOpenGmLogin()
+                            }
+                        )
                         .testTag("account_status_button")
                 ) {
                     Text(
@@ -3419,12 +3777,26 @@ fun HomeScreen(
                 }
             }
 
-            CoinBalancePill(
-                coins = coins,
-                fontFamily = fontFamily,
-                onClickAdd = onOpenCoinShop,
-                testTag = "menu_coin_pill"
-            )
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                CoinBalancePill(
+                    coins = coins,
+                    fontFamily = fontFamily,
+                    onClickAdd = onOpenCoinShop,
+                    testTag = "menu_coin_pill"
+                )
+
+                // Strictly invisible unless isGmLoggedIn == true!
+                if (isGmLoggedIn) {
+                    FloatingGmBadge(
+                        fontFamily = fontFamily,
+                        onClick = onToggleGmConsole,
+                        testTag = "gm_floating_badge"
+                    )
+                }
+            }
         }
 
         // Center Hero: Evolving Dragon Ball Charging Stickman + Synchronized 20-Tier Aura + "W O R D" title
@@ -3444,8 +3816,8 @@ fun HomeScreen(
                 contentAlignment = Alignment.Center
             ) {
                 HomeChargingStickmanCenterpiece(
-                    currentLevel = levelNumber,
-                    currentTier = currentTier,
+                    currentLevel = effectiveCardLevel,
+                    currentTier = activeTier,
                     rankTier = activeRank,
                     fontFamily = fontFamily,
                     modifier = Modifier
@@ -3461,10 +3833,10 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Dynamic Tier Progression Card (Current Rank Title, Tier Progress Bar & Vivid Animated Canvas Aura)
+        // Dynamic Tier Progression Card (Synchronized with activeRank & 20-Tier Cosmic Aura)
         TierProgressionCard(
             rankTier = activeRank,
-            levelNumber = levelNumber,
+            levelNumber = effectiveCardLevel,
             completedLevels = completedLevels,
             totalLevels = totalCampaignLevels,
             fontFamily = fontFamily,
@@ -6354,12 +6726,25 @@ fun GameplayScreen(
                     )
                 }
 
-                CoinBalancePill(
-                    coins = viewModel.coins,
-                    fontFamily = fontFamily,
-                    onClickAdd = { viewModel.showCoinShopDialog = true },
-                    testTag = "game_coin_pill"
-                )
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    CoinBalancePill(
+                        coins = viewModel.coins,
+                        fontFamily = fontFamily,
+                        onClickAdd = { viewModel.showCoinShopDialog = true },
+                        testTag = "game_coin_pill"
+                    )
+                    if (viewModel.isGmLoggedIn) {
+                        FloatingGmBadge(
+                            isConsoleOpen = viewModel.showGmConsoleDrawer,
+                            fontFamily = fontFamily,
+                            onClick = { viewModel.showGmConsoleDrawer = !viewModel.showGmConsoleDrawer },
+                            testTag = "gm_floating_badge_game"
+                        )
+                    }
+                }
             }
 
             // 2. Upper Split Scene:
@@ -6455,7 +6840,9 @@ fun GameplayScreen(
                                 shieldHitsRemaining = viewModel.bossArmorShieldHits,
                                 maxShieldHits = viewModel.bossArmorShieldMaxHits,
                                 shieldShatterTrigger = viewModel.bossShieldShatterTrigger,
-                                chainsActive = viewModel.chainedBossKeys.isNotEmpty() && !viewModel.bossChainsShattered,
+                                chainsActive = viewModel.gmToggleBossChainedKeys &&
+                                    viewModel.chainedBossKeys.isNotEmpty() &&
+                                    !viewModel.bossChainsShattered,
                                 fontFamily = fontFamily,
                                 modifier = Modifier
                                     .padding(bottom = 4.dp)
@@ -6525,16 +6912,18 @@ fun GameplayScreen(
             }
 
             // 3. Tactical Star Power-Up Dock (Right above the Word Slots!)
-            //    ⚡ Ki Blast (30 ★) | 🛡️ Ink Shield (40 ★) | 💥 Hint Spark (20 ★)
-            TacticalStarPowerUpDock(
-                starsAvailable = viewModel.coins,
-                inkShieldActive = viewModel.inkShieldActive,
-                hintSparkActive = viewModel.hintSparkChar != null && viewModel.hintSparkRemainingMs > 0L,
-                fontFamily = fontFamily,
-                onKiBlast = { viewModel.useKiBlastPowerUp() },
-                onInkShield = { viewModel.useInkShieldPowerUp() },
-                onHintSpark = { viewModel.useHintSparkPowerUp() }
-            )
+            //    ⚡ Ki Strike (30 ★) | 🛡️ Ink Shield (40 ★) | 💥 Hint Spark (20 ★)
+            if (viewModel.gmToggleTacticalStarDock) {
+                TacticalStarPowerUpDock(
+                    starsAvailable = viewModel.coins,
+                    inkShieldActive = viewModel.inkShieldActive,
+                    hintSparkActive = viewModel.hintSparkChar != null && viewModel.hintSparkRemainingMs > 0L,
+                    fontFamily = fontFamily,
+                    onKiBlast = { viewModel.useKiBlastPowerUp() },
+                    onInkShield = { viewModel.useInkShieldPowerUp() },
+                    onHintSpark = { viewModel.useHintSparkPowerUp() }
+                )
+            }
 
             // 4. Middle Area (Word Slots with Boss Armor Shield overlay if active)
             Box(
@@ -6566,16 +6955,18 @@ fun GameplayScreen(
             }
 
             // 5. Real-Time "Ki Combo" Speed Meter & Overdrive Fuse Bar (Right above the Keyboard!)
-            KiComboSpeedMeterBar(
-                comboCount = viewModel.comboCount,
-                fuseFraction = viewModel.comboFuseFraction,
-                consecutiveFastStreak = viewModel.consecutiveFastStreak,
-                comboPopupText = viewModel.comboPopupText,
-                comboPopupTrigger = viewModel.comboPopupTrigger,
-                counterPushbackTrigger = viewModel.counterPushbackTrigger,
-                rankTier = rankTier,
-                fontFamily = fontFamily
-            )
+            if (viewModel.gmToggleKiComboFuse) {
+                KiComboSpeedMeterBar(
+                    comboCount = viewModel.comboCount,
+                    fuseFraction = viewModel.comboFuseFraction,
+                    consecutiveFastStreak = viewModel.consecutiveFastStreak,
+                    comboPopupText = viewModel.comboPopupText,
+                    comboPopupTrigger = viewModel.comboPopupTrigger,
+                    counterPushbackTrigger = viewModel.counterPushbackTrigger,
+                    rankTier = rankTier,
+                    fontFamily = fontFamily
+                )
+            }
 
             Spacer(modifier = Modifier.height(3.dp))
 
@@ -6584,7 +6975,11 @@ fun GameplayScreen(
             DoodleAlphabetKeyboard(
                 keyStatuses = viewModel.keyStatuses,
                 bombLetters = viewModel.bombLetters.toSet(),
-                chainedBossKeys = if (viewModel.bossChainsShattered) emptySet() else viewModel.chainedBossKeys.toSet(),
+                chainedBossKeys = if (!viewModel.gmToggleBossChainedKeys || viewModel.bossChainsShattered) {
+                    emptySet()
+                } else {
+                    viewModel.chainedBossKeys.toSet()
+                },
                 chainShatterTrigger = viewModel.chainShatterTrigger,
                 vaporizedKeys = viewModel.lastVaporizedKeys.toSet(),
                 kiBlastVaporizeTrigger = viewModel.kiBlastVaporizeTrigger,
@@ -6770,7 +7165,7 @@ fun BossArmorShieldBar(
 
 // ============================================================================
 // TACTICAL STAR POWER-UP DOCK (Right Above Word Slots)
-// 1. ⚡ Ki Blast (30 ★) | 2. 🛡️ Ink Shield (40 ★) | 3. 💥 Hint Spark (20 ★)
+// 1. ⚡ Ki Strike (30 ★) | 2. 🛡️ Ink Shield (40 ★) | 3. 💥 Hint Spark (20 ★)
 // ============================================================================
 
 @Composable
@@ -6791,10 +7186,10 @@ fun TacticalStarPowerUpDock(
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. ⚡ Ki Blast (Cost: 30 Stars) - Vaporizes 3 wrong keys + reveals 1 correct letter
+        // 1. ⚡ Ki Strike (Cost: 30 Stars) - Vaporizes 3 wrong keys + reveals 1 correct letter
         TacticalStarPowerUpButton(
             iconEmoji = "⚡",
-            title = "Ki Blast",
+            title = "Ki Strike",
             subLabel = "-3 Wrong +1 Letter",
             starCost = 30,
             canAfford = starsAvailable >= 30,
@@ -10768,6 +11163,7 @@ fun VictoryOverlay(
     themeProgress: Int,
     starPayout: Int = if (level.isBossLevel) 50 else 25,
     isDoubleDownActive: Boolean = false,
+    showDoubleOrNothingBet: Boolean = true,
     fontFamily: FontFamily,
     onNextLevel: () -> Unit,
     onDoubleDownNextLevel: () -> Unit = onNextLevel
@@ -11020,69 +11416,71 @@ fun VictoryOverlay(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // High-Stakes Greed Toggle Card ("Double-or-Nothing" Hook)
-                    SketchyContainer(
-                        fillColor = if (highStakesGreedEnabled) Color(0xFFFFEBEE) else Color(0xFFF5F5F5),
-                        borderColor = if (highStakesGreedEnabled) DoodleColors.WrongRed else DoodleColors.InkBlack,
-                        cornerRadius = 14.dp,
-                        strokeWidth = if (highStakesGreedEnabled) 2.dp else 1.4.dp,
-                        shadowOffset = 1.5.dp,
-                        onClick = { highStakesGreedEnabled = !highStakesGreedEnabled },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("high_stakes_greed_toggle")
-                    ) {
-                        Row(
+                    if (showDoubleOrNothingBet) {
+                        // High-Stakes Greed Toggle Card ("Double-or-Nothing" Hook)
+                        SketchyContainer(
+                            fillColor = if (highStakesGreedEnabled) Color(0xFFFFEBEE) else Color(0xFFF5F5F5),
+                            borderColor = if (highStakesGreedEnabled) DoodleColors.WrongRed else DoodleColors.InkBlack,
+                            cornerRadius = 14.dp,
+                            strokeWidth = if (highStakesGreedEnabled) 2.dp else 1.4.dp,
+                            shadowOffset = 1.5.dp,
+                            onClick = { highStakesGreedEnabled = !highStakesGreedEnabled },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .testTag("high_stakes_greed_toggle")
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "🎲 HIGH-STAKES GREED TOGGLE",
-                                    fontFamily = fontFamily,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 11.sp,
-                                    color = if (highStakesGreedEnabled) DoodleColors.WrongRed else DoodleColors.InkBlack
-                                )
-                                Text(
-                                    text = "Wager $wagerAmount ★ (keep $keepNowAmount ★ now) -> Next Level worth 2.5x ★ + Instant 2x Ki Combo!",
-                                    fontFamily = fontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 9.5.sp,
-                                    lineHeight = 12.sp,
-                                    color = DoodleColors.InkBlue
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(6.dp))
-                            SketchyContainer(
-                                fillColor = if (highStakesGreedEnabled) DoodleColors.WrongRed else Color.White,
-                                cornerRadius = 10.dp,
-                                strokeWidth = 1.4.dp,
-                                shadowOffset = 1.dp
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(
-                                    text = if (highStakesGreedEnabled) "ON 🔥" else "OFF",
-                                    fontFamily = fontFamily,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 11.sp,
-                                    color = if (highStakesGreedEnabled) Color.White else DoodleColors.InkBlack,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "🎲 HIGH-STAKES GREED TOGGLE",
+                                        fontFamily = fontFamily,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 11.sp,
+                                        color = if (highStakesGreedEnabled) DoodleColors.WrongRed else DoodleColors.InkBlack
+                                    )
+                                    Text(
+                                        text = "Wager $wagerAmount ★ (keep $keepNowAmount ★ now) -> Next Level worth 2.5x ★ + Instant 2x Ki Combo!",
+                                        fontFamily = fontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.5.sp,
+                                        lineHeight = 12.sp,
+                                        color = DoodleColors.InkBlue
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                SketchyContainer(
+                                    fillColor = if (highStakesGreedEnabled) DoodleColors.WrongRed else Color.White,
+                                    cornerRadius = 10.dp,
+                                    strokeWidth = 1.4.dp,
+                                    shadowOffset = 1.dp
+                                ) {
+                                    Text(
+                                        text = if (highStakesGreedEnabled) "ON 🔥" else "OFF",
+                                        fontFamily = fontFamily,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 11.sp,
+                                        color = if (highStakesGreedEnabled) Color.White else DoodleColors.InkBlack,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
 
                     // Option A: [Claim +X Stars] normally (or if Greed Toggle is ON, triggers Double Down)
                     SketchyContainer(
                         fillColor = DoodleColors.DoodleYellow,
                         cornerRadius = 24.dp,
                         onClick = {
-                            if (highStakesGreedEnabled) {
+                            if (showDoubleOrNothingBet && highStakesGreedEnabled) {
                                 onDoubleDownNextLevel()
                             } else {
                                 onNextLevel()
@@ -11098,7 +11496,7 @@ fun VictoryOverlay(
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = if (highStakesGreedEnabled) {
+                                text = if (showDoubleOrNothingBet && highStakesGreedEnabled) {
                                     "CLAIM $keepNowAmount ★ & WAGER $wagerAmount ★"
                                 } else {
                                     "Claim +$rewardCoins Stars"
@@ -11115,38 +11513,40 @@ fun VictoryOverlay(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    if (showDoubleOrNothingBet) {
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    // Option B: Direct 1-Tap [🔥 DOUBLE DOWN NEXT LEVEL] High-Stakes Button
-                    SketchyContainer(
-                        fillColor = Color(0xFFFF5722),
-                        borderColor = DoodleColors.InkBlack,
-                        cornerRadius = 24.dp,
-                        strokeWidth = 2.dp,
-                        onClick = onDoubleDownNextLevel,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp)
-                            .testTag("double_down_next_level_button")
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                        // Option B: Direct 1-Tap [🔥 DOUBLE DOWN NEXT LEVEL] High-Stakes Button
+                        SketchyContainer(
+                            fillColor = Color(0xFFFF5722),
+                            borderColor = DoodleColors.InkBlack,
+                            cornerRadius = 24.dp,
+                            strokeWidth = 2.dp,
+                            onClick = onDoubleDownNextLevel,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("double_down_next_level_button")
                         ) {
-                            Text(
-                                text = "🔥 DOUBLE DOWN NEXT LEVEL",
-                                fontFamily = fontFamily,
-                                fontWeight = FontWeight.Black,
-                                fontSize = 15.sp,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "Wager $wagerAmount ★ -> Next Level 2.5x ★ + Start at x2 Ki Combo!",
-                                fontFamily = fontFamily,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 9.5.sp,
-                                color = DoodleColors.DoodleYellow
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "🔥 DOUBLE DOWN NEXT LEVEL",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 15.sp,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Wager $wagerAmount ★ -> Next Level 2.5x ★ + Start at x2 Ki Combo!",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 9.5.sp,
+                                    color = DoodleColors.DoodleYellow
+                                )
+                            }
                         }
                     }
                 }
@@ -11743,10 +12143,12 @@ fun SettingsDoodleDialog(
     soundEnabled: Boolean,
     useCursive: Boolean,
     selectedTheme: PaperTheme,
+    isGmLoggedIn: Boolean = false,
     fontFamily: FontFamily,
     onToggleSound: () -> Unit,
     onToggleFont: () -> Unit,
     onSelectTheme: (PaperTheme) -> Unit,
+    onOpenGmLogin: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -11756,7 +12158,9 @@ fun SettingsDoodleDialog(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -11882,7 +12286,31 @@ fun SettingsDoodleDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Discreet "GM Login" button inside Settings dialog
+                SketchyContainer(
+                    fillColor = if (isGmLoggedIn) Color(0xFFFFF8E1) else Color(0xFFF5F5F5),
+                    borderColor = DoodleColors.InkBlack.copy(alpha = 0.65f),
+                    cornerRadius = 14.dp,
+                    strokeWidth = 1.2.dp,
+                    shadowOffset = 1.dp,
+                    onClick = onOpenGmLogin,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(36.dp)
+                        .testTag("gm_login_settings_button")
+                ) {
+                    Text(
+                        text = if (isGmLoggedIn) "👑 GM Console Active (Tap to Open)" else "GM Login",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = DoodleColors.InkBlack.copy(alpha = 0.78f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 SketchyContainer(
                     fillColor = DoodleColors.DoodleYellow,
@@ -11979,6 +12407,851 @@ fun CoinBonusDoodleDialog(
                     )
                 }
             }
+        }
+    }
+}
+
+// ============================================================================
+// 13B. SECRET GM (GAME MASTER) LOGIN DIALOG, FLOATING [👑 GM] BADGE & SANDBOX CONSOLE
+// ============================================================================
+
+@Composable
+fun FloatingGmBadge(
+    isConsoleOpen: Boolean = false,
+    fontFamily: FontFamily,
+    onClick: () -> Unit,
+    testTag: String = "gm_floating_badge"
+) {
+    SketchyContainer(
+        fillColor = if (isConsoleOpen) Color(0xFFFFB300) else DoodleColors.DoodleYellow,
+        borderColor = DoodleColors.InkBlack,
+        cornerRadius = 14.dp,
+        strokeWidth = 1.8.dp,
+        shadowOffset = 2.dp,
+        onClick = onClick,
+        modifier = Modifier
+            .height(30.dp)
+            .testTag(testTag)
+            .semantics { contentDescription = "Open GM Command Console" }
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+        ) {
+            Text(
+                text = "👑 GM",
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 12.sp,
+                color = DoodleColors.InkBlack
+            )
+        }
+    }
+}
+
+@Composable
+fun GmAccessLoginDialog(
+    errorMessage: String?,
+    fontFamily: FontFamily,
+    onSubmit: (username: String, password: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var usernameInput by remember { mutableStateOf("") }
+    var passwordInput by remember { mutableStateOf("") }
+    var showPasswordPlain by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        SketchyContainer(
+            fillColor = DoodleColors.PaperOffWhite,
+            borderColor = DoodleColors.InkBlack,
+            cornerRadius = 24.dp,
+            strokeWidth = 2.4.dp,
+            shadowOffset = 4.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("gm_access_login_dialog")
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                SketchyContainer(
+                    fillColor = DoodleColors.DoodleYellow,
+                    cornerRadius = 14.dp,
+                    strokeWidth = 1.6.dp,
+                    shadowOffset = 1.5.dp
+                ) {
+                    Text(
+                        text = "👑 GM Access Login",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 20.sp,
+                        color = DoodleColors.InkBlack,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Restricted Game Master & Visual FX Sandbox",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = DoodleColors.InkBlue,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = usernameInput,
+                    onValueChange = { usernameInput = it },
+                    label = { Text("GM Username", fontFamily = fontFamily) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = DoodleColors.InkBlack,
+                        unfocusedBorderColor = DoodleColors.InkBlack,
+                        focusedTextColor = DoodleColors.InkBlack,
+                        unfocusedTextColor = DoodleColors.InkBlack
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("gm_username_input")
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = passwordInput,
+                    onValueChange = { passwordInput = it },
+                    label = { Text("GM Password", fontFamily = fontFamily) },
+                    singleLine = true,
+                    visualTransformation = if (showPasswordPlain) {
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        Text(
+                            text = if (showPasswordPlain) "🙈" else "👁️",
+                            fontSize = 15.sp,
+                            modifier = Modifier
+                                .clickable { showPasswordPlain = !showPasswordPlain }
+                                .padding(6.dp)
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = DoodleColors.InkBlack,
+                        unfocusedBorderColor = DoodleColors.InkBlack,
+                        focusedTextColor = DoodleColors.InkBlack,
+                        unfocusedTextColor = DoodleColors.InkBlack
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("gm_password_input")
+                )
+
+                if (!errorMessage.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SketchyContainer(
+                        fillColor = Color(0xFFFFEBEE),
+                        borderColor = DoodleColors.WrongRed,
+                        cornerRadius = 12.dp,
+                        strokeWidth = 1.5.dp,
+                        shadowOffset = 1.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("gm_login_error_text")
+                    ) {
+                        Text(
+                            text = "⚠️ $errorMessage",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp,
+                            color = DoodleColors.WrongRed,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SketchyContainer(
+                        fillColor = Color.White,
+                        cornerRadius = 18.dp,
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                            .testTag("gm_login_cancel_button")
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = DoodleColors.InkBlack
+                        )
+                    }
+
+                    SketchyContainer(
+                        fillColor = DoodleColors.DoodleYellow,
+                        cornerRadius = 18.dp,
+                        onClick = { onSubmit(usernameInput, passwordInput) },
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .height(46.dp)
+                            .testTag("gm_login_submit_button")
+                    ) {
+                        Text(
+                            text = "👑 Unlock GM",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                            color = DoodleColors.InkBlack
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun GmCommandConsoleDrawer(
+    viewModel: WordGameViewModel,
+    fontFamily: FontFamily,
+    onDismiss: () -> Unit
+) {
+    val activeTier = viewModel.activeDisplayTier
+    val realTier = viewModel.realTierIndex
+    val activeRank = viewModel.currentRankTier
+    val isTierOverridden = viewModel.gmTierOverride != null
+    val currentLevelNumber = (viewModel.campaignLevelIndex + 1).coerceIn(1, 1000)
+
+    Dialog(onDismissRequest = onDismiss) {
+        SketchyContainer(
+            fillColor = DoodleColors.PaperOffWhite,
+            borderColor = DoodleColors.InkBlack,
+            cornerRadius = 24.dp,
+            strokeWidth = 2.4.dp,
+            shadowOffset = 4.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .testTag("gm_command_console_drawer")
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SketchyContainer(
+                            fillColor = DoodleColors.DoodleYellow,
+                            cornerRadius = 12.dp,
+                            strokeWidth = 1.6.dp,
+                            shadowOffset = 1.5.dp
+                        ) {
+                            Text(
+                                text = "👑 GM COMMAND CONSOLE",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 15.sp,
+                                color = DoodleColors.InkBlack,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    SketchyContainer(
+                        fillColor = Color.White,
+                        cornerRadius = 12.dp,
+                        strokeWidth = 1.5.dp,
+                        shadowOffset = 1.dp,
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .height(32.dp)
+                            .testTag("gm_console_close_button")
+                    ) {
+                        Text(
+                            text = "✕ Collapse",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp,
+                            color = DoodleColors.InkBlack,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // ================================================================
+                // SECTION A: HOME SCREEN & ACCOUNT MANIPULATORS
+                // ================================================================
+                SketchyContainer(
+                    fillColor = Color(0xFFFFFDE7),
+                    borderColor = DoodleColors.InkBlack,
+                    cornerRadius = 16.dp,
+                    strokeWidth = 1.6.dp,
+                    shadowOffset = 2.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = "A. HOME SCREEN & ACCOUNT MANIPULATORS",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp,
+                            color = DoodleColors.InkBlack
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // 1. Live Tier Switcher: [ < ] Tier X / 20 [ > ] + [Reset to Real Tier]
+                        Text(
+                            text = "Live 20-Tier Aura & Stance Switcher (${activeRank.title})",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp,
+                            color = DoodleColors.InkBlue
+                        )
+
+                        Spacer(modifier = Modifier.height(5.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            SketchyContainer(
+                                fillColor = Color.White,
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.dp,
+                                onClick = { viewModel.gmStepTier(-1) },
+                                modifier = Modifier
+                                    .width(44.dp)
+                                    .height(36.dp)
+                                    .testTag("gm_tier_prev_button")
+                            ) {
+                                Text(
+                                    text = "<",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 16.sp,
+                                    color = DoodleColors.InkBlack
+                                )
+                            }
+
+                            SketchyContainer(
+                                fillColor = activeRank.primaryColor.copy(alpha = 0.32f),
+                                borderColor = activeRank.accentColor,
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.6.dp,
+                                shadowOffset = 1.dp,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(36.dp)
+                                    .testTag("gm_tier_label")
+                            ) {
+                                Text(
+                                    text = "Tier $activeTier / 20" + if (isTierOverridden) " (Preview)" else " (Real)",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 12.sp,
+                                    color = DoodleColors.InkBlack
+                                )
+                            }
+
+                            SketchyContainer(
+                                fillColor = Color.White,
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.dp,
+                                onClick = { viewModel.gmStepTier(1) },
+                                modifier = Modifier
+                                    .width(44.dp)
+                                    .height(36.dp)
+                                    .testTag("gm_tier_next_button")
+                            ) {
+                                Text(
+                                    text = ">",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 16.sp,
+                                    color = DoodleColors.InkBlack
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        SketchyContainer(
+                            fillColor = if (isTierOverridden) DoodleColors.DoodleYellow else Color.White,
+                            cornerRadius = 12.dp,
+                            strokeWidth = 1.4.dp,
+                            shadowOffset = 1.dp,
+                            onClick = { viewModel.gmResetTierToReal() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(32.dp)
+                                .testTag("gm_tier_reset_button")
+                        ) {
+                            Text(
+                                text = "Reset to Real Tier (Tier $realTier • Lv $currentLevelNumber)",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 11.sp,
+                                color = DoodleColors.InkBlack
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // 2. Level Teleporter: [Lv 1], [Lv 25 (Boss)], [+10 Lv], [+50 Lv (Next Tier)], [Lv 1000]
+                        Text(
+                            text = "Level Teleporter (Current: Level $currentLevelNumber)",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp,
+                            color = DoodleColors.InkBlue
+                        )
+
+                        Spacer(modifier = Modifier.height(5.dp))
+
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            GmSmallActionPill(
+                                label = "Lv 1",
+                                fillColor = Color.White,
+                                fontFamily = fontFamily,
+                                testTag = "gm_teleport_lv1",
+                                onClick = { viewModel.gmTeleportToLevel(1) }
+                            )
+                            GmSmallActionPill(
+                                label = "Lv 25 (Boss)",
+                                fillColor = Color(0xFFFFEBEE),
+                                fontFamily = fontFamily,
+                                testTag = "gm_teleport_lv25",
+                                onClick = { viewModel.gmTeleportToLevel(25) }
+                            )
+                            GmSmallActionPill(
+                                label = "+10 Lv",
+                                fillColor = Color.White,
+                                fontFamily = fontFamily,
+                                testTag = "gm_teleport_plus10",
+                                onClick = { viewModel.gmStepLevel(10) }
+                            )
+                            GmSmallActionPill(
+                                label = "+50 Lv (Next Tier)",
+                                fillColor = Color(0xFFE3F2FD),
+                                fontFamily = fontFamily,
+                                testTag = "gm_teleport_plus50",
+                                onClick = { viewModel.gmStepLevel(50) }
+                            )
+                            GmSmallActionPill(
+                                label = "Lv 1000",
+                                fillColor = DoodleColors.DoodleYellow,
+                                fontFamily = fontFamily,
+                                testTag = "gm_teleport_lv1000",
+                                onClick = { viewModel.gmTeleportToLevel(1000) }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // 3. Star Currency Injector: [+1,000 ⭐] and [Reset Stars]
+                        Text(
+                            text = "Star Currency Injector (Balance: ${viewModel.coins} ⭐)",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp,
+                            color = DoodleColors.InkBlue
+                        )
+
+                        Spacer(modifier = Modifier.height(5.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SketchyContainer(
+                                fillColor = DoodleColors.DoodleYellow,
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.5.dp,
+                                onClick = { viewModel.gmInjectStars(1000) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(36.dp)
+                                    .testTag("gm_stars_plus1000")
+                            ) {
+                                Text(
+                                    text = "+1,000 ⭐",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 12.sp,
+                                    color = DoodleColors.InkBlack
+                                )
+                            }
+
+                            SketchyContainer(
+                                fillColor = Color.White,
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.5.dp,
+                                onClick = { viewModel.gmResetStars() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(36.dp)
+                                    .testTag("gm_stars_reset")
+                            ) {
+                                Text(
+                                    text = "Reset Stars",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = DoodleColors.WrongRed
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // ================================================================
+                // SECTION B: EXPERIMENTAL GAMEPLAY FEATURE TOGGLES (TEST HOOKS LIVE)
+                // ================================================================
+                SketchyContainer(
+                    fillColor = Color(0xFFF3E5F5),
+                    borderColor = DoodleColors.InkBlack,
+                    cornerRadius = 16.dp,
+                    strokeWidth = 1.6.dp,
+                    shadowOffset = 2.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "B. EXPERIMENTAL GAMEPLAY FEATURE TOGGLES",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp,
+                            color = DoodleColors.InkBlack
+                        )
+
+                        GmFeatureToggleRow(
+                            title = "⚡ Ki Speed-Combo Fuse",
+                            subtitle = "4s decaying combo bar (x2-x5 OVERDRIVE + 3-streak Counter-Pushback heal)",
+                            checked = viewModel.gmToggleKiComboFuse,
+                            onCheckedChange = { viewModel.setGmToggleKiComboFuseState(it) },
+                            fontFamily = fontFamily,
+                            testTag = "gm_toggle_ki_combo_fuse"
+                        )
+
+                        GmFeatureToggleRow(
+                            title = "☄️ Stickman Ki Blast Attacks",
+                            subtitle = "Stickman fires sketchy Ki Blast at Peril on every correct letter",
+                            checked = viewModel.gmToggleStickmanKiBlasts,
+                            onCheckedChange = { viewModel.setGmToggleStickmanKiBlastsState(it) },
+                            fontFamily = fontFamily,
+                            testTag = "gm_toggle_stickman_ki_blasts"
+                        )
+
+                        GmFeatureToggleRow(
+                            title = "⛓️ Boss Chained Keys",
+                            subtitle = "Boss levels (Lv % 5 == 0) lock 4 keys in chains that shatter at 2x combo",
+                            checked = viewModel.gmToggleBossChainedKeys,
+                            onCheckedChange = { viewModel.setGmToggleBossChainedKeysState(it) },
+                            fontFamily = fontFamily,
+                            testTag = "gm_toggle_boss_chained_keys"
+                        )
+
+                        GmFeatureToggleRow(
+                            title = "🛡️ Tactical Star Power-Up Dock",
+                            subtitle = "⚡ Ki Strike (30⭐), 🛡️ Ink Shield (40⭐), 💥 Hint Spark (20⭐) above slots",
+                            checked = viewModel.gmToggleTacticalStarDock,
+                            onCheckedChange = { viewModel.setGmToggleTacticalStarDockState(it) },
+                            fontFamily = fontFamily,
+                            testTag = "gm_toggle_tactical_star_dock"
+                        )
+
+                        GmFeatureToggleRow(
+                            title = "🔥 Double-or-Nothing Streak Bet",
+                            subtitle = "Post-level victory option to wager half Star reward for 2.5x payout",
+                            checked = viewModel.gmToggleDoubleOrNothingBet,
+                            onCheckedChange = { viewModel.setGmToggleDoubleOrNothingBetState(it) },
+                            fontFamily = fontFamily,
+                            testTag = "gm_toggle_double_or_nothing_bet"
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // ================================================================
+                // SECTION C: IN-GAME QUICK CHEATS & LOGOUT GM
+                // ================================================================
+                SketchyContainer(
+                    fillColor = Color(0xFFE8F5E9),
+                    borderColor = DoodleColors.InkBlack,
+                    cornerRadius = 16.dp,
+                    strokeWidth = 1.6.dp,
+                    shadowOffset = 2.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = "C. IN-GAME QUICK CHEATS",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp,
+                            color = DoodleColors.InkBlack
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SketchyContainer(
+                                fillColor = Color.White,
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.5.dp,
+                                onClick = { viewModel.gmCheatRevealOneLetter() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .testTag("gm_cheat_reveal_letter")
+                            ) {
+                                Text(
+                                    text = "Reveal 1 Letter",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 11.sp,
+                                    color = DoodleColors.InkBlack
+                                )
+                            }
+
+                            SketchyContainer(
+                                fillColor = DoodleColors.DoodleYellow,
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.5.dp,
+                                onClick = { viewModel.gmCheatInstantWinLevel() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .testTag("gm_cheat_instant_win")
+                            ) {
+                                Text(
+                                    text = "Instant Win Level",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 11.sp,
+                                    color = DoodleColors.InkBlack
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SketchyContainer(
+                                fillColor = Color(0xFFFFEBEE),
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.5.dp,
+                                onClick = { viewModel.gmCheatTriggerOneMistake() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .testTag("gm_cheat_trigger_mistake")
+                            ) {
+                                Text(
+                                    text = "Trigger 1 Mistake",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 11.sp,
+                                    color = DoodleColors.WrongRed
+                                )
+                            }
+
+                            SketchyContainer(
+                                fillColor = Color(0xFFE0F7FA),
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.5.dp,
+                                onClick = { viewModel.gmCheatHealAllMistakes() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .testTag("gm_cheat_heal_mistakes")
+                            ) {
+                                Text(
+                                    text = "Heal All Mistakes",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 11.sp,
+                                    color = DoodleColors.CorrectGreen
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // [Logout GM] button at the bottom of the drawer
+                SketchyContainer(
+                    fillColor = Color(0xFFFFEBEE),
+                    borderColor = DoodleColors.WrongRed,
+                    cornerRadius = 18.dp,
+                    strokeWidth = 1.8.dp,
+                    shadowOffset = 2.dp,
+                    onClick = { viewModel.logoutGm() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .testTag("gm_logout_button")
+                ) {
+                    Text(
+                        text = "🔒 Logout GM (Hide All GM Controls)",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 13.sp,
+                        color = DoodleColors.WrongRed
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GmSmallActionPill(
+    label: String,
+    fillColor: Color,
+    fontFamily: FontFamily,
+    testTag: String,
+    onClick: () -> Unit
+) {
+    SketchyContainer(
+        fillColor = fillColor,
+        cornerRadius = 10.dp,
+        strokeWidth = 1.4.dp,
+        shadowOffset = 1.dp,
+        onClick = onClick,
+        modifier = Modifier
+            .height(32.dp)
+            .testTag(testTag)
+    ) {
+        Text(
+            text = label,
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 11.sp,
+            color = DoodleColors.InkBlack,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+
+@Composable
+private fun GmFeatureToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    fontFamily: FontFamily,
+    testTag: String
+) {
+    SketchyContainer(
+        fillColor = if (checked) Color.White else Color(0xFFEEEEEE),
+        cornerRadius = 12.dp,
+        strokeWidth = 1.3.dp,
+        shadowOffset = 1.dp,
+        onClick = { onCheckedChange(!checked) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 11.5.sp,
+                    color = DoodleColors.InkBlack
+                )
+                Text(
+                    text = subtitle,
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 9.5.sp,
+                    lineHeight = 12.sp,
+                    color = DoodleColors.InkBlue
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = DoodleColors.InkBlack,
+                    checkedTrackColor = DoodleColors.DoodleYellow,
+                    uncheckedThumbColor = Color.Gray,
+                    uncheckedTrackColor = Color.LightGray
+                )
+            )
         }
     }
 }

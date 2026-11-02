@@ -198,4 +198,87 @@ class ExampleRobolectricTest {
         assertEquals(2, vm.comboCount) // Starts next level at instant x2 Ki Combo!
         assertEquals(62, vm.currentLevelStarPayout) // 25 * 2.5 = 62 Stars on normal level
     }
+
+    @Test
+    fun `gm authentication sandbox console manipulators experimental toggles and quick cheats work`() {
+        val vm = WordGameViewModel()
+        assertEquals(false, vm.isGmLoggedIn)
+
+        // Reject missing trailing period or wrong username
+        assertEquals(false, vm.authenticateGm("JCV", "jens1990"))
+        assertEquals(false, vm.isGmLoggedIn)
+        assertTrue(!vm.gmLoginErrorMessage.isNullOrBlank())
+
+        // Accept case-insensitive trimmed "jcv" + exact "jens1990."
+        assertEquals(true, vm.authenticateGm("  jcv  ", "jens1990."))
+        assertEquals(true, vm.isGmLoggedIn)
+        assertEquals(true, vm.showGmConsoleDrawer)
+
+        // Live Tier Switcher (1..20) & Reset to Real Tier
+        assertEquals(1, vm.activeDisplayTier)
+        vm.gmStepTier(1)
+        assertEquals(2, vm.activeDisplayTier)
+        assertEquals(RankTier.entries[1], vm.currentRankTier)
+        vm.gmStepTier(-2) // Wraps 2 -> 1 -> 20
+        assertEquals(20, vm.activeDisplayTier)
+        assertEquals("The Supreme Doodle God", vm.currentRankTier.title)
+        vm.gmResetTierToReal()
+        assertEquals(1, vm.activeDisplayTier)
+
+        // Level Teleporter: [Lv 25 (Boss)], [+10 Lv], [+50 Lv], [Lv 1000], [Lv 1]
+        vm.gmTeleportToLevel(25)
+        assertEquals(24, vm.campaignLevelIndex)
+        assertEquals(25, vm.activeLevel.number)
+        assertTrue(vm.activeLevel.isBossLevel)
+
+        vm.gmStepLevel(10)
+        assertEquals(35, vm.activeLevel.number)
+        vm.gmStepLevel(50)
+        assertEquals(85, vm.activeLevel.number)
+        assertEquals(2, vm.realTierIndex)
+
+        vm.gmTeleportToLevel(1000)
+        assertEquals(1000, vm.activeLevel.number)
+        assertEquals(20, vm.realTierIndex)
+
+        vm.gmTeleportToLevel(1)
+        assertEquals(1, vm.activeLevel.number)
+
+        // Star Currency Injector
+        vm.gmResetStars()
+        assertEquals(0, vm.coins)
+        vm.gmInjectStars(1000)
+        assertEquals(1000, vm.coins)
+
+        // Experimental Gameplay Feature Toggles
+        vm.setGmToggleBossChainedKeysState(false)
+        vm.gmTeleportToLevel(5)
+        assertEquals(0, vm.chainedBossKeys.size)
+        vm.setGmToggleBossChainedKeysState(true)
+        assertEquals(4, vm.chainedBossKeys.size)
+
+        vm.setGmToggleKiComboFuseState(false)
+        vm.onLetterTapped('G')
+        assertEquals(0, vm.comboCount)
+        vm.setGmToggleKiComboFuseState(true)
+
+        // In-Game Quick Cheats
+        vm.gmCheatTriggerOneMistake()
+        assertEquals(5, vm.balloonsRemaining)
+        vm.gmCheatHealAllMistakes()
+        assertEquals(6, vm.balloonsRemaining)
+
+        val revealedBefore = vm.revealedChars.size
+        vm.gmCheatRevealOneLetter()
+        assertEquals(revealedBefore + 1, vm.revealedChars.size)
+
+        vm.gmCheatInstantWinLevel()
+        assertEquals(RoundOutcome.VICTORY, vm.roundOutcome)
+
+        // Logout GM
+        vm.logoutGm()
+        assertEquals(false, vm.isGmLoggedIn)
+        assertEquals(false, vm.showGmConsoleDrawer)
+    }
 }
+
