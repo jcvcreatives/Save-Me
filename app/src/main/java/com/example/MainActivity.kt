@@ -1696,6 +1696,7 @@ class WordGameViewModel : ViewModel() {
     }
 
     private var lastLocalFirestoreWriteMs: Long = 0L
+    private var debouncedCloudSyncJob: Job? = null
 
     private fun resetLocalStateToFresh() {
         isApplyingRemoteSnapshot = true
@@ -1808,19 +1809,6 @@ class WordGameViewModel : ViewModel() {
                     applyRemoteAccountToLocalState(synced)
                 }
             }
-
-            repo.observePlayerAccount(targetUid)
-                .catch { e ->
-                    authErrorMessage = e.localizedMessage ?: "Failed to sync profile"
-                }
-                .collect { account ->
-                    if (account != null) {
-                        if (System.currentTimeMillis() - lastLocalFirestoreWriteMs < 800L) {
-                            return@collect
-                        }
-                        applyRemoteAccountToLocalState(account)
-                    }
-                }
         }
     }
 
@@ -1910,12 +1898,6 @@ class WordGameViewModel : ViewModel() {
                 isSyncingCloud = false
                 statusBannerMessage = "👋 Welcome back, ${remoteAccount.displayName}! (Synced Level ${campaignLevelIndex + 1})"
                 currentScreen = ScreenState.MAIN_MENU
-                startObservingCloudAccountByUid(
-                    uid = resolvedUid,
-                    fallbackName = remoteAccount.displayName,
-                    fallbackEmail = remoteAccount.email,
-                    fallbackAuthMethod = remoteAccount.authMethod
-                )
             }
             return
         }
@@ -2010,12 +1992,6 @@ class WordGameViewModel : ViewModel() {
                 }.onFailure { err ->
                     authErrorMessage = err.localizedMessage ?: "Failed to create account."
                 }
-                startObservingCloudAccountByUid(
-                    uid = uid,
-                    fallbackName = cleanNick,
-                    fallbackEmail = cleanEmail,
-                    fallbackAuthMethod = authMethod
-                )
             }
         }
     }
@@ -2026,6 +2002,8 @@ class WordGameViewModel : ViewModel() {
     }
 
     fun continueAsGuest() {
+        debouncedCloudSyncJob?.cancel()
+        debouncedCloudSyncJob = null
         accountSnapshotJob?.cancel()
         accountSnapshotJob = null
         authInstance?.signOut()
@@ -2113,12 +2091,6 @@ class WordGameViewModel : ViewModel() {
                             }
                         }
                         isExplicitSignInInFlight = false
-                        startObservingCloudAccountByUid(
-                            uid = targetUid,
-                            fallbackName = existingCloud?.displayName ?: resolvedName,
-                            fallbackEmail = existingCloud?.email ?: resolvedEmail,
-                            fallbackAuthMethod = authMethod
-                        )
                     } else {
                         isExplicitSignInInFlight = false
                         currentScreen = ScreenState.MAIN_MENU
@@ -2145,6 +2117,8 @@ class WordGameViewModel : ViewModel() {
             putString("registeredPlayerMode", authMethod)
             apply()
         }
+        debouncedCloudSyncJob?.cancel()
+        debouncedCloudSyncJob = null
         isSyncingCloud = true
         authErrorMessage = null
         viewModelScope.launch {
@@ -2165,6 +2139,7 @@ class WordGameViewModel : ViewModel() {
             isSyncingCloud = false
             res.onSuccess { updated ->
                 cloudAccount = updated
+                lastCloudSyncEpochMs = System.currentTimeMillis()
                 statusBannerMessage = "✅ Saved profile for ${updated.displayName}!"
             }.onFailure { err ->
                 authErrorMessage = err.localizedMessage ?: "Could not update profile."
@@ -2173,6 +2148,8 @@ class WordGameViewModel : ViewModel() {
     }
 
     fun signOutFirebase() {
+        debouncedCloudSyncJob?.cancel()
+        debouncedCloudSyncJob = null
         val activeUid = currentUser?.uid ?: registeredPlayerUid ?: cloudAccount?.userId
         val activeName = cloudAccount?.displayName
             ?: appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.getString("registeredPlayerName", null)
@@ -2191,6 +2168,7 @@ class WordGameViewModel : ViewModel() {
         if (!activeUid.isNullOrBlank() && activeUid !in JUNK_TEST_UIDS && !isGuestSession) {
             val repo = playerAccountRepo
             if (repo != null) {
+                lastLocalFirestoreWriteMs = System.currentTimeMillis()
                 viewModelScope.launch {
                     repo.updateProgress(
                         displayName = activeName,
@@ -2231,6 +2209,7 @@ class WordGameViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         authStateListener?.let { authInstance?.removeAuthStateListener(it) }
+        debouncedCloudSyncJob?.cancel()
         accountSnapshotJob?.cancel()
         stateChangeWatcherJob?.cancel()
     }
@@ -2277,37 +2256,76 @@ class WordGameViewModel : ViewModel() {
     }
 
     /**
-     * Pushes the current canonical game state to Firestore when signed in via the Registration screen.
+     * Pushes the current canonical game state to Firestore with a 15-second debounce delay,
+     * a strict minimum 30-second cooldown between automatic cloud writes, and a dirty-check
+     * against [cloudAccount] so rapid gameplay changes and hint clicks batch together without
+     * burning Firestore free-tier quota.
      */
-    private fun syncCurrentStateToFirestore() {
+    private fun syncCurrentStateToFirestore(forceImmediate: Boolean = false) {
         val activeUid = currentUser?.uid ?: registeredPlayerUid ?: cloudAccount?.userId
         val repo = playerAccountRepo
-        if (!activeUid.isNullOrBlank() && activeUid !in JUNK_TEST_UIDS && repo != null && !isGuestSession) {
+        if (activeUid.isNullOrBlank() || activeUid in JUNK_TEST_UIDS || repo == null || isGuestSession) {
+            return
+        }
+
+        debouncedCloudSyncJob?.cancel()
+        debouncedCloudSyncJob = viewModelScope.launch {
+            if (!forceImmediate) {
+                // 15-second debounce delay to batch rapid gameplay state changes & hint clicks
+                delay(15_000L)
+
+                // Enforce strict minimum 30-second cooldown between automatic cloud writes
+                val elapsedSinceLastWrite = System.currentTimeMillis() - lastLocalFirestoreWriteMs
+                if (lastLocalFirestoreWriteMs > 0L && elapsedSinceLastWrite < 30_000L) {
+                    delay(30_000L - elapsedSinceLastWrite)
+                }
+            }
+
+            // Re-validate active session after debounce/cooldown wait
+            val resolvedUid = currentUser?.uid ?: registeredPlayerUid ?: cloudAccount?.userId
+            val activeRepo = playerAccountRepo
+            if (resolvedUid.isNullOrBlank() || resolvedUid in JUNK_TEST_UIDS || activeRepo == null || isGuestSession) {
+                return@launch
+            }
+
+            // Dirty-check: skip Firestore write if cloudAccount already matches current state
+            val currentCloud = cloudAccount
+            val targetCompletedCount = completedCampaignLevels.size
+            if (!forceImmediate &&
+                currentCloud != null &&
+                currentCloud.campaignLevelIndex == campaignLevelIndex.toLong() &&
+                currentCloud.coins == coins.toLong() &&
+                currentCloud.perfectCount == perfectCount.toLong() &&
+                currentCloud.currentStreak == currentStreak.toLong() &&
+                currentCloud.maxStreak == maxStreak.toLong() &&
+                currentCloud.completedLevelsCount == targetCompletedCount.toLong()
+            ) {
+                return@launch
+            }
+
             isSyncingCloud = true
             lastLocalFirestoreWriteMs = System.currentTimeMillis()
-            viewModelScope.launch {
-                val res = repo.updateProgress(
-                    displayName = cloudAccount?.displayName
-                        ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
-                        ?: "Doodle Player",
-                    email = cloudAccount?.email ?: currentUser?.email,
-                    passwordHash = cloudAccount?.passwordHash,
-                    authMethod = cloudAccount?.authMethod ?: "account",
-                    campaignLevelIndex = campaignLevelIndex,
-                    coins = coins,
-                    perfectCount = perfectCount,
-                    currentStreak = currentStreak,
-                    maxStreak = maxStreak,
-                    completedLevelsCount = completedCampaignLevels.size,
-                    userId = activeUid
-                )
-                isSyncingCloud = false
-                res.onSuccess { syncedAccount ->
-                    cloudAccount = syncedAccount
-                    lastCloudSyncEpochMs = System.currentTimeMillis()
-                }.onFailure { err ->
-                    authErrorMessage = err.localizedMessage ?: "Sync failed"
-                }
+            val res = activeRepo.updateProgress(
+                displayName = cloudAccount?.displayName
+                    ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
+                    ?: "Doodle Player",
+                email = cloudAccount?.email ?: currentUser?.email,
+                passwordHash = cloudAccount?.passwordHash,
+                authMethod = cloudAccount?.authMethod ?: "account",
+                campaignLevelIndex = campaignLevelIndex,
+                coins = coins,
+                perfectCount = perfectCount,
+                currentStreak = currentStreak,
+                maxStreak = maxStreak,
+                completedLevelsCount = targetCompletedCount,
+                userId = resolvedUid
+            )
+            isSyncingCloud = false
+            res.onSuccess { syncedAccount ->
+                cloudAccount = syncedAccount
+                lastCloudSyncEpochMs = System.currentTimeMillis()
+            }.onFailure { err ->
+                authErrorMessage = err.localizedMessage ?: "Sync failed"
             }
         }
     }
