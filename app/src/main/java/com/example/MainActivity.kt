@@ -132,11 +132,23 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.Brush
+import android.app.Activity
+import android.content.ContextWrapper
+import androidx.compose.ui.platform.LocalContext
 import com.example.data.JUNK_TEST_UIDS
 import com.example.data.PlayerAccount
 import com.example.data.PlayerAccountRepository
 import com.example.data.computePasswordHash
 import com.example.ui.RegistrationAuthScreen
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -1421,6 +1433,15 @@ class WordGameViewModel : ViewModel() {
     var showSettingsDialog by mutableStateOf(false)
     var showCoinShopDialog by mutableStateOf(false)
 
+    // Google AdMob "Every 5th Free Bonus" Test Ad state
+    var freeBonusClaimCount by mutableIntStateOf(0)
+        private set
+    var showAdMobTestOverlay by mutableStateOf(false)
+    var pendingAdBonusAmount by mutableIntStateOf(150)
+        private set
+    val isNextFreeBonusTestAd: Boolean
+        get() = (freeBonusClaimCount + 1) % 5 == 0
+
     // ========================================================================
     // GM (GAME MASTER) ACCOUNT LOGIN & LIVE SANDBOX CONSOLE STATE
     // ========================================================================
@@ -1616,6 +1637,7 @@ class WordGameViewModel : ViewModel() {
         gmToggleBossChainedKeys = prefs.getBoolean("gmToggleBossChainedKeys", true)
         gmToggleTacticalStarDock = prefs.getBoolean("gmToggleTacticalStarDock", true)
         gmToggleDoubleOrNothingBet = prefs.getBoolean("gmToggleDoubleOrNothingBet", true)
+        freeBonusClaimCount = prefs.getInt("freeBonusClaimCount", 0)
 
         val completedRaw = prefs.getString("completedLevels", "") ?: ""
         completedCampaignLevels.clear()
@@ -1652,8 +1674,11 @@ class WordGameViewModel : ViewModel() {
                 maxStreak = obj.optInt("maxStreak", maxStreak)
                 freeShieldPotions = obj.optInt("freePotions", freeShieldPotions)
                 unlockAllMapLevels = obj.optBoolean("freePlayAll", unlockAllMapLevels)
+                freeBonusClaimCount = obj.optInt("freeBonusCount", freeBonusClaimCount)
             }
         }
+
+        AdMobTestAdManager.initAndPreload(context.applicationContext)
 
         startAutomaticStateChangeSyncWatcher()
         initFirebaseSync(context.applicationContext)
@@ -2451,6 +2476,7 @@ class WordGameViewModel : ViewModel() {
             put("maxStreak", maxStreak)
             put("chestProg", chestProgress)
             put("themeProg", themeProgress)
+            put("freeBonusCount", freeBonusClaimCount)
             put("updatedAt", System.currentTimeMillis())
         }.toString()
 
@@ -2463,6 +2489,7 @@ class WordGameViewModel : ViewModel() {
             .putInt("chestProgress", chestProgress)
             .putInt("themeProgress", themeProgress)
             .putInt("freeShieldPotions", freeShieldPotions)
+            .putInt("freeBonusClaimCount", freeBonusClaimCount)
             .putBoolean("isGmLoggedIn", isGmLoggedIn)
             .putBoolean("gmToggleKiComboFuse", gmToggleKiComboFuse)
             .putBoolean("gmToggleStickmanKiBlasts", gmToggleStickmanKiBlasts)
@@ -3139,10 +3166,65 @@ class WordGameViewModel : ViewModel() {
         }
     }
 
-    fun claimFreeCoinBonus(amount: Int = 150) {
-        coins += amount
-        statusBannerMessage = "+$amount Doodle Coins added!"
+    fun claimFreeCoinBonus(amount: Int = 150, activity: Activity? = null) {
+        val nextClaimNumber = freeBonusClaimCount + 1
+        if (nextClaimNumber % 5 == 0) {
+            // Every 5th Free Bonus triggers a Google AdMob Test Ad!
+            pendingAdBonusAmount = amount
+            showCoinShopDialog = false
+            AdMobTestAdManager.showFifthBonusTestAd(
+                activity = activity,
+                context = appContext,
+                onAdCompletedAndRewardEarned = {
+                    completeFifthBonusTestAdReward()
+                },
+                onFallbackOverlayRequired = {
+                    showAdMobTestOverlay = true
+                }
+            )
+        } else {
+            freeBonusClaimCount = nextClaimNumber
+            coins += amount
+            ProceduralSoundEngine.play(DoodleSoundEffect.CHIME)
+            statusBannerMessage = "+$amount Doodle Coins added! (Bonus ${nextClaimNumber % 5}/5 until Test Ad)"
+            saveStateToPrefs()
+        }
+    }
+
+    fun completeFifthBonusTestAdReward() {
+        showAdMobTestOverlay = false
+        freeBonusClaimCount += 1
+        coins += pendingAdBonusAmount
+        ProceduralSoundEngine.play(DoodleSoundEffect.VICTORY)
+        statusBannerMessage = "🎬 AdMob Test Ad Complete! +$pendingAdBonusAmount Coins (5th Bonus #${freeBonusClaimCount})!"
         saveStateToPrefs()
+    }
+
+    fun dismissAdMobTestOverlayWithoutReward() {
+        showAdMobTestOverlay = false
+        statusBannerMessage = "Test Ad closed early. Watch to completion for +$pendingAdBonusAmount Coins!"
+    }
+
+    fun gmPrimeFifthBonusAd() {
+        if (!isGmLoggedIn) return
+        freeBonusClaimCount = 4
+        writeLocalStorageOnly()
+        statusBannerMessage = "👑 Free Bonus counter set to 4/5 (Next Free Bonus triggers AdMob Test Ad!)"
+    }
+
+    fun gmTriggerTestAdNow(activity: Activity? = null) {
+        if (!isGmLoggedIn) return
+        pendingAdBonusAmount = 150
+        AdMobTestAdManager.showFifthBonusTestAd(
+            activity = activity,
+            context = appContext,
+            onAdCompletedAndRewardEarned = {
+                completeFifthBonusTestAdReward()
+            },
+            onFallbackOverlayRequired = {
+                showAdMobTestOverlay = true
+            }
+        )
     }
 
     fun toggleSoundEffects() {
@@ -3371,13 +3453,150 @@ class WordGameViewModel : ViewModel() {
 }
 
 // ============================================================================
-// 4. MAIN ACTIVITY ENTRY POINT
+// 4. GOOGLE ADMOB TEST AD MANAGER & MAIN ACTIVITY ENTRY POINT
 // ============================================================================
+
+private fun Context.findActivity(): Activity? {
+    var ctx: Context? = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
+
+object AdMobTestAdManager {
+    // Official Google-provided Android Test Ad Unit IDs
+    const val TEST_APPLICATION_ID = "ca-app-pub-3940256099942544~3347511713"
+    const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
+    const val TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
+
+    private var isInitialized = false
+    private var interstitialAd: InterstitialAd? = null
+    private var rewardedAd: RewardedAd? = null
+    private var isLoadingInterstitial = false
+    private var isLoadingRewarded = false
+
+    fun initAndPreload(context: Context) {
+        val appCtx = context.applicationContext
+        runCatching {
+            if (!isInitialized) {
+                isInitialized = true
+                MobileAds.initialize(appCtx) {
+                    preloadAds(appCtx)
+                }
+            }
+            preloadAds(appCtx)
+        }
+    }
+
+    fun preloadAds(context: Context) {
+        val appCtx = context.applicationContext
+        runCatching {
+            if (interstitialAd == null && !isLoadingInterstitial) {
+                isLoadingInterstitial = true
+                InterstitialAd.load(
+                    appCtx,
+                    TEST_INTERSTITIAL_AD_UNIT_ID,
+                    AdRequest.Builder().build(),
+                    object : InterstitialAdLoadCallback() {
+                        override fun onAdLoaded(ad: InterstitialAd) {
+                            interstitialAd = ad
+                            isLoadingInterstitial = false
+                        }
+
+                        override fun onAdFailedToLoad(error: LoadAdError) {
+                            interstitialAd = null
+                            isLoadingInterstitial = false
+                        }
+                    }
+                )
+            }
+            if (rewardedAd == null && !isLoadingRewarded) {
+                isLoadingRewarded = true
+                RewardedAd.load(
+                    appCtx,
+                    TEST_REWARDED_AD_UNIT_ID,
+                    AdRequest.Builder().build(),
+                    object : RewardedAdLoadCallback() {
+                        override fun onAdLoaded(ad: RewardedAd) {
+                            rewardedAd = ad
+                            isLoadingRewarded = false
+                        }
+
+                        override fun onAdFailedToLoad(error: LoadAdError) {
+                            rewardedAd = null
+                            isLoadingRewarded = false
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    fun showFifthBonusTestAd(
+        activity: Activity?,
+        context: Context?,
+        onAdCompletedAndRewardEarned: () -> Unit,
+        onFallbackOverlayRequired: () -> Unit
+    ) {
+        val currentRewarded = rewardedAd
+        val currentInterstitial = interstitialAd
+        if (activity != null && currentRewarded != null) {
+            rewardedAd = null
+            var rewardGranted = false
+            currentRewarded.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    if (context != null) preloadAds(context)
+                    onAdCompletedAndRewardEarned()
+                }
+
+                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                    if (context != null) preloadAds(context)
+                    onFallbackOverlayRequired()
+                }
+            }
+            runCatching {
+                currentRewarded.show(activity) {
+                    rewardGranted = true
+                }
+            }.onFailure {
+                onFallbackOverlayRequired()
+            }
+            return
+        }
+
+        if (activity != null && currentInterstitial != null) {
+            interstitialAd = null
+            currentInterstitial.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    if (context != null) preloadAds(context)
+                    onAdCompletedAndRewardEarned()
+                }
+
+                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                    if (context != null) preloadAds(context)
+                    onFallbackOverlayRequired()
+                }
+            }
+            runCatching {
+                currentInterstitial.show(activity)
+            }.onFailure {
+                onFallbackOverlayRequired()
+            }
+            return
+        }
+
+        if (context != null) preloadAds(context)
+        onFallbackOverlayRequired()
+    }
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ProceduralSoundEngine.init(applicationContext)
+        AdMobTestAdManager.initAndPreload(applicationContext)
         enableEdgeToEdge()
         setContent {
             val vm: WordGameViewModel = viewModel()
@@ -3604,16 +3823,31 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
             )
         }
 
-        // 6. Free Coin / Ad Bonus Dialog
+        // 6. Free Coin / Ad Bonus Dialog ("Every 5th Free Bonus" Test Ad)
+        val hostActivity = LocalContext.current.findActivity()
         if (viewModel.showCoinShopDialog) {
             CoinBonusDoodleDialog(
                 coins = viewModel.coins,
+                freeBonusClaimCount = viewModel.freeBonusClaimCount,
                 fontFamily = activeFontFamily,
                 onClaimCoins = { amount ->
-                    viewModel.claimFreeCoinBonus(amount)
-                    viewModel.showCoinShopDialog = false
+                    viewModel.claimFreeCoinBonus(amount, hostActivity)
+                    if (viewModel.showCoinShopDialog) {
+                        viewModel.showCoinShopDialog = false
+                    }
                 },
                 onDismiss = { viewModel.showCoinShopDialog = false }
+            )
+        }
+
+        // 6B. Google AdMob Test Ad Overlay (5th Free Bonus interactive test ad fallback)
+        if (viewModel.showAdMobTestOverlay) {
+            DoodleAdMobTestAdDialog(
+                rewardAmount = viewModel.pendingAdBonusAmount,
+                claimNumber = viewModel.freeBonusClaimCount + 1,
+                fontFamily = activeFontFamily,
+                onRewardCompleted = { viewModel.completeFifthBonusTestAdReward() },
+                onDismissEarly = { viewModel.dismissAdMobTestOverlayWithoutReward() }
             )
         }
 
@@ -13650,10 +13884,14 @@ fun SettingsDoodleDialog(
 @Composable
 fun CoinBonusDoodleDialog(
     coins: Int,
+    freeBonusClaimCount: Int = 0,
     fontFamily: FontFamily,
     onClaimCoins: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val cycleProgress = freeBonusClaimCount % 5
+    val isFifthAdClaim = (freeBonusClaimCount + 1) % 5 == 0
+
     Dialog(onDismissRequest = onDismiss) {
         SketchyContainer(
             fillColor = DoodleColors.PaperOffWhite,
@@ -13682,10 +13920,42 @@ fun CoinBonusDoodleDialog(
                     color = DoodleColors.InkBlue
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Every 5th Free Bonus Ad Progress Pill
+                SketchyContainer(
+                    fillColor = if (isFifthAdClaim) Color(0xFFFFF3E0) else Color(0xFFE3F2FD),
+                    borderColor = DoodleColors.InkBlack,
+                    cornerRadius = 14.dp,
+                    strokeWidth = 1.5.dp,
+                    shadowOffset = 1.5.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("coin_bank_ad_cycle_badge")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = if (isFifthAdClaim) {
+                                "🎬 5th Free Bonus Ready! (Short Test Ad)"
+                            } else {
+                                "Free Bonus Cycle: $cycleProgress / 4 Instant (Every 5th = Test Ad)"
+                            },
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp,
+                            color = DoodleColors.InkBlack,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 SketchyContainer(
-                    fillColor = DoodleColors.DoodleYellow,
+                    fillColor = if (isFifthAdClaim) Color(0xFFFFB300) else DoodleColors.DoodleYellow,
                     cornerRadius = 20.dp,
                     onClick = { onClaimCoins(150) },
                     modifier = Modifier
@@ -13694,10 +13964,14 @@ fun CoinBonusDoodleDialog(
                         .testTag("claim_free_coins_button")
                 ) {
                     Text(
-                        text = "Claim Free Bonus (+150 Coins)",
+                        text = if (isFifthAdClaim) {
+                            "🎬 Watch Test Ad (+150 Coins)"
+                        } else {
+                            "Claim Free Bonus (+150 Coins)"
+                        },
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Black,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         color = DoodleColors.InkBlack
                     )
                 }
@@ -13718,6 +13992,152 @@ fun CoinBonusDoodleDialog(
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
                         color = DoodleColors.InkBlack
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DoodleAdMobTestAdDialog(
+    rewardAmount: Int,
+    claimNumber: Int,
+    fontFamily: FontFamily,
+    onRewardCompleted: () -> Unit,
+    onDismissEarly: () -> Unit
+) {
+    var secondsLeft by remember { mutableIntStateOf(3) }
+    LaunchedEffect(Unit) {
+        while (secondsLeft > 0) {
+            delay(1000L)
+            secondsLeft--
+        }
+    }
+
+    Dialog(onDismissRequest = {
+        if (secondsLeft <= 0) onRewardCompleted() else onDismissEarly()
+    }) {
+        SketchyContainer(
+            fillColor = DoodleColors.PaperOffWhite,
+            borderColor = DoodleColors.InkBlack,
+            cornerRadius = 24.dp,
+            strokeWidth = 2.6.dp,
+            shadowOffset = 5.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("admob_test_ad_dialog")
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SketchyContainer(
+                        fillColor = DoodleColors.DoodleYellow,
+                        cornerRadius = 10.dp,
+                        strokeWidth = 1.5.dp,
+                        shadowOffset = 1.dp
+                    ) {
+                        Text(
+                            text = "AdMob • TEST AD",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp,
+                            color = DoodleColors.InkBlack,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    Text(
+                        text = if (secondsLeft > 0) "Reward in ${secondsLeft}s..." else "✓ Reward Ready!",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 12.sp,
+                        color = if (secondsLeft > 0) DoodleColors.InkBlue else DoodleColors.CorrectGreen
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                SketchyContainer(
+                    fillColor = Color(0xFFFFFDE7),
+                    borderColor = DoodleColors.InkBlack,
+                    cornerRadius = 18.dp,
+                    strokeWidth = 2.dp,
+                    shadowOffset = 2.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "🎬 Google Mobile Ads SDK",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 19.sp,
+                            color = DoodleColors.InkBlack,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = "Every 5th Free Bonus Test Ad (Claim #$claimNumber)",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 13.sp,
+                            color = DoodleColors.InkBlue,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = "Unit: ${AdMobTestAdManager.TEST_INTERSTITIAL_AD_UNIT_ID}",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            color = DoodleColors.InkBlack.copy(alpha = 0.65f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                SketchyContainer(
+                    fillColor = if (secondsLeft <= 0) DoodleColors.CorrectGreen else DoodleColors.DoodleYellow,
+                    cornerRadius = 18.dp,
+                    onClick = {
+                        if (secondsLeft <= 0) {
+                            onRewardCompleted()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("admob_claim_reward_button")
+                ) {
+                    Text(
+                        text = if (secondsLeft <= 0) {
+                            "✨ Claim +$rewardAmount Coins & Close Ad"
+                        } else {
+                            "⏳ Watching Test Ad ($secondsLeft)..."
+                        },
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 15.sp,
+                        color = if (secondsLeft <= 0) Color.White else DoodleColors.InkBlack
                     )
                 }
             }
@@ -14591,6 +15011,55 @@ fun GmCommandConsoleDrawer(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = DoodleColors.WrongRed
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // 4. AdMob 5th-Bonus Test Ad Sandbox Controls
+                        val gmHostActivity = LocalContext.current.findActivity()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SketchyContainer(
+                                fillColor = Color(0xFFE3F2FD),
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.5.dp,
+                                onClick = { viewModel.gmPrimeFifthBonusAd() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
+                                    .testTag("gm_prime_5th_ad_button")
+                            ) {
+                                Text(
+                                    text = "Prime 4/5 Bonus",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 11.sp,
+                                    color = DoodleColors.InkBlack
+                                )
+                            }
+
+                            SketchyContainer(
+                                fillColor = Color(0xFFFFF3E0),
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.5.dp,
+                                onClick = { viewModel.gmTriggerTestAdNow(gmHostActivity) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
+                                    .testTag("gm_trigger_test_ad_button")
+                            ) {
+                                Text(
+                                    text = "🎬 Test 5th Ad",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 11.sp,
+                                    color = DoodleColors.InkBlack
                                 )
                             }
                         }

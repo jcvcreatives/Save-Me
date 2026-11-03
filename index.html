@@ -1171,11 +1171,32 @@
   <div id="coinModal" class="modal-backdrop">
     <div class="sketch-box dialog-card">
       <div style="font-size:24px;font-weight:700;margin-bottom:8px;">Doodle Coin Bank</div>
-      <p id="coinModalBalance" style="font-size:17px;color:var(--ink-blue);font-weight:700;">Current Balance: 1231 Coins</p>
-      <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-bottom:10px;" onclick="claimFreeCoins()">
+      <p id="coinModalBalance" style="font-size:17px;color:var(--ink-blue);font-weight:700;margin-bottom:8px;">Current Balance: 1231 Coins</p>
+      <div id="coinModalAdCycleBadge" class="sketch-box" style="padding:8px 10px;border-radius:12px;background:#E3F2FD;font-size:12px;font-weight:800;margin-bottom:12px;">
+        Free Bonus Cycle: 0 / 4 Instant (Every 5th = Test Ad)
+      </div>
+      <button id="claimFreeCoinsBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="margin-bottom:10px;" onclick="claimFreeCoins()">
         Claim Free Bonus (+150 Coins)
       </button>
       <button class="sketch-box sketch-btn menu-btn" style="height:46px;" onclick="closeAllModals()">Maybe Later</button>
+    </div>
+  </div>
+
+  <!-- ================= ADMOB 5TH BONUS TEST AD MODAL ================= -->
+  <div id="admobTestAdModal" class="modal-backdrop">
+    <div class="sketch-box dialog-card" style="max-width:390px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span class="sketch-box" style="background:var(--doodle-yellow);padding:4px 8px;border-radius:10px;font-size:11px;font-weight:800;">AdMob • TEST AD</span>
+        <span id="admobCountdownText" style="font-size:12px;font-weight:800;color:var(--ink-blue);">Reward in 3s...</span>
+      </div>
+      <div class="sketch-box" style="background:#FFFDE7;padding:14px;border-radius:16px;margin-bottom:14px;">
+        <div style="font-size:18px;font-weight:800;margin-bottom:6px;">🎬 Google Mobile Ads SDK</div>
+        <div id="admobClaimTitle" style="font-size:13px;font-weight:700;color:var(--ink-blue);margin-bottom:6px;">Every 5th Free Bonus Test Ad</div>
+        <div style="font-size:10px;opacity:0.65;">Unit: ca-app-pub-3940256099942544/1033173712</div>
+      </div>
+      <button id="admobRewardClaimBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:48px;" onclick="completeAdMobTestAdReward()">
+        ⏳ Watching Test Ad (3)...
+      </button>
     </div>
   </div>
 
@@ -3836,12 +3857,34 @@
 
     function openTwoPlayerModal() { document.getElementById('twoPlayerModal').classList.add('active'); }
     function openSettings() { document.getElementById('settingsModal').classList.add('active'); }
+    let freeBonusClaimCount = Number(localStorage.getItem('doodle_free_bonus_count') || 0);
+    let _admobTimer = null;
+    let _admobSecondsLeft = 3;
+
+    function updateCoinModalAdBadge() {
+      const badge = document.getElementById('coinModalAdCycleBadge');
+      const btn = document.getElementById('claimFreeCoinsBtn');
+      const isFifth = (freeBonusClaimCount + 1) % 5 === 0;
+      const cycle = freeBonusClaimCount % 5;
+      if (badge) {
+        badge.style.background = isFifth ? '#FFF3E0' : '#E3F2FD';
+        badge.textContent = isFifth
+          ? '🎬 5th Free Bonus Ready! (Short Test Ad)'
+          : `Free Bonus Cycle: ${cycle} / 4 Instant (Every 5th = Test Ad)`;
+      }
+      if (btn) {
+        btn.textContent = isFifth ? '🎬 Watch Test Ad (+150 Coins)' : 'Claim Free Bonus (+150 Coins)';
+      }
+    }
+
     function openCoinModal() {
       document.getElementById('coinModalBalance').textContent = `Current Balance: ${coins} Coins`;
+      updateCoinModalAdBadge();
       document.getElementById('coinModal').classList.add('active');
     }
     function closeAllModals() {
       clearTimeout(window._gameOverDelayTimer);
+      clearInterval(_admobTimer);
       document.querySelectorAll('.modal-backdrop').forEach(m => {
         m.classList.remove('active');
         m.classList.remove('minimized');
@@ -3849,12 +3892,62 @@
     }
 
     function claimFreeCoins() {
+      const nextClaim = freeBonusClaimCount + 1;
+      if (nextClaim % 5 === 0) {
+        closeAllModals();
+        openAdMobTestAdModal(nextClaim);
+      } else {
+        freeBonusClaimCount = nextClaim;
+        localStorage.setItem('doodle_free_bonus_count', String(freeBonusClaimCount));
+        coins += 150;
+        saveState();
+        playProceduralSound('chime');
+        closeAllModals();
+        updateMenuUI();
+        showToast(`+150 Doodle Coins added! (Bonus ${nextClaim % 5}/5 until Test Ad)`);
+      }
+    }
+
+    function openAdMobTestAdModal(claimNum) {
+      _admobSecondsLeft = 3;
+      const modal = document.getElementById('admobTestAdModal');
+      const countEl = document.getElementById('admobCountdownText');
+      const titleEl = document.getElementById('admobClaimTitle');
+      const btnEl = document.getElementById('admobRewardClaimBtn');
+      if (titleEl) titleEl.textContent = `Every 5th Free Bonus Test Ad (Claim #${claimNum})`;
+      const refreshBtn = () => {
+        if (_admobSecondsLeft > 0) {
+          if (countEl) countEl.textContent = `Reward in ${_admobSecondsLeft}s...`;
+          if (btnEl) btnEl.textContent = `⏳ Watching Test Ad (${_admobSecondsLeft})...`;
+        } else {
+          if (countEl) countEl.textContent = '✓ Reward Ready!';
+          if (btnEl) btnEl.textContent = '✨ Claim +150 Coins & Close Ad';
+        }
+      };
+      refreshBtn();
+      if (modal) modal.classList.add('active');
+      clearInterval(_admobTimer);
+      _admobTimer = setInterval(() => {
+        if (_admobSecondsLeft > 0) {
+          _admobSecondsLeft--;
+          refreshBtn();
+        } else {
+          clearInterval(_admobTimer);
+        }
+      }, 1000);
+    }
+
+    function completeAdMobTestAdReward() {
+      if (_admobSecondsLeft > 0) return;
+      clearInterval(_admobTimer);
+      freeBonusClaimCount += 1;
+      localStorage.setItem('doodle_free_bonus_count', String(freeBonusClaimCount));
       coins += 150;
       saveState();
-      playProceduralSound('chime');
+      playProceduralSound('victory');
       closeAllModals();
       updateMenuUI();
-      showToast('+150 Doodle Coins added!');
+      showToast(`🎬 AdMob Test Ad Complete! +150 Coins (5th Bonus #${freeBonusClaimCount})!`);
     }
 
     function toggleSound() {

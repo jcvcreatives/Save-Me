@@ -33,4 +33,41 @@ class ExampleUnitTest {
     assertEquals(PerilType.DRAGON_CAVE, PerilType.forLevel(15))
     assertEquals(PerilType.SHARK_BALLOONS, PerilType.forLevel(16))
   }
+
+  @Test
+  fun fifthFreeBonus_triggersAdMobTestAdAndGrantsRewardOnCompletion() {
+    val vm = WordGameViewModel()
+    val startCoins = vm.coins
+
+    // Claims 1..4 grant +150 coins immediately without showing the Test Ad
+    for (i in 1..4) {
+      vm.claimFreeCoinBonus(150, activity = null)
+      assertEquals(i, vm.freeBonusClaimCount)
+      assertEquals(startCoins + i * 150, vm.coins)
+      assertFalse(vm.showAdMobTestOverlay)
+    }
+
+    assertTrue(vm.isNextFreeBonusTestAd)
+
+    // 5th claim opens the Test Ad flow and waits for completion before granting coins
+    vm.claimFreeCoinBonus(150, activity = null)
+    assertTrue(vm.showAdMobTestOverlay)
+    assertEquals(4, vm.freeBonusClaimCount)
+    assertEquals(startCoins + 4 * 150, vm.coins)
+
+    // Completing the Test Ad grants the 5th bonus (+150 coins) and increments count to 5
+    vm.completeFifthBonusTestAdReward()
+    assertFalse(vm.showAdMobTestOverlay)
+    assertEquals(5, vm.freeBonusClaimCount)
+    assertEquals(startCoins + 5 * 150, vm.coins)
+  }
+
+  @Test
+  fun gmAuthentication_validatesJcvAndExactPassword() {
+    val vm = WordGameViewModel()
+    assertFalse(vm.authenticateGm("JCV", "jens1990"))
+    assertFalse(vm.isGmLoggedIn)
+    assertTrue(vm.authenticateGm(" jcv ", "jens1990."))
+    assertTrue(vm.isGmLoggedIn)
+  }
 }
