@@ -341,7 +341,7 @@
     .lives-dots {
       display: flex;
       gap: 5px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .life-dot {
@@ -356,10 +356,10 @@
       border: 2px solid var(--wrong-red);
       color: var(--wrong-red);
       border-radius: 10px;
-      padding: 3px 8px;
-      font-size: 11px;
+      padding: 2px 7px;
+      font-size: 10.5px;
       font-weight: 700;
-      margin-bottom: 8px;
+      margin-bottom: 5px;
     }
 
     /* Randomized Hand-Drawn Clue Card Container (8 Styles) */
@@ -367,12 +367,12 @@
       position: relative;
       width: 100%;
       max-width: 225px;
-      min-height: 118px;
-      padding: 16px 14px 14px;
+      min-height: 124px;
+      padding: 15px 14px 14px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
       transform-origin: center top;
       animation: clueCardSway 3.8s ease-in-out infinite alternate;
       z-index: 2;
@@ -395,16 +395,16 @@
     .clue-category-pill {
       position: relative;
       z-index: 2;
-      font-size: 10px;
+      font-size: 9.5px;
       font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 0.6px;
+      letter-spacing: 0.5px;
       padding: 2px 8px;
       border-radius: 8px;
       border: 1.5px solid var(--ink-black);
       background: var(--doodle-yellow);
       color: var(--ink-black);
-      margin-bottom: 5px;
+      margin-bottom: 4px;
       box-shadow: 1px 1.5px 0 rgba(0,0,0,0.18);
     }
 
@@ -413,15 +413,18 @@
       z-index: 2;
       font-size: 9px;
       font-weight: 800;
-      opacity: 0.68;
-      margin-top: 4px;
+      opacity: 0.78;
+      margin-top: 6px;
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.78);
     }
 
     .clue-text {
       position: relative;
       z-index: 2;
-      font-size: 15.5px;
-      line-height: 1.24;
+      font-size: 14.5px;
+      line-height: 1.22;
       font-weight: 800;
       color: var(--ink-black);
       text-shadow: 0 1px 0 rgba(255,255,255,0.65);
@@ -456,13 +459,13 @@
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 8px;
-      margin: 8px 0;
-      min-height: 48px;
+      gap: 7px;
+      margin: 4px 0;
+      min-height: 42px;
     }
 
     .slot-item {
-      width: 34px;
+      width: 33px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -470,10 +473,10 @@
     }
 
     .slot-char {
-      height: 34px;
-      font-size: 27px;
+      height: 32px;
+      font-size: 26px;
       font-weight: 800;
-      line-height: 34px;
+      line-height: 32px;
       transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
@@ -500,34 +503,47 @@
     .keyboard {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 5px;
       width: 100%;
     }
 
     .kb-row {
       display: flex;
       justify-content: center;
-      gap: 6px;
+      gap: 5px;
     }
 
     .kb-key {
-      width: 44px;
-      height: 44px;
+      width: 43px;
+      height: 41px;
       border-radius: 12px;
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 21px;
+      font-size: 20px;
       font-weight: 800;
       cursor: pointer;
       background: #FFFFFF;
       border: 2.2px solid var(--ink-black);
-      box-shadow: 0 4px 0 var(--ink-black), 0 5px 6px rgba(0,0,0,0.14);
+      box-shadow: 0 3.5px 0 var(--ink-black), 0 4px 5px rgba(0,0,0,0.14);
       font-family: var(--font-main);
       color: var(--ink-black);
       transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.15s ease;
       user-select: none;
+    }
+
+    .kb-key.spark-hint {
+      background: #FFF59D !important;
+      border-color: #FF6D00 !important;
+      color: #E65100 !important;
+      box-shadow: 0 0 14px rgba(255, 214, 0, 0.95), 0 3.5px 0 #E65100 !important;
+      animation: keySparkPulse 0.45s ease-in-out infinite alternate;
+    }
+
+    @keyframes keySparkPulse {
+      0% { transform: scale(1.0) translateY(0); }
+      100% { transform: scale(1.14) translateY(-2px); }
     }
 
     .kb-key:active:not(.correct):not(.wrong) {
@@ -621,26 +637,35 @@
       pointer-events: none;
     }
 
-    /* Bottom Power-Up Bar */
+    /* Bottom Power-Up Bar (Always Visible & Responsive) */
     .powerup-bar {
-      display: flex;
+      display: flex !important;
       justify-content: space-evenly;
       align-items: center;
       width: 100%;
-      margin-top: 6px;
+      margin-top: 4px;
+      padding-bottom: 2px;
+      flex-shrink: 0;
     }
 
     .powerup-wrap {
       position: relative;
-      width: 82px;
-      height: 68px;
+      width: 76px;
+      height: 62px;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      cursor: pointer;
+    }
+
+    .powerup-wrap:active .powerup-circle {
+      transform: translateY(2px) scale(0.95);
     }
 
     .powerup-circle {
-      width: 56px;
-      height: 56px;
+      width: 50px;
+      height: 50px;
       border-radius: 50%;
       background: #FFF;
       border: 2.5px solid var(--ink-black);
@@ -649,7 +674,8 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      font-size: 24px;
+      font-size: 22px;
+      transition: transform 0.1s ease;
     }
 
     .powerup-badge {
@@ -658,9 +684,10 @@
       background: var(--doodle-yellow);
       border: 2px solid var(--ink-black);
       border-radius: 10px;
-      padding: 1px 8px;
-      font-size: 11px;
-      font-weight: 700;
+      padding: 1px 7px;
+      font-size: 10.5px;
+      font-weight: 800;
+      white-space: nowrap;
     }
 
     /* Status Toast */
@@ -1069,12 +1096,13 @@
       <div id="wordSlots" class="word-slots"></div>
 
       <!-- KI COMBO SPEED FUSE BAR -->
-      <div id="kiComboFuseContainer" style="display:none;width:100%;max-width:360px;margin:2px auto 4px;padding:4px 10px;border:2px solid var(--ink-black);border-radius:12px;background:#FFF8E1;">
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:800;margin-bottom:3px;">
-          <span id="kiComboLabelText" style="color:#E65100;">🔥 1x KI SPARK!</span>
-          <span id="kiComboTimerText" style="color:var(--ink-blue);">4.0s • 3-Streak = Pushback!</span>
+      <div id="kiComboFuseContainer" style="display:none;flex-direction:column;width:100%;max-width:360px;margin:1px auto 3px;padding:4px 10px;border:2px solid var(--ink-black);border-radius:12px;background:#FFF8E1;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;font-weight:800;margin-bottom:2px;width:100%;">
+          <span id="kiComboLabelText" style="color:#E65100;white-space:nowrap;">⚡ Ki Speed Fuse</span>
+          <span id="kiComboStreakText" style="color:#1B5E20;font-size:10px;white-space:nowrap;">Pushback: 0/3</span>
+          <span id="kiComboTimerText" style="color:var(--ink-blue);white-space:nowrap;">4.0s</span>
         </div>
-        <div class="progress-track" style="height:10px;background:#FFF;border:1.5px solid var(--ink-black);">
+        <div class="progress-track" style="height:8px;width:100%;background:#FFF;border:1.5px solid var(--ink-black);">
           <div id="kiComboFuseFill" class="progress-fill" style="background:linear-gradient(90deg,#FFD54F,#FF6D00);width:0%;"></div>
         </div>
       </div>
@@ -1082,17 +1110,21 @@
       <div id="keyboard" class="keyboard"></div>
 
       <div id="tacticalPowerupDock" class="powerup-bar">
-        <div class="powerup-wrap" onclick="useLightbulbHint()" title="Ki Strike: Vaporize 3 wrong keys &amp; reveal 1 letter">
-          <div class="powerup-circle" style="background:rgba(255,152,0,0.18)">⚡</div>
-          <div class="powerup-badge">⭐ 30</div>
+        <div class="powerup-wrap" onclick="useLightbulbHint()" title="Zap 3 Wrong Keys">
+          <div class="powerup-circle" style="background:rgba(255,152,0,0.18)">💡</div>
+          <div class="powerup-badge">💡 ⭐ 15</div>
         </div>
-        <div class="powerup-wrap" onclick="useExtraLifeHint()" title="Ink Shield: Absorb next wrong letter or +1 Life">
+        <div class="powerup-wrap" onclick="useExtraLifeHint()" title="Ink Shield: +1 Life &amp; Block 1 Mistake">
           <div class="powerup-circle" style="background:rgba(33,150,243,0.18)">🛡️</div>
-          <div id="potionBadge" class="powerup-badge" style="background:var(--hint-blue);color:#fff;">⭐ 40</div>
+          <div id="potionBadge" class="powerup-badge" style="background:var(--hint-blue);color:#fff;">🛡️ 2</div>
         </div>
-        <div class="powerup-wrap" onclick="useMagnifierHint()" title="Hint Spark: Highlight &amp; reveal 1 correct letter">
-          <div class="powerup-circle" style="background:rgba(76,175,80,0.18)">💥</div>
-          <div class="powerup-badge">⭐ 50</div>
+        <div class="powerup-wrap" onclick="useHintSparkPowerUp()" title="Hint Spark: Flash a correct key in Gold!">
+          <div class="powerup-circle" style="background:rgba(255,87,34,0.18)">💥</div>
+          <div id="sparkBadge" class="powerup-badge">💥 ⭐ 20</div>
+        </div>
+        <div class="powerup-wrap" onclick="useMagnifierHint()" title="Ki Strike: Fire Ki Blast &amp; Reveal 1 Letter!">
+          <div class="powerup-circle" style="background:rgba(76,175,80,0.18)">⚡</div>
+          <div class="powerup-badge">⚡ ⭐ 30</div>
         </div>
       </div>
     </div>
@@ -3195,11 +3227,11 @@
     // =========================================================================
     let isGmLoggedIn = localStorage.getItem('doodle_gm_logged_in') === '1';
     let gmTierOverride = null; // 1..20 or null
-    let enableKiComboFuse = localStorage.getItem('doodle_gm_ki_combo') !== '0';
-    let enableStickmanKiBlasts = localStorage.getItem('doodle_gm_ki_blasts') !== '0';
-    let enableBossChainedKeys = localStorage.getItem('doodle_gm_boss_chains') !== '0';
-    let enableTacticalStarDock = localStorage.getItem('doodle_gm_star_dock') !== '0';
-    let enableDoubleOrNothingBet = localStorage.getItem('doodle_gm_double_bet') !== '0';
+    let enableKiComboFuse = localStorage.getItem('doodle_gm_ki_combo_v2') !== '0';
+    let enableStickmanKiBlasts = localStorage.getItem('doodle_gm_ki_blasts_v2') !== '0';
+    let enableBossChainedKeys = localStorage.getItem('doodle_gm_boss_chains_v2') !== '0';
+    let enableTacticalStarDock = localStorage.getItem('doodle_gm_star_dock_v2') !== '0';
+    let enableDoubleOrNothingBet = localStorage.getItem('doodle_gm_double_bet_v2') !== '0';
 
     let comboCount = 0;
     let comboTimeRemainingMs = 0;
@@ -3208,6 +3240,8 @@
     let bossShieldHp = 0;
     let chainedLetters = new Set();
     let shieldGuardActive = false;
+    let hintSparkChar = null;
+    let hintSparkTimer = null;
     let doubleOrNothingActive = false;
     let kiBlasts = [];
     let perilHitFlashTimer = 0;
@@ -3868,12 +3902,16 @@
       renderDoodleClueCard(activeLevel);
       const potionBadge = document.getElementById('potionBadge');
       if (potionBadge) {
-        potionBadge.textContent = shieldGuardActive ? 'ACTIVE' : (freePotions > 0 ? `🛡️ ${freePotions}` : '⭐ 40');
+        potionBadge.textContent = shieldGuardActive ? '🛡️ ON' : (freePotions > 0 ? `🛡️ ${freePotions}` : '🛡️ ⭐ 40');
+      }
+      const sparkBadge = document.getElementById('sparkBadge');
+      if (sparkBadge) {
+        sparkBadge.textContent = hintSparkChar ? `💥 '${hintSparkChar}'` : '💥 ⭐ 20';
       }
 
       const dockEl = document.getElementById('tacticalPowerupDock');
       if (dockEl) {
-        dockEl.style.display = enableTacticalStarDock ? 'flex' : 'none';
+        dockEl.style.display = (isGmLoggedIn && !enableTacticalStarDock) ? 'none' : 'flex';
       }
 
       updateKiComboFuseDOM();
@@ -3930,8 +3968,9 @@
           const st = keyStatuses[ch] || 'DEFAULT';
           const isFrozenKey = vowelsFrozen && VOWELS_SET.has(ch) && st === 'DEFAULT';
           const isChainedKey = enableBossChainedKeys && bossShieldHp > 0 && chainedLetters.has(ch) && st === 'DEFAULT';
+          const isSparkKey = hintSparkChar === ch && st === 'DEFAULT';
           const btn = document.createElement('button');
-          btn.className = 'kb-key' + (st === 'CORRECT' ? ' correct' : st === 'WRONG' ? ' wrong' : '');
+          btn.className = 'kb-key' + (st === 'CORRECT' ? ' correct' : st === 'WRONG' ? ' wrong' : isSparkKey ? ' spark-hint' : '');
           btn.textContent = ch;
           if (isFrozenKey) {
             btn.style.color = '#01579B';
@@ -3991,6 +4030,10 @@
       if (word.includes(ch)) {
         keyStatuses[ch] = 'CORRECT';
         revealed.add(ch);
+        if (hintSparkChar === ch) {
+          hintSparkChar = null;
+          clearTimeout(hintSparkTimer);
+        }
         lastSlammedChar = ch;
         spawnKiBlastTowardPeril();
         spawnJuiceConfettiFromKey(ch, true);
@@ -4052,7 +4095,7 @@
         if (shieldGuardActive) {
           shieldGuardActive = false;
           playProceduralSound('chime');
-          showToast(`🛡️ Shield Guard blocked wrong letter '${ch}'! (0 damage)`);
+          showToast(`🛡️ Ink Shield absorbed wrong letter '${ch}'! (0 damage)`);
           renderGameplayUI();
           return;
         }
@@ -4123,7 +4166,8 @@
       }
     }
 
-    // Tactical Star Power-up Dock (⚡ Zap 3 = 15, 🎯 Strike = 25, 🛡️ Guard = 40)
+    // 4-Button Tactical Star Power-up Dock:
+    // 1. 💡 Zap 3 Wrong (15 ⭐) | 2. 🛡️ Ink Shield (40 ⭐ or Free Potion) | 3. 💥 Hint Spark (20 ⭐) | 4. ⚡ Ki Strike (30 ⭐)
     function useLightbulbHint() {
       const targetSet = new Set(activeLevel.word.toUpperCase().split(''));
       const candidates = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(c => !targetSet.has(c) && !keyStatuses[c]);
@@ -4135,30 +4179,59 @@
       candidates.slice(0, 3).forEach(c => { keyStatuses[c] = 'WRONG'; });
       saveState();
       playProceduralSound('chime');
-      showToast('⚡ Zapped 3 wrong letters!');
+      showToast('💡 Zapped 3 wrong letters!');
+      renderGameplayUI();
+    }
+
+    function useHintSparkPowerUp() {
+      const unrevealed = activeLevel.word.toUpperCase().split('').filter(c => !revealed.has(c));
+      if (!unrevealed.length) return;
+      const cost = 20;
+      if (coins < cost) { showToast(`Need ⭐ ${cost} Stars for Hint Spark! Tap + to get stars.`); return; }
+      coins -= cost;
+      const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+      if (chainedLetters.has(pick)) chainedLetters.delete(pick);
+      hintSparkChar = pick;
+      clearTimeout(hintSparkTimer);
+      hintSparkTimer = setTimeout(() => {
+        hintSparkChar = null;
+        renderGameplayUI();
+      }, 3500);
+      saveState();
+      playProceduralSound('chime');
+      showToast(`💥 Hint Spark! Look for the flashing GOLD key '${pick}'!`);
       renderGameplayUI();
     }
 
     function useMagnifierHint() {
       const unrevealed = activeLevel.word.toUpperCase().split('').filter(c => !revealed.has(c));
       if (!unrevealed.length) return;
-      const cost = 25;
-      if (coins < cost) { showToast(`Need ⭐ ${cost} Stars! Tap + to get stars.`); return; }
+      const cost = 30;
+      if (coins < cost) { showToast(`Need ⭐ ${cost} Stars for Ki Strike! Tap + to get stars.`); return; }
       coins -= cost;
+      // Also zap up to 2 wrong keys + reveal 1 correct letter!
+      const targetSet = new Set(activeLevel.word.toUpperCase().split(''));
+      const wrongCandidates = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(c => !targetSet.has(c) && !keyStatuses[c]);
+      wrongCandidates.sort((a, b) => (bombLetters.has(b) ? 1 : 0) - (bombLetters.has(a) ? 1 : 0));
+      wrongCandidates.slice(0, 2).forEach(c => { keyStatuses[c] = 'WRONG'; });
+
       const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)];
       keyStatuses[pick] = 'CORRECT';
       revealed.add(pick);
+      lastSlammedChar = pick;
+      if (hintSparkChar === pick) hintSparkChar = null;
       spawnKiBlastTowardPeril();
+      spawnJuiceConfettiFromKey(pick, true);
       saveState();
       playProceduralSound('chime');
-      showToast(`🎯 Targeted Strike revealed '${pick}'!`);
+      showToast(`⚡ Ki Strike! Zapped 2 wrong keys & revealed '${pick}'!`);
       renderGameplayUI();
       checkVictory();
     }
 
     function useShieldGuardHint() {
       if (shieldGuardActive && lives >= 6) {
-        showToast('🛡️ Shield Guard is already active!');
+        showToast('🛡️ Ink Shield is already active!');
         return;
       }
       if (freePotions > 0) {
@@ -4167,16 +4240,16 @@
         if (lives < 6) lives++;
         saveState();
         playProceduralSound('chime');
-        showToast('🛡️ Shield Guard active (+1 ❤️ & blocks next mistake)!');
+        showToast('🛡️ Ink Shield active (+1 ❤️ & blocks next mistake)!');
       } else if (coins >= 40) {
         coins -= 40;
         shieldGuardActive = true;
         if (lives < 6) lives++;
         saveState();
         playProceduralSound('chime');
-        showToast('🛡️ Shield Guard active (+1 ❤️ & blocks next mistake)!');
+        showToast('🛡️ Ink Shield active (+1 ❤️ & blocks next mistake)!');
       } else {
-        showToast('Need ⭐ 40 Stars for Shield Guard!');
+        showToast('Need ⭐ 40 Stars for Ink Shield!');
       }
       renderGameplayUI();
     }
@@ -4475,7 +4548,7 @@
     function drawStickman(ctx, x, handY, scale, panicking, handsUp, t) {
       ctx.save();
 
-      const shoulderY = handY + 20 * scale;
+      const shoulderY = handY + 21 * scale;
       const headY = shoulderY - 16 * scale;
       const hipY = shoulderY + 26 * scale;
       const centerBodyY = (headY + hipY) * 0.5;
@@ -4514,74 +4587,77 @@
       }
       ctx.restore();
 
+      // Active Ink Shield Forcefield Bubble when 🛡️ Shield Guard is active
+      if (typeof shieldGuardActive !== 'undefined' && shieldGuardActive) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(41, 182, 246, 0.18)';
+        ctx.strokeStyle = '#0288D1';
+        ctx.lineWidth = 2.4 * scale;
+        ctx.setLineDash([6 * scale, 4 * scale]);
+        ctx.beginPath();
+        ctx.arc(x, centerBodyY + 2 * scale, 36 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
       ctx.strokeStyle = '#1E1E1E';
-      ctx.lineWidth = 3 * scale;
+      ctx.lineWidth = 3.1 * scale;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
       // Ground/floating shadow
-      ctx.fillStyle = 'rgba(30, 30, 30, 0.08)';
+      ctx.fillStyle = 'rgba(30, 30, 30, 0.09)';
       ctx.beginPath();
-      ctx.ellipse(x, hipY + 25 * scale, 14 * scale, 3.5 * scale, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, hipY + 26 * scale, 15 * scale, 3.8 * scale, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Left arm
-      ctx.beginPath();
-      ctx.moveTo(x, shoulderY);
-      if (handsUp) {
-        ctx.lineTo(x - 8 * scale, handY + 9 * scale);
-        ctx.lineTo(x, handY);
-      } else if (panicking) {
-        ctx.lineTo(x - 19 * scale, shoulderY - 9 * scale + Math.cos(t * 9) * 7 * scale);
-      } else {
-        ctx.lineTo(x - 15 * scale, shoulderY + 12 * scale + Math.sin(t * 3) * 5 * scale);
-      }
-      ctx.stroke();
-
-      // Right arm (with Ki Kamehameha Forward Thrust Pose when attacking!)
-      ctx.beginPath();
-      ctx.moveTo(x, shoulderY);
-      if (kiAttackPoseTimer > 0) {
-        const thrustX = x + 23 * scale;
-        const thrustY = shoulderY - 3 * scale;
-        ctx.lineTo(thrustX, thrustY);
-        ctx.stroke();
-        // Glowing Ki palm flare
+      // Helper for sketchy cartoon hand / glove at wrist
+      function drawCartoonHand(hx, hy, thumbDir) {
         ctx.save();
-        ctx.fillStyle = auraSecondary;
-        ctx.beginPath();
-        ctx.arc(thrustX + 3 * scale, thrustY, 6.5 * scale, 0, Math.PI * 2);
-        ctx.fill();
         ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.1 * scale;
         ctx.beginPath();
-        ctx.arc(thrustX + 3 * scale, thrustY, 3.2 * scale, 0, Math.PI * 2);
+        ctx.arc(hx, hy, 3.8 * scale, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
+        // Little thumb bump for unmistakable hand silhouette
+        ctx.beginPath();
+        ctx.arc(hx + thumbDir * 2.7 * scale, hy + 0.5 * scale, 2.0 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
         ctx.restore();
-      } else if (panicking) {
-        ctx.lineTo(x + 20 * scale, shoulderY - 10 * scale + Math.sin(t * 9) * 8 * scale);
-        ctx.stroke();
-      } else if (handsUp) {
-        ctx.lineTo(x + 8 * scale, handY + 9 * scale);
-        ctx.lineTo(x, handY);
-        ctx.stroke();
-      } else {
-        ctx.lineTo(x + 15 * scale, shoulderY + 12 * scale + Math.cos(t * 3) * 5 * scale);
-        ctx.stroke();
       }
 
-      // Torso & Animated Legs
+      // 1. Torso & Animated Legs + Sketchy Shoes/Feet
       const kick = panicking ? Math.sin(t * 10) * 7.5 * scale : Math.sin(t * 2.6) * 3.2 * scale;
+      const leftFootX = x - 12 * scale;
+      const leftFootY = hipY + 20 * scale + kick;
+      const rightFootX = x + 12 * scale;
+      const rightFootY = hipY + 20 * scale - kick;
+
       ctx.beginPath();
       ctx.moveTo(x, shoulderY);
       ctx.lineTo(x, hipY);
       ctx.moveTo(x, hipY);
-      ctx.lineTo(x - 12 * scale, hipY + 20 * scale + kick);
+      ctx.lineTo(leftFootX, leftFootY);
       ctx.moveTo(x, hipY);
-      ctx.lineTo(x + 12 * scale, hipY + 20 * scale - kick);
+      ctx.lineTo(rightFootX, rightFootY);
       ctx.stroke();
 
-      // Head with subtle sketchy rim
+      // Little cartoon shoes/feet
+      ctx.fillStyle = '#1E1E1E';
+      ctx.beginPath();
+      ctx.ellipse(leftFootX - 2.5 * scale, leftFootY + 1 * scale, 4.2 * scale, 2.2 * scale, -0.2, 0, Math.PI * 2);
+      ctx.ellipse(rightFootX + 2.5 * scale, rightFootY + 1 * scale, 4.2 * scale, 2.2 * scale, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Head drawn BEFORE arms so raised arms & hands are never hidden behind the head!
       ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 3.0 * scale;
       ctx.beginPath();
       ctx.arc(x, headY, 12.5 * scale, 0, Math.PI * 2);
       ctx.fill();
@@ -4594,25 +4670,119 @@
         ctx.arc(x - 4.2 * scale, headY - 2 * scale, 2.3 * scale, 0, Math.PI * 2);
         ctx.arc(x + 4.2 * scale, headY - 2 * scale, 2.3 * scale, 0, Math.PI * 2);
         ctx.fill();
+        // Worried eyebrows
+        ctx.lineWidth = 1.8 * scale;
+        ctx.beginPath();
+        ctx.moveTo(x - 7 * scale, headY - 5 * scale);
+        ctx.lineTo(x - 2 * scale, headY - 6.5 * scale);
+        ctx.moveTo(x + 7 * scale, headY - 5 * scale);
+        ctx.lineTo(x + 2 * scale, headY - 6.5 * scale);
+        ctx.stroke();
         // Sweat drop
         ctx.fillStyle = '#4FC3F7';
         ctx.beginPath();
-        ctx.ellipse(x + 11 * scale, headY - 6 * scale + ((t * 18) % 8), 2 * scale, 3.2 * scale, 0, 0, Math.PI * 2);
+        ctx.ellipse(x + 11 * scale, headY - 6 * scale + ((t * 18) % 8), 2.1 * scale, 3.3 * scale, 0, 0, Math.PI * 2);
         ctx.fill();
       } else {
         ctx.beginPath();
-        ctx.arc(x - 4 * scale, headY - 2 * scale, 1.8 * scale, 0, Math.PI * 2);
-        ctx.arc(x + 4 * scale, headY - 2 * scale, 1.8 * scale, 0, Math.PI * 2);
+        ctx.arc(x - 4 * scale, headY - 2 * scale, 1.9 * scale, 0, Math.PI * 2);
+        ctx.arc(x + 4 * scale, headY - 2 * scale, 1.9 * scale, 0, Math.PI * 2);
         ctx.fill();
       }
 
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 2.2 * scale;
       ctx.beginPath();
       if (panicking) {
-        ctx.arc(x, headY + 4.2 * scale, 3.3 * scale, 0, Math.PI * 2);
+        ctx.arc(x, headY + 4.4 * scale, 3.3 * scale, 0, Math.PI * 2);
       } else {
         ctx.arc(x, headY + 1.8 * scale, 4.8 * scale, 0.15 * Math.PI, 0.85 * Math.PI);
       }
       ctx.stroke();
+
+      // 3. Left & Right Arms + Cartoon Hands (drawn AFTER head with wide elbows so they're always 100% visible)
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 3.0 * scale;
+      let leftHandX, leftHandY;
+      ctx.beginPath();
+      ctx.moveTo(x - 3 * scale, shoulderY);
+      if (handsUp) {
+        const elbowX = x - 18 * scale;
+        const elbowY = headY - 2 * scale + Math.sin(t * 5) * 1.5 * scale;
+        leftHandX = x - 5 * scale;
+        leftHandY = handY;
+        ctx.lineTo(elbowX, elbowY);
+        ctx.lineTo(leftHandX, leftHandY);
+      } else if (panicking) {
+        const elbowX = x - 13 * scale;
+        const elbowY = shoulderY - 3 * scale;
+        leftHandX = x - 22 * scale;
+        leftHandY = shoulderY - 12 * scale + Math.cos(t * 9) * 7 * scale;
+        ctx.lineTo(elbowX, elbowY);
+        ctx.lineTo(leftHandX, leftHandY);
+      } else {
+        const elbowX = x - 11 * scale;
+        const elbowY = shoulderY + 6 * scale;
+        leftHandX = x - 17 * scale;
+        leftHandY = shoulderY + 13 * scale + Math.sin(t * 3) * 5 * scale;
+        ctx.lineTo(elbowX, elbowY);
+        ctx.lineTo(leftHandX, leftHandY);
+      }
+      ctx.stroke();
+      drawCartoonHand(leftHandX, leftHandY, 1);
+
+      // Right arm (with Ki Kamehameha Forward Thrust Pose when attacking!)
+      let rightHandX, rightHandY;
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 3.0 * scale;
+      ctx.beginPath();
+      ctx.moveTo(x + 3 * scale, shoulderY);
+      if (kiAttackPoseTimer > 0) {
+        rightHandX = x + 23 * scale;
+        rightHandY = shoulderY - 3 * scale;
+        ctx.lineTo(rightHandX, rightHandY);
+        ctx.stroke();
+        drawCartoonHand(rightHandX, rightHandY, -1);
+        // Glowing Ki palm flare
+        ctx.save();
+        ctx.fillStyle = auraSecondary;
+        ctx.beginPath();
+        ctx.arc(rightHandX + 4 * scale, rightHandY, 6.5 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(rightHandX + 4 * scale, rightHandY, 3.2 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (handsUp) {
+        const elbowX = x + 18 * scale;
+        const elbowY = headY - 2 * scale + Math.cos(t * 5) * 1.5 * scale;
+        rightHandX = x + 5 * scale;
+        rightHandY = handY;
+        ctx.lineTo(elbowX, elbowY);
+        ctx.lineTo(rightHandX, rightHandY);
+        ctx.stroke();
+        drawCartoonHand(rightHandX, rightHandY, -1);
+      } else if (panicking) {
+        const elbowX = x + 13 * scale;
+        const elbowY = shoulderY - 3 * scale;
+        rightHandX = x + 22 * scale;
+        rightHandY = shoulderY - 12 * scale + Math.sin(t * 9) * 8 * scale;
+        ctx.lineTo(elbowX, elbowY);
+        ctx.lineTo(rightHandX, rightHandY);
+        ctx.stroke();
+        drawCartoonHand(rightHandX, rightHandY, -1);
+      } else {
+        const elbowX = x + 11 * scale;
+        const elbowY = shoulderY + 6 * scale;
+        rightHandX = x + 17 * scale;
+        rightHandY = shoulderY + 13 * scale + Math.cos(t * 3) * 5 * scale;
+        ctx.lineTo(elbowX, elbowY);
+        ctx.lineTo(rightHandX, rightHandY);
+        ctx.stroke();
+        drawCartoonHand(rightHandX, rightHandY, -1);
+      }
+
       ctx.restore();
     }
 
@@ -5342,16 +5512,17 @@
         const branchY = h * 0.08;
         const plantBaseY = h * 0.88;
         const swayX = Math.sin(t * 2.2) * 6;
-        const maxVineBottomY = h * 0.64;
-        const minVineBottomY = h * 0.30;
+        const maxVineBottomY = h * 0.60;
+        const minVineBottomY = h * 0.28;
         const vineBottomY = minVineBottomY + (maxVineBottomY - minVineBottomY) * danger + bob * 0.5;
 
-        // Top jungle branch
+        // Top jungle branch with bark texture & hanging moss
         ctx.strokeStyle = '#5D4037';
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 7;
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(w * 0.12, branchY);
-        ctx.lineTo(w * 0.88, branchY - 4);
+        ctx.moveTo(w * 0.10, branchY);
+        ctx.quadraticCurveTo(w * 0.50, branchY + 5, w * 0.90, branchY - 4);
         ctx.stroke();
 
         // Twisting vine with 6 leaf nodes
@@ -5370,7 +5541,7 @@
             ctx.strokeStyle = '#1E1E1E';
             ctx.lineWidth = 1.4;
             ctx.beginPath();
-            ctx.ellipse(nx + (n % 2 === 0 ? 8 : -8), ny, 6, 3.5, 0, 0, Math.PI * 2);
+            ctx.ellipse(nx + (n % 2 === 0 ? 8 : -8), ny, 6.5, 3.8, (n % 2 === 0 ? 0.3 : -0.3), 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
           }
@@ -5403,12 +5574,22 @@
           drawStickman(ctx, cx + swayX, vineBottomY, 0.84, !isPreview && livesCount <= 2, true, t);
         }
 
-        // Venus Flytrap stalk
+        // Base jungle leaves & Venus Flytrap stalk
+        ctx.fillStyle = '#388E3C';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2;
+        [-1, 1].forEach(side => {
+          ctx.beginPath();
+          ctx.ellipse(cx + side * 22, plantBaseY - 4, 18, 7, side * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
+
         ctx.strokeStyle = '#2E7D32';
-        ctx.lineWidth = 6.5;
+        ctx.lineWidth = 7;
         ctx.beginPath();
         ctx.moveTo(cx, plantBaseY);
-        ctx.lineTo(cx, plantBaseY - 36);
+        ctx.quadraticCurveTo(cx + Math.sin(t * 2) * 4, plantBaseY - 18, cx, plantBaseY - 36);
         ctx.stroke();
 
         // Dinner bib + fork & knife when lives <= 2!
@@ -5437,18 +5618,45 @@
           ctx.stroke();
         }
 
-        // Flytrap jaws
-        const jawSpread = (!isPreview && livesCount <= 0) ? 6 : (!isPreview && livesCount <= 2) ? 38 : 26;
+        // Sculpted Flytrap Jaws with crimson inner mouth & interlocking white fang teeth!
+        const jawSpread = (!isPreview && livesCount <= 0) ? 6 : (!isPreview && livesCount <= 2) ? 40 : 28 + Math.sin(t * 4) * 3;
         [-1, 1].forEach(side => {
+          // Crimson inner mouth lining
+          ctx.fillStyle = '#D32F2F';
+          ctx.beginPath();
+          ctx.moveTo(cx, plantBaseY - 36);
+          ctx.quadraticCurveTo(cx + side * (jawSpread + 14), plantBaseY - 70, cx + side * jawSpread, plantBaseY - 48);
+          ctx.closePath();
+          ctx.fill();
+
+          // Green outer lobe
           ctx.fillStyle = '#43A047';
           ctx.strokeStyle = '#1E1E1E';
           ctx.lineWidth = 2.4;
           ctx.beginPath();
           ctx.moveTo(cx, plantBaseY - 36);
-          ctx.quadraticCurveTo(cx + side * (jawSpread + 18), plantBaseY - 72, cx + side * jawSpread, plantBaseY - 46);
+          ctx.quadraticCurveTo(cx + side * (jawSpread + 24), plantBaseY - 76, cx + side * jawSpread, plantBaseY - 48);
+          ctx.quadraticCurveTo(cx + side * (jawSpread * 0.5), plantBaseY - 38, cx, plantBaseY - 36);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
+
+          // Sharp white interlocking flytrap teeth along jaw rim
+          ctx.fillStyle = '#FFFFFF';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.4;
+          for (let tooth = 1; tooth <= 4; tooth++) {
+            const frac = tooth / 5;
+            const tx = cx + side * (jawSpread * frac + 4 * side);
+            const ty = (plantBaseY - 36) - frac * 22;
+            ctx.beginPath();
+            ctx.moveTo(tx, ty - 3);
+            ctx.lineTo(tx - side * 7, ty + 2);
+            ctx.lineTo(tx, ty + 4);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
         });
 
       } else if (peril.id === 'DINO_STEALTH') {
@@ -5456,14 +5664,29 @@
 
       } else if (peril.id === 'LEAKY_SUBMARINE') {
         const tankW = w * 0.64;
-        const tankH = h * 0.76;
+        const tankH = h * 0.74;
         const tankLeft = (w - tankW) * 0.5;
         const tankRight = tankLeft + tankW;
-        const tankTop = h * 0.11;
+        const tankTop = h * 0.13;
         const tankBottom = tankTop + tankH;
 
+        // Yellow submarine periscope & top hatch
+        ctx.fillStyle = '#FFB300';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.roundRect(cx - 22, tankTop - 10, 44, 10, 4);
+        ctx.fill();
+        ctx.stroke();
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(cx, tankTop - 10);
+        ctx.lineTo(cx, tankTop - 22);
+        ctx.lineTo(cx + 14, tankTop - 22);
+        ctx.stroke();
+
         // Submarine tank background
-        ctx.fillStyle = 'rgba(225, 245, 254, 0.38)';
+        ctx.fillStyle = 'rgba(225, 245, 254, 0.42)';
         ctx.beginPath();
         ctx.roundRect(tankLeft, tankTop, tankW, tankH, 14);
         ctx.fill();
@@ -5473,7 +5696,7 @@
         const waterH = tankH * waterFillFrac;
         const waterTopY = tankBottom - waterH;
 
-        ctx.fillStyle = 'rgba(41, 182, 246, 0.52)';
+        ctx.fillStyle = 'rgba(41, 182, 246, 0.55)';
         ctx.beginPath();
         ctx.moveTo(tankLeft + 3, tankBottom - 3);
         ctx.lineTo(tankLeft + 3, waterTopY);
@@ -5484,6 +5707,19 @@
         ctx.closePath();
         ctx.fill();
 
+        // Air bubbles rising in water
+        for (let b = 0; b < 4; b++) {
+          const bx = tankLeft + tankW * (0.22 + b * 0.18) + Math.sin(t * 3 + b) * 4;
+          const by = tankBottom - 10 - ((t * 26 + b * 17) % Math.max(12, waterH - 10));
+          if (by > waterTopY + 4) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(bx, by, 3, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
         // Stickman inside glass tank (treads water with puffed cheeks when lives <= 2!)
         const stickY = (!isPreview && livesCount <= 0)
           ? tankTop + 26 + Math.sin(t * 4) * 5
@@ -5493,7 +5729,7 @@
         drawStickman(ctx, cx, stickY, 0.82, !isPreview && livesCount <= 2, !isPreview && livesCount <= 2, t);
         if (!isPreview && livesCount <= 2) {
           // Puffed cheeks holding breath!
-          const headY = stickY + 20 * 0.82 - 16 * 0.82;
+          const headY = stickY + 21 * 0.82 - 16 * 0.82;
           ctx.fillStyle = '#B3E5FC';
           ctx.strokeStyle = '#1E1E1E';
           ctx.lineWidth = 1.6;
@@ -5517,11 +5753,11 @@
           const by = tankBottom - tankH * ((b + 0.6) / 6.3);
           const intact = b < livesCount;
           if (intact) {
-            ctx.fillStyle = '#B0BEC5';
+            ctx.fillStyle = '#CFD8DC';
             ctx.strokeStyle = '#1E1E1E';
             ctx.lineWidth = 1.8;
             ctx.beginPath();
-            ctx.arc(bx, by, 5, 0, Math.PI * 2);
+            ctx.arc(bx, by, 5.5, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
           } else if (!isPreview) {
@@ -5537,33 +5773,50 @@
         }
       } else if (peril.id === 'TIGHTROPE_SAW') {
         const ropeY = h * 0.62;
-        ctx.strokeStyle = '#8D6E63';
-        ctx.lineWidth = 6;
+        // Left & Right rocky canyon cliffs
+        ctx.fillStyle = '#8D6E63';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.2;
         ctx.beginPath();
-        ctx.moveTo(w * 0.1, ropeY - 8); ctx.lineTo(w * 0.1, h * 0.92);
-        ctx.moveTo(w * 0.9, ropeY - 8); ctx.lineTo(w * 0.9, h * 0.92);
+        ctx.moveTo(0, ropeY - 10);
+        ctx.lineTo(w * 0.13, ropeY - 10);
+        ctx.lineTo(w * 0.16, h * 0.95);
+        ctx.lineTo(0, h * 0.95);
+        ctx.closePath();
+        ctx.fill();
         ctx.stroke();
 
+        ctx.beginPath();
+        ctx.moveTo(w, ropeY - 10);
+        ctx.lineTo(w * 0.87, ropeY - 10);
+        ctx.lineTo(w * 0.84, h * 0.95);
+        ctx.lineTo(w, h * 0.95);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // 6-strand tightrope
         for (let i = 0; i < 6; i++) {
           const alive = i < livesCount;
           const sy = ropeY + (i - 2.5) * 2.2;
-          ctx.strokeStyle = alive ? '#795548' : 'rgba(231,76,60,0.4)';
-          ctx.lineWidth = 1.6;
+          ctx.strokeStyle = alive ? '#5D4037' : 'rgba(231,76,60,0.45)';
+          ctx.lineWidth = 1.7;
           ctx.beginPath();
-          ctx.moveTo(w * 0.1, sy);
-          ctx.lineTo(w * 0.9, sy + (alive ? Math.sin(t * 6 + i) * 1.2 : 10));
+          ctx.moveTo(w * 0.12, sy);
+          ctx.lineTo(w * 0.88, sy + (alive ? Math.sin(t * 6 + i) * 1.2 : 12));
           ctx.stroke();
         }
 
-        const sawX = w * 0.18 + (w * 0.34) * danger + Math.sin(t * 3.5) * 6;
-        const sawR = 20;
+        // Spinning saw blade with flying sparks!
+        const sawX = w * 0.20 + (w * 0.34) * danger + Math.sin(t * 3.5) * 5;
+        const sawR = 21;
         ctx.fillStyle = '#CFD8DC';
         ctx.strokeStyle = '#1E1E1E';
         ctx.lineWidth = 1.8;
         ctx.beginPath();
         for (let i = 0; i < 24; i++) {
           const r = (i % 2 === 0) ? sawR : sawR * 0.72;
-          const ang = t * 8 + (i * Math.PI) / 12;
+          const ang = t * 10 + (i * Math.PI) / 12;
           const px = sawX + Math.cos(ang) * r;
           const py = ropeY + Math.sin(ang) * r;
           if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
@@ -5572,162 +5825,575 @@
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#E74C3C';
-        ctx.beginPath(); ctx.arc(sawX, ropeY, 4.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sawX, ropeY, 5.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
-        const stickX = w * 0.56;
+        // Friction sparks flying off the saw blade
+        ctx.strokeStyle = '#FFB300';
+        ctx.lineWidth = 2;
+        for (let sp = 0; sp < 4; sp++) {
+          const spAng = -0.6 - sp * 0.35 + Math.sin(t * 18 + sp) * 0.2;
+          const len = 8 + ((t * 30 + sp * 7) % 12);
+          ctx.beginPath();
+          ctx.moveTo(sawX + Math.cos(spAng) * sawR * 0.8, ropeY + Math.sin(spAng) * sawR * 0.8);
+          ctx.lineTo(sawX + Math.cos(spAng) * (sawR + len), ropeY + Math.sin(spAng) * (sawR + len));
+          ctx.stroke();
+        }
+
+        const stickX = w * 0.58;
         const stickY = (!isPreview && livesCount <= 0) ? h * 0.78 : ropeY - 62 + bob * 0.6;
         drawStickman(ctx, stickX, stickY, 0.86, !isPreview && livesCount <= 2, false, t);
         const tilt = Math.sin(t * 4) * 11;
         ctx.strokeStyle = '#1B4F72';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 3.4;
         ctx.beginPath();
-        ctx.moveTo(stickX - 36, stickY + 26 - tilt);
-        ctx.lineTo(stickX + 36, stickY + 26 + tilt);
+        ctx.moveTo(stickX - 38, stickY + 26 - tilt);
+        ctx.lineTo(stickX + 38, stickY + 26 + tilt);
         ctx.stroke();
 
       } else if (peril.id === 'METEOR_SHOWER') {
-        const rockY = h * 0.76 + Math.sin(t * 2) * 3;
-        ctx.fillStyle = '#D7CCC8';
-        ctx.strokeStyle = '#1E1E1E';
-        ctx.lineWidth = 2.2;
+        // Starry space backdrop & distant ringed planet
+        ctx.save();
+        ctx.strokeStyle = '#90CAF9';
+        ctx.fillStyle = '#CE93D8';
+        ctx.lineWidth = 1.6;
         ctx.beginPath();
-        ctx.ellipse(cx, rockY + 12, w * 0.3, 14, 0, 0, Math.PI * 2);
+        ctx.arc(w * 0.18, h * 0.18, 9, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
-
-        const meteorX = w * 0.76 - (w * 0.24) * danger + Math.cos(t * 4) * 5;
-        const meteorY = h * 0.16 + (h * 0.40) * danger + Math.sin(t * 4) * 5;
-        const meteorR = 18 + 8 * danger;
-        ctx.fillStyle = '#FF5722';
         ctx.beginPath();
-        ctx.moveTo(meteorX - meteorR * 0.6, meteorY - meteorR * 0.6);
-        ctx.lineTo(meteorX + meteorR * 2.1 + Math.sin(t * 14) * 6, meteorY - meteorR * 1.9);
-        ctx.lineTo(meteorX + meteorR * 0.7, meteorY + meteorR * 0.5);
+        ctx.ellipse(w * 0.18, h * 0.18, 17, 4.5, -0.35, 0, Math.PI * 2);
+        ctx.stroke();
+        // Twinkling stars
+        [[0.12, 0.34], [0.35, 0.12], [0.84, 0.52], [0.22, 0.52]].forEach(([sx, sy], idx) => {
+          const starX = w * sx, starY = h * sy;
+          const r = 2 + Math.sin(t * 5 + idx) * 1;
+          ctx.fillStyle = '#FFF59D';
+          ctx.beginPath();
+          ctx.arc(starX, starY, r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
+
+        // Cratered Asteroid / Moon Platform at bottom
+        const rockY = h * 0.76 + Math.sin(t * 2) * 2.5;
+        ctx.fillStyle = '#BCAAA4';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.ellipse(cx, rockY + 12, w * 0.33, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Moon craters on platform
+        ctx.fillStyle = '#8D6E63';
+        ctx.lineWidth = 1.5;
+        [[-28, 10, 8, 3.5], [4, 15, 6, 2.5], [26, 9, 9, 4]].forEach(([dx, dy, rx, ry]) => {
+          ctx.beginPath();
+          ctx.ellipse(cx + dx, rockY + dy, rx, ry, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
+
+        // BLAZING COMET / METEOR with multi-layered Ion + Plasma Tail, Coma Halo, and Cratered Core!
+        const cometX = w * 0.78 - (w * 0.27) * danger + Math.cos(t * 5) * 4;
+        const cometY = h * 0.16 + (h * 0.40) * danger + Math.sin(t * 5) * 4;
+        const cometR = 17 + 7 * danger;
+        const tailAngle = -0.68; // pointing up-right away from Stickman
+        const cosA = Math.cos(tailAngle), sinA = Math.sin(tailAngle);
+        const tailLen = cometR * 3.4 + Math.sin(t * 16) * 8;
+
+        // 1. Outer Cyan/Blue Cosmic Ion Streamers
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.34)';
+        ctx.beginPath();
+        ctx.moveTo(cometX - cometR * 0.7, cometY - cometR * 0.7);
+        ctx.quadraticCurveTo(
+          cometX + cometR * 1.6,
+          cometY - cometR * 2.3 + Math.sin(t * 12) * 5,
+          cometX + tailLen * 1.15,
+          cometY - tailLen * 0.98
+        );
+        ctx.quadraticCurveTo(
+          cometX + cometR * 2.3,
+          cometY - cometR * 1.1 + Math.cos(t * 12) * 5,
+          cometX + cometR * 0.7,
+          cometY + cometR * 0.7
+        );
         ctx.closePath();
         ctx.fill();
 
-        ctx.fillStyle = '#8D6E63';
+        // 2. Outer Roaring Orange Fire Tail
+        ctx.fillStyle = '#FF5722';
         ctx.strokeStyle = '#1E1E1E';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(meteorX, meteorY, meteorR, 0, Math.PI * 2);
+        ctx.moveTo(cometX - cometR * 0.65, cometY - cometR * 0.55);
+        ctx.quadraticCurveTo(cometX + cometR * 0.9, cometY - cometR * 1.8, cometX + tailLen * 0.92, cometY - tailLen * 0.82);
+        ctx.lineTo(cometX + tailLen * 0.58 + Math.sin(t * 18) * 5, cometY - tailLen * 0.42);
+        ctx.lineTo(cometX + tailLen * 0.85, cometY - tailLen * 0.50);
+        ctx.quadraticCurveTo(cometX + cometR * 1.7, cometY - cometR * 0.6, cometX + cometR * 0.65, cometY + cometR * 0.65);
+        ctx.closePath();
         ctx.fill();
         ctx.stroke();
 
-        drawStickman(ctx, w * 0.45, rockY - 62 + bob * 0.4, 0.86, !isPreview && livesCount <= 2, !isPreview && livesCount <= 2, t);
-
-      } else if (peril.id === 'MAD_SCIENTIST_POTION') {
-        const flaskLeft = w * 0.22, flaskRight = w * 0.78, flaskTop = h * 0.16, flaskBottom = h * 0.86;
-        const flaskW = flaskRight - flaskLeft, flaskH = flaskBottom - flaskTop;
-        const acidH = Math.min(flaskH, flaskH * (0.22 + 0.62 * danger));
-        const acidTop = flaskBottom - acidH;
-
-        ctx.fillStyle = 'rgba(118, 255, 3, 0.52)';
+        // 3. Inner Golden-Yellow Plasma Tail
+        ctx.fillStyle = '#FFD54F';
         ctx.beginPath();
-        ctx.roundRect(flaskLeft + 4, acidTop, flaskW - 8, acidH, 12);
+        ctx.moveTo(cometX - cometR * 0.4, cometY - cometR * 0.4);
+        ctx.quadraticCurveTo(cometX + cometR * 0.7, cometY - cometR * 1.2, cometX + tailLen * 0.60, cometY - tailLen * 0.54);
+        ctx.quadraticCurveTo(cometX + cometR * 1.1, cometY - cometR * 0.4, cometX + cometR * 0.4, cometY + cometR * 0.4);
+        ctx.closePath();
         ctx.fill();
 
+        // 4. Trailing Comet Embers & Sparks
+        for (let e = 0; e < 5; e++) {
+          const prog = ((t * 2.4 + e * 0.2) % 1);
+          const ex = cometX + prog * tailLen * 0.85 + Math.sin(t * 10 + e * 2) * 6;
+          const ey = cometY - prog * tailLen * 0.72 + Math.cos(t * 10 + e * 2) * 6;
+          ctx.fillStyle = e % 2 === 0 ? '#FFF176' : '#FF7043';
+          ctx.beginPath();
+          ctx.arc(ex, ey, (1 - prog) * 3.8 + 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 5. Glowing Coma Shockwave Ring around Comet Head
+        ctx.strokeStyle = '#FFAB00';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(cometX - 2, cometY + 2, cometR * 1.16, 0.35 * Math.PI, 1.15 * Math.PI);
+        ctx.stroke();
+
+        // 6. Sculpted Jagged Comet / Meteorite Core
+        ctx.fillStyle = '#5D4037';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        const bumps = 10;
+        for (let b = 0; b < bumps; b++) {
+          const ang = (b * Math.PI * 2) / bumps;
+          const r = cometR * (b % 2 === 0 ? 1.0 : 0.86);
+          const px = cometX + Math.cos(ang) * r;
+          const py = cometY + Math.sin(ang) * r;
+          if (b === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Glowing magma cracks & craters on the comet rock
+        ctx.strokeStyle = '#FFCA28';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(cometX - cometR * 0.4, cometY - cometR * 0.1);
+        ctx.lineTo(cometX + cometR * 0.1, cometY + cometR * 0.2);
+        ctx.lineTo(cometX + cometR * 0.4, cometY - cometR * 0.25);
+        ctx.stroke();
+
+        ctx.fillStyle = '#3E2723';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(cometX - cometR * 0.28, cometY + cometR * 0.22, cometR * 0.22, 0, Math.PI * 2);
+        ctx.arc(cometX + cometR * 0.24, cometY - cometR * 0.24, cometR * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        drawStickman(ctx, w * 0.42, rockY - 62 + bob * 0.4, 0.86, !isPreview && livesCount <= 2, !isPreview && livesCount <= 2, t);
+
+      } else if (peril.id === 'MAD_SCIENTIST_POTION') {
+        const flaskLeft = w * 0.22, flaskRight = w * 0.78, flaskTop = h * 0.16, flaskBottom = h * 0.85;
+        const flaskW = flaskRight - flaskLeft, flaskH = flaskBottom - flaskTop;
+        const acidH = Math.min(flaskH - 10, flaskH * (0.20 + 0.62 * danger));
+        const acidTop = flaskBottom - acidH;
+
+        // Bunsen burner flame heating the bottom of the beaker!
+        ctx.save();
+        for (let f = -1; f <= 1; f++) {
+          const fx = cx + f * 18;
+          ctx.fillStyle = f === 0 ? '#00E5FF' : '#FF6D00';
+          ctx.beginPath();
+          ctx.moveTo(fx - 8, h * 0.95);
+          ctx.quadraticCurveTo(fx + Math.sin(t * 16 + f) * 5, flaskBottom + 2, fx + 8, h * 0.95);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Translucent Lab Glass Tint
+        ctx.fillStyle = 'rgba(225, 245, 254, 0.30)';
+        ctx.beginPath();
+        ctx.roundRect(flaskLeft, flaskTop, flaskW, flaskH, 16);
+        ctx.fill();
+
+        // Top suspension rope & lab clamp holding the Stickman's raised hands!
+        const stickY = Math.max(flaskTop + 14, acidTop - 66 + bob * 0.5);
+        ctx.strokeStyle = '#5D4037';
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, stickY - 2);
+        ctx.lineTo(cx - 5 * 0.84, stickY);
+        ctx.moveTo(cx, stickY - 2);
+        ctx.lineTo(cx + 5 * 0.84, stickY);
+        ctx.stroke();
+        // Metal pulley wheel at top
+        ctx.fillStyle = '#90A4AE';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, flaskTop * 0.45, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Stickman suspended over the bubbling acid with both hands visible!
+        drawStickman(ctx, cx, stickY, 0.84, !isPreview && livesCount <= 2, true, t);
+
+        // Glowing Radioactive Acid with wavy meniscus surface
+        ctx.fillStyle = 'rgba(118, 255, 3, 0.58)';
+        ctx.beginPath();
+        ctx.moveTo(flaskLeft + 4, flaskBottom - 4);
+        ctx.lineTo(flaskLeft + 4, acidTop);
+        for (let x = flaskLeft + 4; x <= flaskRight - 4; x += 8) {
+          ctx.lineTo(x, acidTop + Math.sin(t * 5 + x * 0.09) * 3.2);
+        }
+        ctx.lineTo(flaskRight - 4, flaskBottom - 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Darker green neon surface rim
+        ctx.strokeStyle = '#33691E';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        for (let x = flaskLeft + 5; x <= flaskRight - 5; x += 8) {
+          const wy = acidTop + Math.sin(t * 5 + x * 0.09) * 3.2;
+          if (x === flaskLeft + 5) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
+        }
+        ctx.stroke();
+
+        // Rising acid bubbles + toxic fume puffs above surface
         for (let i = 0; i < 6; i++) {
           const bx = flaskLeft + flaskW * (0.16 + i * 0.13) + Math.sin(t * 3 + i) * 4;
           const by = flaskBottom - 8 - ((t * 32 + i * 19) % Math.max(12, acidH - 12));
-          ctx.fillStyle = 'rgba(255,255,255,0.8)';
-          ctx.beginPath(); ctx.arc(bx, by, 3.5 + (i % 2) * 1.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.82)';
+          ctx.strokeStyle = '#33691E';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(bx, by, 3.5 + (i % 2) * 1.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        // Rising green toxic vapor puffs
+        for (let v = 0; v < 3; v++) {
+          const prog = (t * 0.8 + v * 0.33) % 1;
+          const vx = flaskLeft + flaskW * (0.28 + v * 0.22) + Math.sin(t * 4 + v) * 6;
+          const vy = acidTop - 8 - prog * 28;
+          ctx.fillStyle = `rgba(118, 255, 3, ${(1 - prog) * 0.38})`;
+          ctx.beginPath();
+          ctx.arc(vx, vy, 5 + prog * 5, 0, Math.PI * 2);
+          ctx.fill();
         }
 
+        // Flared Beaker Rim, Pour Spout & Outer Glass Outline
         ctx.strokeStyle = '#1E1E1E';
-        ctx.lineWidth = 2.8;
+        ctx.lineWidth = 3.0;
         ctx.beginPath();
         ctx.roundRect(flaskLeft, flaskTop, flaskW, flaskH, 14);
         ctx.stroke();
-
-        const stickY = Math.max(flaskTop + 8, acidTop - 66 + bob * 0.5);
-        drawStickman(ctx, cx, stickY, 0.84, !isPreview && livesCount <= 2, true, t);
-
-      } else if (peril.id === 'PIRATE_PLANK') {
-        const waterY = h * 0.80, plankY = h * 0.50;
-        ctx.fillStyle = '#795548';
-        ctx.strokeStyle = '#1E1E1E';
-        ctx.lineWidth = 2.2;
+        // Flared top lip of beaker
+        ctx.fillStyle = '#E1F5FE';
         ctx.beginPath();
-        ctx.roundRect(0, plankY, w * 0.66, 12, 4);
+        ctx.roundRect(flaskLeft - 7, flaskTop - 5, flaskW + 14, 9, 4.5);
         ctx.fill();
         ctx.stroke();
 
-        for (let k = 0; k < 3; k++) {
-          const tx = w * (0.58 + k * 0.13);
-          const topY = waterY - (28 + 34 * danger) + Math.sin(t * 3.5 + k) * 7;
-          ctx.strokeStyle = '#8E24AA';
-          ctx.lineWidth = 7.5;
-          ctx.lineCap = 'round';
+        // Glass specular shine & mL graduation marks on right wall
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(flaskLeft + 9, flaskTop + 16);
+        ctx.lineTo(flaskLeft + 9, flaskBottom - 20);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.fillStyle = '#1E1E1E';
+        ctx.lineWidth = 1.6;
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'right';
+        for (let m = 1; m <= 5; m++) {
+          const my = flaskBottom - (flaskH * m) / 6;
+          const tickW = m % 2 === 0 ? 12 : 7;
           ctx.beginPath();
-          ctx.moveTo(tx, waterY + 6);
-          ctx.quadraticCurveTo(tx - 12 + Math.cos(t * 3 + k) * 6, (waterY + topY) * 0.5, tx + 6, topY);
+          ctx.moveTo(flaskRight - tickW, my);
+          ctx.lineTo(flaskRight, my);
+          ctx.stroke();
+          if (m % 2 === 0) {
+            ctx.fillText(`${m * 100}mL`, flaskRight - 14, my + 3);
+          }
+        }
+
+      } else if (peril.id === 'PIRATE_PLANK') {
+        const waterY = h * 0.79, plankY = h * 0.50;
+
+        // Pirate ship wooden hull & railing on the left edge
+        ctx.fillStyle = '#5D4037';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(0, plankY - 34);
+        ctx.lineTo(w * 0.16, plankY - 34);
+        ctx.lineTo(w * 0.14, plankY);
+        ctx.lineTo(w * 0.19, waterY + 10);
+        ctx.lineTo(0, waterY + 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Railing posts
+        for (let p = 0; p < 3; p++) {
+          const px = w * (0.03 + p * 0.05);
+          ctx.beginPath();
+          ctx.moveTo(px, plankY - 34);
+          ctx.lineTo(px, plankY);
           ctx.stroke();
         }
 
-        const stickX = w * 0.22 + (w * 0.40) * danger;
+        // Wooden Pirate Plank with wood grain & nail heads
+        ctx.fillStyle = '#8D6E63';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.roundRect(0, plankY, w * 0.66, 13, 4);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#1E1E1E';
+        for (let n = 1; n <= 5; n++) {
+          ctx.beginPath();
+          ctx.arc(w * n * 0.11, plankY + 6.5, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Sculpted Kraken Sea Monster head & suction-cupped tentacles emerging on the right!
+        const krakenX = w * 0.80;
+        const krakenY = waterY - 8 - danger * 14 + Math.sin(t * 2.5) * 4;
+        ctx.fillStyle = '#7B1FA2';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.ellipse(krakenX, krakenY, 22, 18, 0, Math.PI, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Angry glowing yellow Kraken eyes
+        ctx.fillStyle = '#FFEB3B';
+        ctx.beginPath();
+        ctx.arc(krakenX - 7, krakenY - 6, 3.8, 0, Math.PI * 2);
+        ctx.arc(krakenX + 7, krakenY - 6, 3.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#1E1E1E';
+        ctx.beginPath();
+        ctx.arc(krakenX - 7, krakenY - 6, 1.5, 0, Math.PI * 2);
+        ctx.arc(krakenX + 7, krakenY - 6, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Curling Kraken tentacles with pink suction cups
+        for (let k = 0; k < 3; k++) {
+          const tx = w * (0.56 + k * 0.14);
+          const topY = waterY - (30 + 38 * danger) + Math.sin(t * 3.5 + k) * 7;
+          const ctrlX = tx - 14 + Math.cos(t * 3 + k) * 7;
+          const ctrlY = (waterY + topY) * 0.5;
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 10.5;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(tx, waterY + 6);
+          ctx.quadraticCurveTo(ctrlX, ctrlY, tx + 6, topY);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#8E24AA';
+          ctx.lineWidth = 7.2;
+          ctx.beginPath();
+          ctx.moveTo(tx, waterY + 6);
+          ctx.quadraticCurveTo(ctrlX, ctrlY, tx + 6, topY);
+          ctx.stroke();
+
+          // Suction cups along tentacle
+          ctx.fillStyle = '#F48FB1';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.1;
+          for (let s = 1; s <= 3; s++) {
+            const u = s / 4;
+            const sx = (1 - u) * (1 - u) * tx + 2 * (1 - u) * u * ctrlX + u * u * (tx + 6) - 4;
+            const sy = (1 - u) * (1 - u) * (waterY + 6) + 2 * (1 - u) * u * ctrlY + u * u * topY;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 2.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+        }
+
+        const stickX = w * 0.24 + (w * 0.36) * danger;
         const stickY = (!isPreview && livesCount <= 0) ? waterY - 22 : plankY - 64 + bob * 0.4;
         drawStickman(ctx, stickX, stickY, 0.86, !isPreview && livesCount <= 2, false, t);
+        // Pirate red bandana on Stickman's head!
+        const headBandY = stickY + 5 * 0.86 - 10 * 0.86;
+        ctx.fillStyle = '#E53935';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.roundRect(stickX - 11, headBandY, 22, 4.5, 2);
+        ctx.fill();
+        ctx.stroke();
 
-        ctx.fillStyle = '#B3E5FC';
+        ctx.fillStyle = '#4FC3F7';
+        ctx.strokeStyle = '#0288D1';
+        ctx.lineWidth = 2.2;
         ctx.beginPath();
         ctx.moveTo(0, h);
         for (let x = 0; x <= w; x += 12) ctx.lineTo(x, waterY + Math.sin(t * 3.2 + x * 0.05) * 4.5);
         ctx.lineTo(w, h);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
 
       } else if (peril.id === 'SPIDER_WEB') {
-        const wy = h * 0.54;
-        ctx.strokeStyle = 'rgba(30,30,30,0.32)';
-        ctx.lineWidth = 1.4;
+        const wy = h * 0.56;
+        ctx.strokeStyle = 'rgba(30,30,30,0.34)';
+        ctx.lineWidth = 1.5;
         for (let i = 0; i < 8; i++) {
           const ang = (i * Math.PI) / 4;
           ctx.beginPath();
           ctx.moveTo(cx, wy);
-          ctx.lineTo(cx + Math.cos(ang) * w * 0.45, wy + Math.sin(ang) * h * 0.42);
+          ctx.lineTo(cx + Math.cos(ang) * w * 0.46, wy + Math.sin(ang) * h * 0.42);
           ctx.stroke();
         }
-        for (let r = 1; r <= 3; r++) {
-          ctx.beginPath(); ctx.arc(cx, wy, r * 22, 0, Math.PI * 2); ctx.stroke();
+        for (let r = 1; r <= 4; r++) {
+          ctx.beginPath();
+          ctx.arc(cx, wy, r * 19, 0, Math.PI * 2);
+          ctx.stroke();
         }
 
         drawStickman(ctx, cx, wy - 26 + bob * 0.3, 0.86, !isPreview && livesCount <= 2, true, t);
 
-        const spiderY = h * 0.15 + (h * 0.28) * danger + Math.sin(t * 3.2) * 6;
+        // Sculpted 2-Segment Black Widow Spider with jointed legs, fangs & red hourglass!
+        const spiderY = h * 0.14 + (h * 0.28) * danger + Math.sin(t * 3.2) * 5;
         ctx.strokeStyle = '#1E1E1E';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, spiderY); ctx.stroke();
-        ctx.fillStyle = '#1E1E1E';
-        ctx.beginPath(); ctx.arc(cx, spiderY, 14, 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = 2.2;
+        ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, spiderY - 12); ctx.stroke();
+
+        // 8 jointed spider legs
         [-1, 1].forEach(side => {
-          for (let leg = -1; leg <= 2; leg++) {
-            const ly = spiderY + leg * 4;
+          for (let leg = 0; leg < 4; leg++) {
+            const baseY = spiderY + (leg - 1.5) * 3.5;
+            const kneeX = cx + side * (16 + leg * 2);
+            const kneeY = baseY - 7 + leg * 3 + Math.sin(t * 6 + leg) * 2.5;
+            const footX = cx + side * (26 - Math.abs(leg - 1.5) * 3);
+            const footY = baseY + 6 + leg * 2 + Math.cos(t * 6 + leg) * 2.5;
+            ctx.lineWidth = 2.4;
             ctx.beginPath();
-            ctx.moveTo(cx, ly);
-            ctx.lineTo(cx + side * 24, ly + Math.sin(t * 6 + leg) * 4.5);
+            ctx.moveTo(cx + side * 6, baseY);
+            ctx.lineTo(kneeX, kneeY);
+            ctx.lineTo(footX, footY);
             ctx.stroke();
           }
         });
-        ctx.fillStyle = '#E74C3C';
+
+        // Upper abdomen + lower cephalothorax
+        ctx.fillStyle = '#212121';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(cx - 4, spiderY + 3, 2.5, 0, Math.PI * 2);
-        ctx.arc(cx + 4, spiderY + 3, 2.5, 0, Math.PI * 2);
+        ctx.ellipse(cx, spiderY - 7, 13, 11, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Red Black-Widow hourglass mark on abdomen
+        ctx.fillStyle = '#FF1744';
+        ctx.beginPath();
+        ctx.moveTo(cx - 4, spiderY - 12);
+        ctx.lineTo(cx + 4, spiderY - 12);
+        ctx.lineTo(cx - 4, spiderY - 2);
+        ctx.lineTo(cx + 4, spiderY - 2);
+        ctx.closePath();
+        ctx.fill();
+
+        // Lower head segment
+        ctx.fillStyle = '#212121';
+        ctx.beginPath();
+        ctx.arc(cx, spiderY + 6, 8.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Pincer fangs & glowing red eyes
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 4, spiderY + 13); ctx.lineTo(cx - 2, spiderY + 18);
+        ctx.moveTo(cx + 4, spiderY + 13); ctx.lineTo(cx + 2, spiderY + 18);
+        ctx.stroke();
+
+        ctx.fillStyle = '#FF1744';
+        ctx.beginPath();
+        ctx.arc(cx - 3.5, spiderY + 7, 2.3, 0, Math.PI * 2);
+        ctx.arc(cx + 3.5, spiderY + 7, 2.3, 0, Math.PI * 2);
+        ctx.arc(cx - 6.5, spiderY + 5, 1.4, 0, Math.PI * 2);
+        ctx.arc(cx + 6.5, spiderY + 5, 1.4, 0, Math.PI * 2);
         ctx.fill();
 
       } else if (peril.id === 'QUICKSAND_PIT') {
         const sandY = h * 0.66;
-        const sinkOffset = 54 * danger;
+
+        // Desert Saguaro Cactus on the left & Warning Sign on the right
+        ctx.fillStyle = '#43A047';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2;
+        const cactX = w * 0.16;
+        ctx.beginPath();
+        ctx.roundRect(cactX - 5, sandY - 42, 10, 44, 5);
+        ctx.roundRect(cactX - 15, sandY - 30, 10, 6, 3);
+        ctx.roundRect(cactX - 15, sandY - 38, 6, 12, 3);
+        ctx.roundRect(cactX + 5, sandY - 24, 10, 6, 3);
+        ctx.roundRect(cactX + 9, sandY - 34, 6, 14, 3);
+        ctx.fill();
+        ctx.stroke();
+
+        // Wooden DANGER sign on right
+        const signX = w * 0.82;
+        ctx.strokeStyle = '#5D4037';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(signX, sandY + 4);
+        ctx.lineTo(signX + 3, sandY - 28);
+        ctx.stroke();
+        ctx.fillStyle = '#FFCA28';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(signX + 3, sandY - 42);
+        ctx.lineTo(signX + 16, sandY - 22);
+        ctx.lineTo(signX - 10, sandY - 22);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#1E1E1E';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('!', signX + 3, sandY - 25);
+
+        const sinkOffset = 52 * danger;
         drawStickman(ctx, cx, sandY - 58 + sinkOffset + bob * 0.35, 0.88, !isPreview && livesCount <= 2, true, t);
 
+        // Quicksand pit foreground covering lower body
         ctx.fillStyle = '#E6C280';
         ctx.fillRect(0, sandY, w, h - sandY);
         ctx.strokeStyle = '#795548';
         ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(0, sandY); ctx.lineTo(w, sandY); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, sandY);
+        ctx.quadraticCurveTo(cx, sandY + 6, w, sandY);
+        ctx.stroke();
+
         for (let r = 1; r <= 3; r++) {
-          ctx.strokeStyle = 'rgba(121, 85, 72, 0.5)';
-          ctx.lineWidth = 1.6;
+          ctx.strokeStyle = 'rgba(121, 85, 72, 0.55)';
+          ctx.lineWidth = 1.8;
           ctx.beginPath();
           ctx.ellipse(cx + Math.sin(t * 2 + r) * 5, sandY + 10 + r * 6, r * 24, 6, 0, 0, Math.PI * 2);
           ctx.stroke();
@@ -5739,80 +6405,397 @@
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(cx, 0); ctx.lineTo(cx, barY);
-        ctx.moveTo(w * 0.18, barY); ctx.lineTo(w * 0.82, barY);
+        ctx.moveTo(w * 0.16, barY); ctx.lineTo(w * 0.84, barY);
         ctx.stroke();
 
         for (let i = 0; i < 6; i++) {
-          const candleX = w * (0.20 + i * 0.12);
+          const candleX = w * (0.19 + i * 0.124);
           ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(candleX - 3, barY - 12, 6, 12);
-          ctx.strokeRect(candleX - 3, barY - 12, 6, 12);
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 1.6;
+          ctx.fillRect(candleX - 3.5, barY - 13, 7, 13);
+          ctx.strokeRect(candleX - 3.5, barY - 13, 7, 13);
           if (i < livesCount) {
-            ctx.fillStyle = '#FFD166';
+            ctx.fillStyle = '#FF9800';
             ctx.beginPath();
-            ctx.arc(candleX, barY - 17 + Math.sin(t * 6 + i) * 1.8, 4.5, 0, Math.PI * 2);
+            ctx.arc(candleX, barY - 18 + Math.sin(t * 6 + i) * 1.8, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FFF59D';
+            ctx.beginPath();
+            ctx.arc(candleX, barY - 18 + Math.sin(t * 6 + i) * 1.8, 2.5, 0, Math.PI * 2);
             ctx.fill();
           }
         }
 
-        const ghostX = w * 0.20 + (w * 0.24) * danger + Math.cos(t * 2.5) * 8;
-        const ghostY = h * 0.44 + Math.sin(t * 3.5) * 9;
-        ctx.fillStyle = '#E1F5FE';
-        ctx.strokeStyle = '#1E1E1E';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(ghostX, ghostY, 17, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#1E1E1E';
-        ctx.beginPath();
-        ctx.arc(ghostX - 5, ghostY - 2, 2.3, 0, Math.PI * 2);
-        ctx.arc(ghostX + 5, ghostY - 2, 2.3, 0, Math.PI * 2);
-        ctx.fill();
-
-        drawStickman(ctx, w * 0.64, h * 0.50 + bob * 0.4, 0.88, !isPreview && livesCount <= 2, false, t);
-
-      } else if (peril.id === 'TICKING_TIME_BOMB') {
-        const bx = w * 0.66, by = h * 0.62, br = 26;
-        const fuseRatio = Math.max(0.08, 1 - danger);
-        ctx.fillStyle = '#263238';
-        ctx.strokeStyle = '#1E1E1E';
-        ctx.lineWidth = 2.4;
-        ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-
-        const tipX = bx + 34 * fuseRatio;
-        const tipY = by - br - 28 * fuseRatio;
-        ctx.strokeStyle = '#795548';
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(bx, by - br); ctx.lineTo(tipX, tipY); ctx.stroke();
-
-        ctx.fillStyle = '#FF5722';
-        ctx.beginPath(); ctx.arc(tipX, tipY, 6 + Math.sin(t * 14) * 2.5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#FFD166';
-        ctx.beginPath(); ctx.arc(tipX, tipY, 3, 0, Math.PI * 2); ctx.fill();
-
-        drawStickman(ctx, w * 0.30, h * 0.48 + bob * 0.4, 0.88, !isPreview && livesCount <= 2, !isPreview && livesCount <= 2, t);
-
-      } else {
-        // DRAGON_CAVE
-        const snoutX = w * 0.82, snoutY = h * 0.48;
-        ctx.fillStyle = '#E74C3C';
+        // Sculpted Billowing Sheet Specter Ghost with wavy tail & spooky arms!
+        const ghostX = w * 0.22 + (w * 0.24) * danger + Math.cos(t * 2.5) * 7;
+        const ghostY = h * 0.44 + Math.sin(t * 3.5) * 8;
+        ctx.save();
+        ctx.fillStyle = 'rgba(225, 245, 254, 0.92)';
         ctx.strokeStyle = '#1E1E1E';
         ctx.lineWidth = 2.2;
-        ctx.beginPath(); ctx.roundRect(snoutX - 18, snoutY - 16, 34, 32, 8); ctx.fill(); ctx.stroke();
-
-        const fireLen = (w * 0.16) + (w * 0.32) * danger + Math.sin(t * 10) * 8;
-        ctx.fillStyle = 'rgba(255, 87, 34, 0.84)';
         ctx.beginPath();
-        ctx.moveTo(snoutX - 18, snoutY);
-        ctx.lineTo(snoutX - 18 - fireLen, snoutY - 14 - danger * 8);
-        ctx.lineTo(snoutX - 18 - fireLen, snoutY + 14 + danger * 8);
+        ctx.arc(ghostX, ghostY - 6, 16, Math.PI, 0, false);
+        ctx.lineTo(ghostX + 18, ghostY + 18);
+        // Wavy bottom sheet hem
+        const waveShift = Math.sin(t * 8) * 3;
+        ctx.quadraticCurveTo(ghostX + 11, ghostY + 12 + waveShift, ghostX + 5, ghostY + 19);
+        ctx.quadraticCurveTo(ghostX, ghostY + 12 - waveShift, ghostX - 6, ghostY + 19);
+        ctx.quadraticCurveTo(ghostX - 12, ghostY + 12 + waveShift, ghostX - 18, ghostY + 18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Spooky ghost arms reaching toward Stickman
+        ctx.beginPath();
+        ctx.moveTo(ghostX + 14, ghostY - 2);
+        ctx.quadraticCurveTo(ghostX + 26, ghostY - 8 + Math.sin(t * 6) * 4, ghostX + 22, ghostY + 4);
+        ctx.stroke();
+
+        // Hollow spooky eyes & howling mouth
+        ctx.fillStyle = '#1E1E1E';
+        ctx.beginPath();
+        ctx.ellipse(ghostX - 5, ghostY - 6, 2.6, 3.6, 0, 0, Math.PI * 2);
+        ctx.ellipse(ghostX + 5, ghostY - 6, 2.6, 3.6, 0, 0, Math.PI * 2);
+        ctx.ellipse(ghostX + 1, ghostY + 3, 3.5, 4.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        drawStickman(ctx, w * 0.66, h * 0.50 + bob * 0.4, 0.88, !isPreview && livesCount <= 2, false, t);
+
+      } else if (peril.id === 'TICKING_TIME_BOMB') {
+        const bx = w * 0.66, by = h * 0.62, br = 27;
+        const fuseRatio = Math.max(0.08, 1 - danger);
+
+        // Bomb shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.beginPath();
+        ctx.ellipse(bx, by + br + 4, 22, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Brass fuse nozzle collar at top of bomb
+        ctx.fillStyle = '#546E7A';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.roundRect(bx - 8, by - br - 7, 16, 9, 3);
+        ctx.fill();
+        ctx.stroke();
+
+        // Iron bomb sphere
+        ctx.fillStyle = '#263238';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // 3D glossy highlight arc on bomb
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.arc(bx, by, br - 6, 1.15 * Math.PI, 1.48 * Math.PI);
+        ctx.stroke();
+
+        // Red "TNT" danger badge on bomb front
+        ctx.fillStyle = '#E53935';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(bx - 14, by - 7, 28, 14, 4);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('TNT', bx, by + 3);
+
+        // Curved braided rope fuse
+        const tipX = bx + 32 * fuseRatio;
+        const tipY = by - br - 7 - 26 * fuseRatio;
+        ctx.strokeStyle = '#8D6E63';
+        ctx.lineWidth = 3.4;
+        ctx.beginPath();
+        ctx.moveTo(bx, by - br - 7);
+        ctx.quadraticCurveTo(bx + 18 * fuseRatio, by - br - 28 * fuseRatio, tipX, tipY);
+        ctx.stroke();
+
+        // Multi-rayed burning spark burst
+        ctx.strokeStyle = '#FF9800';
+        ctx.lineWidth = 2;
+        for (let r = 0; r < 6; r++) {
+          const ang = t * 12 + (r * Math.PI) / 3;
+          const rad = 8 + Math.sin(t * 20 + r) * 3;
+          ctx.beginPath();
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(tipX + Math.cos(ang) * rad, tipY + Math.sin(ang) * rad);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#FF5722';
+        ctx.beginPath(); ctx.arc(tipX, tipY, 6 + Math.sin(t * 14) * 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#FFF59D';
+        ctx.beginPath(); ctx.arc(tipX, tipY, 3, 0, Math.PI * 2); ctx.fill();
+
+        drawStickman(ctx, w * 0.28, h * 0.48 + bob * 0.4, 0.88, !isPreview && livesCount <= 2, !isPreview && livesCount <= 2, t);
+
+      } else {
+        // ====================================================================
+        // SCULPTED DRAGON_CAVE (Full Winged Fire-Breathing Dragon + Knight Shield)
+        // ====================================================================
+        const headX = w * 0.80;
+        const headY = h * 0.43 + Math.sin(t * 2.6) * 3.5;
+        const jawOpen = 6 + danger * 10 + Math.sin(t * 9) * 2.5;
+
+        // 1. Cave ceiling stalactites & treasure gold mound at bottom right
+        ctx.fillStyle = '#78909C';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.8;
+        [[0.22, 18], [0.48, 24], [0.72, 16]].forEach(([sx, sh]) => {
+          ctx.beginPath();
+          ctx.moveTo(w * sx - 8, 0);
+          ctx.lineTo(w * sx, sh);
+          ctx.lineTo(w * sx + 8, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        });
+
+        // Dragon's Gold Treasure Mound at bottom right
+        ctx.fillStyle = '#FFD54F';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(w * 0.84, h * 0.86, 36, 12, 0, Math.PI, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // 2. Bat-like Dragon Wing rising behind the dragon's back
+        const wingFlap = Math.sin(t * 4.5) * 6;
+        ctx.fillStyle = '#B71C1C';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(headX + 10, headY + 14);
+        ctx.lineTo(headX - 8, headY - 38 + wingFlap);
+        ctx.lineTo(headX + 26, headY - 30 + wingFlap * 0.7);
+        ctx.quadraticCurveTo(headX + 18, headY - 14, headX + 28, headY - 6);
+        ctx.quadraticCurveTo(headX + 18, headY + 4, headX + 14, headY + 20);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // 3. Sculpted Dragon Neck, Back Spikes & Golden Ribbed Belly Scales
+        ctx.fillStyle = '#D32F2F';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(headX + 4, headY + 6);
+        ctx.quadraticCurveTo(w * 0.94, headY + 26, w * 0.96, h * 0.86);
+        ctx.lineTo(w * 0.76, h * 0.86);
+        ctx.quadraticCurveTo(headX - 4, headY + 38, headX - 6, headY + 14);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Golden dragon belly plates
+        ctx.fillStyle = '#FFCA28';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.5;
+        for (let s = 0; s < 4; s++) {
+          const sy = headY + 20 + s * 13;
+          const sx = headX - 4 + s * 2;
+          ctx.beginPath();
+          ctx.roundRect(sx - 6, sy, 14, 8, 3);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Dorsal spines along neck/head
+        ctx.fillStyle = '#FF8F00';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.6;
+        for (let sp = 0; sp < 4; sp++) {
+          const spX = headX + 8 + sp * 5;
+          const spY = headY - 12 + sp * 11;
+          ctx.beginPath();
+          ctx.moveTo(spX, spY);
+          ctx.lineTo(spX + 10, spY - 5);
+          ctx.lineTo(spX + 3, spY + 7);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // 4. Curved Swept-Back Dragon Horns
+        ctx.fillStyle = '#FFF8E1';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.2;
+        [-1, 1].forEach((hIdx, i) => {
+          ctx.beginPath();
+          ctx.moveTo(headX + 2, headY - 12 + i * 4);
+          ctx.quadraticCurveTo(headX + 18, headY - 28 + i * 5, headX + 30, headY - 22 + i * 6);
+          ctx.quadraticCurveTo(headX + 18, headY - 14 + i * 4, headX + 6, headY - 6 + i * 4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        });
+
+        // 5. Hinged Lower Jaw with Sharp White Fangs
+        const mouthTipX = headX - 34;
+        ctx.fillStyle = '#B71C1C';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(headX - 2, headY + 6);
+        ctx.lineTo(mouthTipX + 4, headY + jawOpen + 8);
+        ctx.quadraticCurveTo(headX - 12, headY + jawOpen + 16, headX + 4, headY + 14);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // 6. Multi-Layered Roaring Dragon Fire Breath!
+        const fireLen = (w * 0.16) + (w * 0.30) * danger + Math.sin(t * 14) * 7;
+        const fireOriginX = mouthTipX + 2;
+        const fireOriginY = headY + jawOpen * 0.35;
+        const fireEndX = fireOriginX - fireLen;
+        const spread = 13 + danger * 9 + Math.cos(t * 12) * 3;
+
+        // Outer red-orange flame tongue
+        ctx.fillStyle = 'rgba(255, 61, 0, 0.88)';
+        ctx.strokeStyle = '#BF360C';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(fireOriginX, fireOriginY - 4);
+        ctx.quadraticCurveTo(
+          fireOriginX - fireLen * 0.5,
+          fireOriginY - spread * 1.15 + Math.sin(t * 16) * 5,
+          fireEndX,
+          fireOriginY - spread * 0.65
+        );
+        ctx.lineTo(fireEndX - 8 + Math.sin(t * 20) * 4, fireOriginY);
+        ctx.lineTo(fireEndX, fireOriginY + spread * 0.65);
+        ctx.quadraticCurveTo(
+          fireOriginX - fireLen * 0.5,
+          fireOriginY + spread * 1.15 + Math.cos(t * 16) * 5,
+          fireOriginX,
+          fireOriginY + 6
+        );
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Inner golden-yellow plasma core
+        ctx.fillStyle = 'rgba(255, 235, 59, 0.92)';
+        ctx.beginPath();
+        ctx.moveTo(fireOriginX, fireOriginY - 2);
+        ctx.quadraticCurveTo(fireOriginX - fireLen * 0.4, fireOriginY - spread * 0.55, fireOriginX - fireLen * 0.72, fireOriginY);
+        ctx.quadraticCurveTo(fireOriginX - fireLen * 0.4, fireOriginY + spread * 0.55, fireOriginX, fireOriginY + 3);
         ctx.closePath();
         ctx.fill();
 
-        const stickX = w * 0.26;
-        drawStickman(ctx, stickX, h * 0.46 + bob * 0.4, 0.86, !isPreview && livesCount <= 2, false, t);
-        ctx.fillStyle = '#78909C';
+        // 7. Sculpted Dragon Upper Head, Snout, Flared Nostril & Slit Reptile Eye
+        ctx.fillStyle = '#E53935';
         ctx.strokeStyle = '#1E1E1E';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(stickX + 18, h * 0.56, 14, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(headX + 10, headY + 6);
+        ctx.lineTo(headX + 8, headY - 14);
+        ctx.quadraticCurveTo(headX - 6, headY - 20, headX - 16, headY - 10);
+        // Snout bridge & nostril bump
+        ctx.lineTo(mouthTipX + 6, headY - 8);
+        ctx.quadraticCurveTo(mouthTipX - 2, headY - 9, mouthTipX, headY + 1);
+        ctx.lineTo(headX - 4, headY + 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Upper & lower interlocking white dragon fangs
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.4;
+        for (let f = 0; f < 3; f++) {
+          const fx = mouthTipX + 5 + f * 8;
+          // Upper fang
+          ctx.beginPath();
+          ctx.moveTo(fx, headY + 1);
+          ctx.lineTo(fx + 3, headY + 8);
+          ctx.lineTo(fx + 6, headY + 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Nostril + puff of smoke
+        ctx.fillStyle = '#1E1E1E';
+        ctx.beginPath();
+        ctx.arc(mouthTipX + 6, headY - 4, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        const smokeProg = (t * 0.9) % 1;
+        ctx.fillStyle = `rgba(144, 164, 174, ${(1 - smokeProg) * 0.55})`;
+        ctx.beginPath();
+        ctx.arc(mouthTipX + 4 - smokeProg * 8, headY - 10 - smokeProg * 14, 3 + smokeProg * 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fierce golden dragon eye with vertical slit pupil & angry brow ridge
+        ctx.fillStyle = '#FFEB3B';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.ellipse(headX - 9, headY - 7, 5.2, 3.8, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#1E1E1E';
+        ctx.beginPath();
+        ctx.ellipse(headX - 9, headY - 7, 1.4, 3.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Brow ridge
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(headX - 16, headY - 12);
+        ctx.lineTo(headX - 3, headY - 9);
+        ctx.stroke();
+
+        // 8. Stickman Hero with Knight Helmet Plume & Riveted Heater Shield!
+        const stickX = w * 0.24;
+        const stickY = h * 0.46 + bob * 0.4;
+        drawStickman(ctx, stickX, stickY, 0.86, !isPreview && livesCount <= 2, false, t);
+
+        // Red knight feather plume on Stickman's head
+        const helmetTopY = stickY + 5 * 0.86 - 12.5 * 0.86;
+        ctx.fillStyle = '#E53935';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(stickX, helmetTopY);
+        ctx.quadraticCurveTo(stickX - 12, helmetTopY - 12, stickX - 18, helmetTopY - 4);
+        ctx.quadraticCurveTo(stickX - 8, helmetTopY - 2, stickX, helmetTopY);
+        ctx.fill();
+        ctx.stroke();
+
+        // Sculpted Knight Heater Shield with Gold Cross & 6 Life Rivets
+        const sx = stickX + 18;
+        const sy = stickY + 26;
+        ctx.fillStyle = '#90A4AE';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(sx - 12, sy - 14);
+        ctx.lineTo(sx + 12, sy - 14);
+        ctx.lineTo(sx + 12, sy + 2);
+        ctx.quadraticCurveTo(sx + 10, sy + 14, sx, sy + 19);
+        ctx.quadraticCurveTo(sx - 10, sy + 14, sx - 12, sy + 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Golden emblem cross on shield
+        ctx.strokeStyle = '#FFD54F';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - 10); ctx.lineTo(sx, sy + 13);
+        ctx.moveTo(sx - 8, sy - 1); ctx.lineTo(sx + 8, sy - 1);
+        ctx.stroke();
       }
 
       // Render active damage particles & floating "-1 ❤️" indicators
@@ -7383,7 +8366,7 @@
         ctx.moveTo(cx, hipY);
         ctx.lineTo(cx + 18, hipY + 9);
         ctx.lineTo(cx - 4, hipY + 15);
-        // Omnipotent crossed arms
+        // Omnipotent crossed arms + visible cartoon hands
         ctx.moveTo(cx - 4, shoulderY + 2);
         ctx.lineTo(cx - 16, shoulderY + 11);
         ctx.lineTo(cx + 8, shoulderY + 9);
@@ -7391,6 +8374,23 @@
         ctx.lineTo(cx + 16, shoulderY + 11);
         ctx.lineTo(cx - 8, shoulderY + 9);
         ctx.stroke();
+
+        // Glowing Ki hands on crossed wrists
+        [[cx - 9, shoulderY + 9], [cx + 9, shoulderY + 9]].forEach(([hx, hy]) => {
+          ctx.fillStyle = primary;
+          ctx.globalAlpha = 0.75;
+          ctx.beginPath();
+          ctx.arc(hx, hy, 5.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.strokeStyle = '#1E1E1E';
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.arc(hx, hy, 3.6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
 
         // Doodle Head
         ctx.fillStyle = '#FAF9F6';
@@ -8635,8 +9635,8 @@
     }
 
     function gmTeleportFromInput() {
-      const val = document.getElementById('gmLevelInput')?.value;
-      gmTeleportToLevel(val);
+      const el = document.getElementById('gmTeleportLevelInput') || document.getElementById('gmLevelInput');
+      gmTeleportToLevel(el ? el.value : 1);
     }
 
     function gmInjectStars(amount) {
@@ -8665,17 +9665,23 @@
     }
 
     function onGmToggleChanged() {
-      enableKiComboFuse = Boolean(document.getElementById('gmToggleKiComboFuse')?.checked);
-      enableStickmanKiBlasts = Boolean(document.getElementById('gmToggleStickmanKiBlasts')?.checked);
-      enableBossChainedKeys = Boolean(document.getElementById('gmToggleBossChainedKeys')?.checked);
-      enableTacticalStarDock = Boolean(document.getElementById('gmToggleTacticalStarDock')?.checked);
-      enableDoubleOrNothingBet = Boolean(document.getElementById('gmToggleDoubleOrNothingBet')?.checked);
+      const elCombo = document.getElementById('gmChkKiCombo') || document.getElementById('gmToggleKiComboFuse');
+      const elBlasts = document.getElementById('gmChkKiBlasts') || document.getElementById('gmToggleStickmanKiBlasts');
+      const elChains = document.getElementById('gmChkBossChains') || document.getElementById('gmToggleBossChainedKeys');
+      const elDock = document.getElementById('gmChkStarDock') || document.getElementById('gmToggleTacticalStarDock');
+      const elDouble = document.getElementById('gmChkDoubleBet') || document.getElementById('gmToggleDoubleOrNothingBet');
 
-      localStorage.setItem('doodle_gm_ki_combo', enableKiComboFuse ? '1' : '0');
-      localStorage.setItem('doodle_gm_ki_blasts', enableStickmanKiBlasts ? '1' : '0');
-      localStorage.setItem('doodle_gm_boss_chains', enableBossChainedKeys ? '1' : '0');
-      localStorage.setItem('doodle_gm_star_dock', enableTacticalStarDock ? '1' : '0');
-      localStorage.setItem('doodle_gm_double_bet', enableDoubleOrNothingBet ? '1' : '0');
+      if (elCombo) enableKiComboFuse = Boolean(elCombo.checked);
+      if (elBlasts) enableStickmanKiBlasts = Boolean(elBlasts.checked);
+      if (elChains) enableBossChainedKeys = Boolean(elChains.checked);
+      if (elDock) enableTacticalStarDock = Boolean(elDock.checked);
+      if (elDouble) enableDoubleOrNothingBet = Boolean(elDouble.checked);
+
+      localStorage.setItem('doodle_gm_ki_combo_v2', enableKiComboFuse ? '1' : '0');
+      localStorage.setItem('doodle_gm_ki_blasts_v2', enableStickmanKiBlasts ? '1' : '0');
+      localStorage.setItem('doodle_gm_boss_chains_v2', enableBossChainedKeys ? '1' : '0');
+      localStorage.setItem('doodle_gm_star_dock_v2', enableTacticalStarDock ? '1' : '0');
+      localStorage.setItem('doodle_gm_double_bet_v2', enableDoubleOrNothingBet ? '1' : '0');
 
       renderGameplayUI();
       showToast('👑 GM Feature Toggles Updated!');

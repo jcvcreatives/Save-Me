@@ -11819,9 +11819,26 @@ private fun DrawScope.drawTightropeSawPeril(
     val ropeY = h * 0.62f
     val dangerRatio = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
 
-    // Left and right canyon posts
-    drawLine(color = DoodleColors.CrateStoneDark, start = Offset(w * 0.10f, ropeY - 8.dp.toPx()), end = Offset(w * 0.10f, h * 0.92f), strokeWidth = 6.dp.toPx(), cap = StrokeCap.Round)
-    drawLine(color = DoodleColors.CrateStoneDark, start = Offset(w * 0.90f, ropeY - 8.dp.toPx()), end = Offset(w * 0.90f, h * 0.92f), strokeWidth = 6.dp.toPx(), cap = StrokeCap.Round)
+    // Left and right rocky canyon cliffs
+    val leftCliff = Path().apply {
+        moveTo(0f, ropeY - 10.dp.toPx())
+        lineTo(w * 0.13f, ropeY - 10.dp.toPx())
+        lineTo(w * 0.16f, h * 0.95f)
+        lineTo(0f, h * 0.95f)
+        close()
+    }
+    drawPath(path = leftCliff, color = DoodleColors.CrateStoneDark)
+    drawPath(path = leftCliff, color = DoodleColors.InkBlack, style = Stroke(width = 2.2.dp.toPx(), join = StrokeJoin.Round))
+
+    val rightCliff = Path().apply {
+        moveTo(w, ropeY - 10.dp.toPx())
+        lineTo(w * 0.87f, ropeY - 10.dp.toPx())
+        lineTo(w * 0.84f, h * 0.95f)
+        lineTo(w, h * 0.95f)
+        close()
+    }
+    drawPath(path = rightCliff, color = DoodleColors.CrateStoneDark)
+    drawPath(path = rightCliff, color = DoodleColors.InkBlack, style = Stroke(width = 2.2.dp.toPx(), join = StrokeJoin.Round))
 
     // 6-strand tightrope; strands snap as lives decrease
     for (i in 0 until 6) {
@@ -11829,16 +11846,16 @@ private fun DrawScope.drawTightropeSawPeril(
         val strandY = ropeY + (i - 2.5f) * 2.dp.toPx()
         drawLine(
             color = if (alive) DoodleColors.VineRopeBrown else DoodleColors.WrongRed.copy(alpha = 0.35f),
-            start = Offset(w * 0.10f, strandY),
-            end = Offset(w * 0.90f, strandY + if (alive) 0f else 10.dp.toPx()),
+            start = Offset(w * 0.12f, strandY),
+            end = Offset(w * 0.88f, strandY + if (alive) 0f else 10.dp.toPx()),
             strokeWidth = 1.6.dp.toPx(),
             cap = StrokeCap.Round
         )
     }
 
     // Spinning circular saw blade creeping along the rope toward center
-    val sawX = w * 0.16f + (w * 0.34f) * dangerRatio
-    val sawR = 19.dp.toPx()
+    val sawX = w * 0.20f + (w * 0.34f) * dangerRatio
+    val sawR = 20.dp.toPx()
     val teeth = 12
     val sawPath = Path().apply {
         for (i in 0 until teeth * 2) {
@@ -11852,10 +11869,23 @@ private fun DrawScope.drawTightropeSawPeril(
     }
     drawPath(path = sawPath, color = Color(0xFFCFD8DC))
     drawPath(path = sawPath, color = DoodleColors.InkBlack, style = Stroke(width = 1.8.dp.toPx(), join = StrokeJoin.Round))
-    drawCircle(color = DoodleColors.WrongRed, radius = 4.5.dp.toPx(), center = Offset(sawX, ropeY))
+    drawCircle(color = DoodleColors.WrongRed, radius = 5.dp.toPx(), center = Offset(sawX, ropeY))
+
+    // Friction sparks flying off the saw blade
+    for (sp in 0..3) {
+        val spAng = -0.6f - sp * 0.35f + sin(wavePhase * 5f + sp) * 0.2f
+        val len = (8f + ((wavePhase * 12f + sp * 4f) % 10f)).dp.toPx()
+        drawLine(
+            color = DoodleColors.DoodleYellow,
+            start = Offset(sawX + cos(spAng) * sawR * 0.8f, ropeY + sin(spAng) * sawR * 0.8f),
+            end = Offset(sawX + cos(spAng) * (sawR + len), ropeY + sin(spAng) * (sawR + len)),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
 
     // Stickman balancing on tightrope with a long balance pole
-    val stickX = w * 0.54f
+    val stickX = w * 0.56f
     val stickAnchorY = if (isGameOver || livesRemaining <= 0) h * 0.78f else ropeY - 62.dp.toPx() + bobOffset * 0.6f
     drawDoodleStickman(
         handAnchor = Offset(stickX, stickAnchorY),
@@ -11871,13 +11901,13 @@ private fun DrawScope.drawTightropeSawPeril(
         color = DoodleColors.InkBlue,
         start = Offset(stickX - 36.dp.toPx(), stickAnchorY + 26.dp.toPx() - tilt),
         end = Offset(stickX + 36.dp.toPx(), stickAnchorY + 26.dp.toPx() + tilt),
-        strokeWidth = 3.dp.toPx(),
+        strokeWidth = 3.2.dp.toPx(),
         cap = StrokeCap.Round
     )
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 8: METEOR_SHOWER (Levels 141–160, etc.)
+// PERIL 8: METEOR_SHOWER (Blazing Multi-Tail Comet & Cratered Asteroid)
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawMeteorShowerPeril(
     livesRemaining: Int,
@@ -11888,42 +11918,101 @@ private fun DrawScope.drawMeteorShowerPeril(
 ) {
     val w = size.width
     val h = size.height
+    val cx = w * 0.50f
     val dangerRatio = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
 
-    // Floating asteroid rock platform at bottom
+    // Distant ringed planet & twinkling space stars
+    val planetCenter = Offset(w * 0.18f, h * 0.18f)
+    drawCircle(color = Color(0xFFCE93D8), radius = 9.dp.toPx(), center = planetCenter)
+    drawCircle(color = DoodleColors.InkBlack, radius = 9.dp.toPx(), center = planetCenter, style = Stroke(width = 1.6.dp.toPx()))
+    drawOval(
+        color = Color(0xFF90CAF9),
+        topLeft = Offset(planetCenter.x - 16.dp.toPx(), planetCenter.y - 4.dp.toPx()),
+        size = Size(32.dp.toPx(), 8.dp.toPx()),
+        style = Stroke(width = 1.6.dp.toPx())
+    )
+
+    // Cratered Asteroid / Moon Platform at bottom
     val rockY = h * 0.76f
     drawOval(
         color = DoodleColors.CrateStoneLight,
-        topLeft = Offset(w * 0.20f, rockY),
-        size = Size(w * 0.60f, 28.dp.toPx())
+        topLeft = Offset(w * 0.17f, rockY),
+        size = Size(w * 0.66f, 30.dp.toPx())
     )
     drawOval(
         color = DoodleColors.InkBlack,
-        topLeft = Offset(w * 0.20f, rockY),
-        size = Size(w * 0.60f, 28.dp.toPx()),
-        style = Stroke(width = 2.2.dp.toPx())
+        topLeft = Offset(w * 0.17f, rockY),
+        size = Size(w * 0.66f, 30.dp.toPx()),
+        style = Stroke(width = 2.4.dp.toPx())
+    )
+    // Craters on asteroid platform
+    drawOval(
+        color = DoodleColors.CrateStoneDark,
+        topLeft = Offset(cx - 34.dp.toPx(), rockY + 8.dp.toPx()),
+        size = Size(16.dp.toPx(), 7.dp.toPx())
+    )
+    drawOval(
+        color = DoodleColors.CrateStoneDark,
+        topLeft = Offset(cx + 18.dp.toPx(), rockY + 9.dp.toPx()),
+        size = Size(18.dp.toPx(), 8.dp.toPx())
     )
 
-    // Giant flaming meteor descending from top-right
-    val meteorX = w * 0.76f - (w * 0.24f) * dangerRatio
-    val meteorY = h * 0.16f + (h * 0.42f) * dangerRatio + bobOffset * 0.5f
-    val meteorR = (18.dp.toPx() + 8.dp.toPx() * dangerRatio)
+    // Blazing Comet descending from top-right with Cyan Ion Streamers, Roaring Orange/Gold Plasma Tail, Coma Halo & Cratered Core!
+    val cometX = w * 0.78f - (w * 0.27f) * dangerRatio
+    val cometY = h * 0.16f + (h * 0.40f) * dangerRatio + bobOffset * 0.5f
+    val cometR = 17.dp.toPx() + 7.dp.toPx() * dangerRatio
+    val tailLen = cometR * 3.3f + sin(wavePhase * 4f) * 6.dp.toPx()
 
-    // Flame tail
-    val flamePath = Path().apply {
-        moveTo(meteorX - meteorR * 0.6f, meteorY - meteorR * 0.6f)
-        lineTo(meteorX + meteorR * 1.9f, meteorY - meteorR * 1.8f)
-        lineTo(meteorX + meteorR * 0.7f, meteorY + meteorR * 0.5f)
+    // 1. Outer Cyan Cosmic Ion Tail
+    val ionTailPath = Path().apply {
+        moveTo(cometX - cometR * 0.7f, cometY - cometR * 0.7f)
+        quadraticTo(cometX + cometR * 1.5f, cometY - cometR * 2.2f, cometX + tailLen * 1.12f, cometY - tailLen * 0.96f)
+        quadraticTo(cometX + cometR * 2.2f, cometY - cometR * 1.1f, cometX + cometR * 0.7f, cometY + cometR * 0.7f)
         close()
     }
-    drawPath(path = flamePath, color = DoodleColors.LavaOrange)
-    drawCircle(color = DoodleColors.LavaRed, radius = meteorR * 1.15f, center = Offset(meteorX, meteorY))
-    drawCircle(color = DoodleColors.CrateStoneDark, radius = meteorR, center = Offset(meteorX, meteorY))
-    drawCircle(color = DoodleColors.InkBlack, radius = meteorR, center = Offset(meteorX, meteorY), style = Stroke(width = 2.dp.toPx()))
+    drawPath(path = ionTailPath, color = Color(0xFF00E5FF).copy(alpha = 0.34f))
+
+    // 2. Outer Roaring Orange Fire Tail
+    val outerFlamePath = Path().apply {
+        moveTo(cometX - cometR * 0.65f, cometY - cometR * 0.55f)
+        quadraticTo(cometX + cometR * 0.9f, cometY - cometR * 1.8f, cometX + tailLen * 0.92f, cometY - tailLen * 0.82f)
+        lineTo(cometX + tailLen * 0.58f, cometY - tailLen * 0.42f)
+        lineTo(cometX + tailLen * 0.85f, cometY - tailLen * 0.50f)
+        quadraticTo(cometX + cometR * 1.7f, cometY - cometR * 0.6f, cometX + cometR * 0.65f, cometY + cometR * 0.65f)
+        close()
+    }
+    drawPath(path = outerFlamePath, color = DoodleColors.LavaOrange)
+    drawPath(path = outerFlamePath, color = DoodleColors.InkBlack, style = Stroke(width = 2.dp.toPx(), join = StrokeJoin.Round))
+
+    // 3. Inner Golden-Yellow Plasma Tail
+    val innerPlasmaPath = Path().apply {
+        moveTo(cometX - cometR * 0.4f, cometY - cometR * 0.4f)
+        quadraticTo(cometX + cometR * 0.7f, cometY - cometR * 1.2f, cometX + tailLen * 0.60f, cometY - tailLen * 0.54f)
+        quadraticTo(cometX + cometR * 1.1f, cometY - cometR * 0.4f, cometX + cometR * 0.4f, cometY + cometR * 0.4f)
+        close()
+    }
+    drawPath(path = innerPlasmaPath, color = DoodleColors.DoodleYellow)
+
+    // 4. Sculpted Jagged Comet Core with Magma Cracks & Craters
+    val corePath = Path().apply {
+        val bumps = 10
+        for (b in 0 until bumps) {
+            val ang = (b * 2.0 * PI / bumps).toFloat()
+            val r = cometR * if (b % 2 == 0) 1.0f else 0.86f
+            val px = cometX + cos(ang) * r
+            val py = cometY + sin(ang) * r
+            if (b == 0) moveTo(px, py) else lineTo(px, py)
+        }
+        close()
+    }
+    drawPath(path = corePath, color = Color(0xFF5D4037))
+    drawPath(path = corePath, color = DoodleColors.InkBlack, style = Stroke(width = 2.4.dp.toPx(), join = StrokeJoin.Round))
+    drawCircle(color = Color(0xFF3E2723), radius = cometR * 0.22f, center = Offset(cometX - cometR * 0.28f, cometY + cometR * 0.22f))
+    drawCircle(color = Color(0xFF3E2723), radius = cometR * 0.18f, center = Offset(cometX + cometR * 0.24f, cometY - cometR * 0.24f))
 
     // Stickman on asteroid
     drawDoodleStickman(
-        handAnchor = Offset(w * 0.46f, rockY - 62.dp.toPx() + bobOffset * 0.4f),
+        handAnchor = Offset(w * 0.42f, rockY - 62.dp.toPx() + bobOffset * 0.4f),
         scale = 0.90f,
         isPanicking = livesRemaining <= 2,
         isSplashed = isGameOver || livesRemaining <= 0,
@@ -11933,7 +12022,7 @@ private fun DrawScope.drawMeteorShowerPeril(
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 9: MAD_SCIENTIST_POTION (Levels 161–180, etc.)
+// PERIL 9: MAD_SCIENTIST_POTION (Graduated Lab Beaker, Pulley, Bunsen Flame & Acid)
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawMadScientistPotionPeril(
     livesRemaining: Int,
@@ -11944,56 +12033,104 @@ private fun DrawScope.drawMadScientistPotionPeril(
 ) {
     val w = size.width
     val h = size.height
+    val cx = w * 0.50f
     val dangerRatio = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
 
     // Giant glass beaker flask
     val flaskLeft = w * 0.22f
     val flaskRight = w * 0.78f
     val flaskTop = h * 0.16f
-    val flaskBottom = h * 0.86f
+    val flaskBottom = h * 0.85f
+    val flaskW = flaskRight - flaskLeft
     val flaskH = flaskBottom - flaskTop
 
-    // Bubbling green acid rising from bottom
-    val acidH = (flaskH * (0.18f + 0.68f * dangerRatio)).coerceAtMost(flaskH)
-    val acidTop = flaskBottom - acidH
+    // Translucent glass background tint
     drawRoundRect(
-        color = DoodleColors.UfoBeamGreen.copy(alpha = 0.55f),
-        topLeft = Offset(flaskLeft + 4.dp.toPx(), acidTop),
-        size = Size(flaskRight - flaskLeft - 8.dp.toPx(), acidH),
-        cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
-    )
-
-    // Bubbles in acid
-    for (i in 0..4) {
-        val bx = flaskLeft + (flaskRight - flaskLeft) * (0.2f + i * 0.15f)
-        val by = acidTop + 10.dp.toPx() + sin(wavePhase * 2f + i) * 5.dp.toPx()
-        if (by < flaskBottom - 6.dp.toPx()) {
-            drawCircle(color = Color.White.copy(alpha = 0.75f), radius = 3.5.dp.toPx(), center = Offset(bx, by))
-        }
-    }
-
-    // Beaker outline & measurement ticks
-    drawRoundRect(
-        color = DoodleColors.InkBlack,
+        color = Color(0xFFE1F5FE).copy(alpha = 0.32f),
         topLeft = Offset(flaskLeft, flaskTop),
-        size = Size(flaskRight - flaskLeft, flaskH),
-        cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx()),
-        style = Stroke(width = 2.6.dp.toPx())
+        size = Size(flaskW, flaskH),
+        cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx())
     )
 
-    val stickAnchorY = (acidTop - 68.dp.toPx() + bobOffset * 0.5f).coerceAtLeast(flaskTop + 6.dp.toPx())
+    // Bubbling green acid rising from bottom
+    val acidH = (flaskH * (0.20f + 0.62f * dangerRatio)).coerceAtMost(flaskH - 10.dp.toPx())
+    val acidTop = flaskBottom - acidH
+
+    // Top suspension rope & pulley holding Stickman's raised hands!
+    val stickAnchorY = (acidTop - 66.dp.toPx() + bobOffset * 0.5f).coerceAtLeast(flaskTop + 14.dp.toPx())
+    drawLine(
+        color = DoodleColors.VineRopeBrown,
+        start = Offset(cx, 0f),
+        end = Offset(cx, stickAnchorY - 2.dp.toPx()),
+        strokeWidth = 2.6.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+    drawCircle(color = DoodleColors.SubmarineSteel, radius = 6.5.dp.toPx(), center = Offset(cx, flaskTop * 0.45f))
+    drawCircle(color = DoodleColors.InkBlack, radius = 6.5.dp.toPx(), center = Offset(cx, flaskTop * 0.45f), style = Stroke(width = 2.dp.toPx()))
+
     drawDoodleStickman(
-        handAnchor = Offset(w * 0.50f, stickAnchorY),
+        handAnchor = Offset(cx, stickAnchorY),
         scale = 0.86f,
         isPanicking = livesRemaining <= 2,
         isSplashed = isGameOver || livesRemaining <= 0,
         wavePhase = wavePhase,
         handsUp = true
     )
+
+    // Wavy radioactive green acid
+    drawRoundRect(
+        color = DoodleColors.UfoBeamGreen.copy(alpha = 0.58f),
+        topLeft = Offset(flaskLeft + 4.dp.toPx(), acidTop),
+        size = Size(flaskW - 8.dp.toPx(), acidH),
+        cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
+    )
+
+    // Bubbles & rising toxic fumes in acid
+    for (i in 0..5) {
+        val bx = flaskLeft + flaskW * (0.16f + i * 0.13f) + sin(wavePhase * 2f + i) * 3.dp.toPx()
+        val by = acidTop + 12.dp.toPx() + (i % 3) * 14.dp.toPx()
+        if (by < flaskBottom - 6.dp.toPx()) {
+            drawCircle(color = Color.White.copy(alpha = 0.82f), radius = 3.8.dp.toPx(), center = Offset(bx, by))
+            drawCircle(color = Color(0xFF33691E), radius = 3.8.dp.toPx(), center = Offset(bx, by), style = Stroke(width = 1.2.dp.toPx()))
+        }
+    }
+
+    // Beaker outline, flared top lip & graduation ticks
+    drawRoundRect(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(flaskLeft, flaskTop),
+        size = Size(flaskW, flaskH),
+        cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx()),
+        style = Stroke(width = 2.8.dp.toPx())
+    )
+    drawRoundRect(
+        color = Color(0xFFE1F5FE),
+        topLeft = Offset(flaskLeft - 6.dp.toPx(), flaskTop - 5.dp.toPx()),
+        size = Size(flaskW + 12.dp.toPx(), 9.dp.toPx()),
+        cornerRadius = CornerRadius(4.5.dp.toPx(), 4.5.dp.toPx())
+    )
+    drawRoundRect(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(flaskLeft - 6.dp.toPx(), flaskTop - 5.dp.toPx()),
+        size = Size(flaskW + 12.dp.toPx(), 9.dp.toPx()),
+        cornerRadius = CornerRadius(4.5.dp.toPx(), 4.5.dp.toPx()),
+        style = Stroke(width = 2.4.dp.toPx())
+    )
+    for (m in 1..5) {
+        val my = flaskBottom - (flaskH * m) / 6f
+        val tickW = if (m % 2 == 0) 12.dp.toPx() else 7.dp.toPx()
+        drawLine(
+            color = DoodleColors.InkBlack,
+            start = Offset(flaskRight - tickW, my),
+            end = Offset(flaskRight, my),
+            strokeWidth = 1.8.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 10: PIRATE_PLANK (Levels 181–200, etc.)
+// PERIL 10: PIRATE_PLANK (Pirate Ship Rail, Wood Plank & Sculpted Kraken)
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawPiratePlankPeril(
     livesRemaining: Int,
@@ -12008,35 +12145,65 @@ private fun DrawScope.drawPiratePlankPeril(
     val plankY = h * 0.50f
     val dangerRatio = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
 
+    // Wooden pirate ship hull & railing on left edge
+    val shipPath = Path().apply {
+        moveTo(0f, plankY - 32.dp.toPx())
+        lineTo(w * 0.16f, plankY - 32.dp.toPx())
+        lineTo(w * 0.14f, plankY)
+        lineTo(w * 0.19f, waterY + 10.dp.toPx())
+        lineTo(0f, waterY + 10.dp.toPx())
+        close()
+    }
+    drawPath(path = shipPath, color = Color(0xFF5D4037))
+    drawPath(path = shipPath, color = DoodleColors.InkBlack, style = Stroke(width = 2.4.dp.toPx(), join = StrokeJoin.Round))
+
     // Wooden pirate plank extending from left ship rail
     drawRoundRect(
         color = DoodleColors.VineRopeBrown,
         topLeft = Offset(0f, plankY),
-        size = Size(w * 0.68f, 12.dp.toPx()),
+        size = Size(w * 0.66f, 13.dp.toPx()),
         cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
     )
     drawRoundRect(
         color = DoodleColors.InkBlack,
         topLeft = Offset(0f, plankY),
-        size = Size(w * 0.68f, 12.dp.toPx()),
+        size = Size(w * 0.66f, 13.dp.toPx()),
         cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
-        style = Stroke(width = 2.dp.toPx())
+        style = Stroke(width = 2.2.dp.toPx())
     )
 
-    // Kraken tentacles rising from water on the right
+    // Sculpted Kraken head & suction-cupped tentacles rising from water on the right
+    val krakenX = w * 0.80f
+    val krakenY = waterY - 8.dp.toPx() - dangerRatio * 14.dp.toPx()
+    drawOval(
+        color = Color(0xFF7B1FA2),
+        topLeft = Offset(krakenX - 20.dp.toPx(), krakenY - 16.dp.toPx()),
+        size = Size(40.dp.toPx(), 32.dp.toPx())
+    )
+    drawOval(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(krakenX - 20.dp.toPx(), krakenY - 16.dp.toPx()),
+        size = Size(40.dp.toPx(), 32.dp.toPx()),
+        style = Stroke(width = 2.2.dp.toPx())
+    )
+    drawCircle(color = DoodleColors.DoodleYellow, radius = 3.8.dp.toPx(), center = Offset(krakenX - 7.dp.toPx(), krakenY - 5.dp.toPx()))
+    drawCircle(color = DoodleColors.DoodleYellow, radius = 3.8.dp.toPx(), center = Offset(krakenX + 7.dp.toPx(), krakenY - 5.dp.toPx()))
+    drawCircle(color = DoodleColors.InkBlack, radius = 1.6.dp.toPx(), center = Offset(krakenX - 7.dp.toPx(), krakenY - 5.dp.toPx()))
+    drawCircle(color = DoodleColors.InkBlack, radius = 1.6.dp.toPx(), center = Offset(krakenX + 7.dp.toPx(), krakenY - 5.dp.toPx()))
+
     for (t in 0..2) {
-        val tx = w * (0.58f + t * 0.14f)
-        val tentacleTopY = waterY - (26.dp.toPx() + 34.dp.toPx() * dangerRatio) + sin(wavePhase * 2f + t) * 5.dp.toPx()
+        val tx = w * (0.56f + t * 0.14f)
+        val tentacleTopY = waterY - (28.dp.toPx() + 36.dp.toPx() * dangerRatio) + sin(wavePhase * 2f + t) * 5.dp.toPx()
         val path = Path().apply {
             moveTo(tx, waterY + 6.dp.toPx())
             quadraticTo(tx - 12.dp.toPx(), (waterY + tentacleTopY) * 0.5f, tx + 6.dp.toPx(), tentacleTopY)
         }
+        drawPath(path = path, color = DoodleColors.InkBlack, style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round))
         drawPath(path = path, color = Color(0xFF8E24AA), style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round))
-        drawPath(path = path, color = DoodleColors.InkBlack, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
     }
 
     // Stickman stepping closer to the edge of the plank with each wrong guess
-    val stickX = w * 0.20f + (w * 0.44f) * dangerRatio
+    val stickX = w * 0.24f + (w * 0.36f) * dangerRatio
     val stickY = if (isGameOver || livesRemaining <= 0) waterY - 22.dp.toPx() else plankY - 64.dp.toPx() + bobOffset * 0.4f
     drawDoodleStickman(
         handAnchor = Offset(stickX, stickY),
@@ -12051,7 +12218,7 @@ private fun DrawScope.drawPiratePlankPeril(
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 11: SPIDER_WEB (Levels 201–220, etc.)
+// PERIL 11: SPIDER_WEB (2-Segment Black Widow Spider with Red Hourglass)
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawSpiderWebPeril(
     livesRemaining: Int,
@@ -12063,7 +12230,7 @@ private fun DrawScope.drawSpiderWebPeril(
     val w = size.width
     val h = size.height
     val cx = w * 0.50f
-    val cy = h * 0.54f
+    val cy = h * 0.56f
     val dangerRatio = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
 
     // Radial spider web lines
@@ -12076,10 +12243,10 @@ private fun DrawScope.drawSpiderWebPeril(
             strokeWidth = 1.4.dp.toPx()
         )
     }
-    for (ring in 1..3) {
+    for (ring in 1..4) {
         drawCircle(
             color = DoodleColors.InkBlack.copy(alpha = 0.28f),
-            radius = ring * 22.dp.toPx(),
+            radius = ring * 19.dp.toPx(),
             center = Offset(cx, cy),
             style = Stroke(width = 1.2.dp.toPx())
         )
@@ -12095,30 +12262,49 @@ private fun DrawScope.drawSpiderWebPeril(
         handsUp = true
     )
 
-    // Giant doodle spider descending on silk thread from top
+    // Sculpted 2-Segment Black Widow Spider descending on silk thread
     val spiderY = h * 0.14f + (h * 0.28f) * dangerRatio
-    drawLine(color = DoodleColors.InkBlack, start = Offset(cx, 0f), end = Offset(cx, spiderY), strokeWidth = 2.dp.toPx())
-    drawCircle(color = DoodleColors.InkBlack, radius = 14.dp.toPx(), center = Offset(cx, spiderY))
-    // 8 spider legs
+    drawLine(color = DoodleColors.InkBlack, start = Offset(cx, 0f), end = Offset(cx, spiderY - 10.dp.toPx()), strokeWidth = 2.2.dp.toPx())
+
+    // 8 jointed spider legs
     for (side in listOf(-1f, 1f)) {
-        for (leg in -1..2) {
-            val ly = spiderY + leg * 4.dp.toPx()
-            drawLine(
-                color = DoodleColors.InkBlack,
-                start = Offset(cx, ly),
-                end = Offset(cx + side * 24.dp.toPx(), ly + sin(wavePhase * 3f + leg) * 4.dp.toPx()),
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round
-            )
+        for (leg in 0..3) {
+            val baseY = spiderY + (leg - 1.5f) * 3.5.dp.toPx()
+            val kneeX = cx + side * (16f + leg * 2f).dp.toPx()
+            val kneeY = baseY - (7f - leg * 3f).dp.toPx() + sin(wavePhase * 3f + leg) * 2.5.dp.toPx()
+            val footX = cx + side * (26f - kotlin.math.abs(leg - 1.5f) * 3f).dp.toPx()
+            val footY = baseY + (6f + leg * 2f).dp.toPx()
+            val legPath = Path().apply {
+                moveTo(cx + side * 6.dp.toPx(), baseY)
+                lineTo(kneeX, kneeY)
+                lineTo(footX, footY)
+            }
+            drawPath(path = legPath, color = DoodleColors.InkBlack, style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }
+
+    // Abdomen + red hourglass + head segment
+    drawOval(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(cx - 13.dp.toPx(), spiderY - 18.dp.toPx()),
+        size = Size(26.dp.toPx(), 22.dp.toPx())
+    )
+    val hourglass = Path().apply {
+        moveTo(cx - 4.dp.toPx(), spiderY - 12.dp.toPx())
+        lineTo(cx + 4.dp.toPx(), spiderY - 12.dp.toPx())
+        lineTo(cx - 4.dp.toPx(), spiderY - 2.dp.toPx())
+        lineTo(cx + 4.dp.toPx(), spiderY - 2.dp.toPx())
+        close()
+    }
+    drawPath(path = hourglass, color = DoodleColors.WrongRed)
+    drawCircle(color = DoodleColors.InkBlack, radius = 8.5.dp.toPx(), center = Offset(cx, spiderY + 6.dp.toPx()))
     // Glowing red spider eyes
-    drawCircle(color = DoodleColors.WrongRed, radius = 2.5.dp.toPx(), center = Offset(cx - 4.dp.toPx(), spiderY + 3.dp.toPx()))
-    drawCircle(color = DoodleColors.WrongRed, radius = 2.5.dp.toPx(), center = Offset(cx + 4.dp.toPx(), spiderY + 3.dp.toPx()))
+    drawCircle(color = DoodleColors.WrongRed, radius = 2.3.dp.toPx(), center = Offset(cx - 3.5.dp.toPx(), spiderY + 7.dp.toPx()))
+    drawCircle(color = DoodleColors.WrongRed, radius = 2.3.dp.toPx(), center = Offset(cx + 3.5.dp.toPx(), spiderY + 7.dp.toPx()))
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 12: QUICKSAND_PIT (Levels 221–240, etc.)
+// PERIL 12: QUICKSAND_PIT (Desert Cactus, Danger Sign & Sinking Sand)
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawQuicksandPitPeril(
     livesRemaining: Int,
@@ -12132,8 +12318,24 @@ private fun DrawScope.drawQuicksandPitPeril(
     val sandY = h * 0.68f
     val dangerRatio = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
 
+    // Desert cactus on left
+    val cactX = w * 0.16f
+    drawRoundRect(
+        color = Color(0xFF43A047),
+        topLeft = Offset(cactX - 5.dp.toPx(), sandY - 40.dp.toPx()),
+        size = Size(10.dp.toPx(), 42.dp.toPx()),
+        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+    )
+    drawRoundRect(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(cactX - 5.dp.toPx(), sandY - 40.dp.toPx()),
+        size = Size(10.dp.toPx(), 42.dp.toPx()),
+        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
+        style = Stroke(width = 2.dp.toPx())
+    )
+
     // Stickman sinking deeper into the sand pit with each wrong guess
-    val sinkOffset = (56.dp.toPx()) * dangerRatio
+    val sinkOffset = (52.dp.toPx()) * dangerRatio
     val stickAnchorY = sandY - 58.dp.toPx() + sinkOffset + bobOffset * 0.3f
     drawDoodleStickman(
         handAnchor = Offset(w * 0.50f, stickAnchorY),
@@ -12159,7 +12361,7 @@ private fun DrawScope.drawQuicksandPitPeril(
     // Swirling quicksand rings
     for (i in 1..3) {
         drawOval(
-            color = DoodleColors.VineRopeBrown.copy(alpha = 0.45f),
+            color = DoodleColors.VineRopeBrown.copy(alpha = 0.50f),
             topLeft = Offset(w * 0.5f - i * 24.dp.toPx(), sandY + 8.dp.toPx() + i * 4.dp.toPx()),
             size = Size(i * 48.dp.toPx(), 12.dp.toPx()),
             style = Stroke(width = 1.6.dp.toPx())
@@ -12168,7 +12370,7 @@ private fun DrawScope.drawQuicksandPitPeril(
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 13: GHOST_MANOR (Levels 241–260, etc.)
+// PERIL 13: GHOST_MANOR (Chandelier & Billowing Sheet Specter)
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawGhostManorPeril(
     livesRemaining: Int,
@@ -12184,10 +12386,10 @@ private fun DrawScope.drawGhostManorPeril(
     // 6-candle chandelier at top; candles blow out one by one
     val barY = h * 0.20f
     drawLine(color = DoodleColors.InkBlack, start = Offset(cx, 0f), end = Offset(cx, barY), strokeWidth = 2.5.dp.toPx())
-    drawLine(color = DoodleColors.InkBlack, start = Offset(w * 0.18f, barY), end = Offset(w * 0.82f, barY), strokeWidth = 3.5.dp.toPx(), cap = StrokeCap.Round)
+    drawLine(color = DoodleColors.InkBlack, start = Offset(w * 0.16f, barY), end = Offset(w * 0.84f, barY), strokeWidth = 3.5.dp.toPx(), cap = StrokeCap.Round)
 
     for (i in 0 until 6) {
-        val candleX = w * (0.20f + i * 0.12f)
+        val candleX = w * (0.19f + i * 0.124f)
         drawRect(
             color = Color.White,
             topLeft = Offset(candleX - 3.dp.toPx(), barY - 12.dp.toPx()),
@@ -12197,29 +12399,47 @@ private fun DrawScope.drawGhostManorPeril(
             color = DoodleColors.InkBlack,
             topLeft = Offset(candleX - 3.dp.toPx(), barY - 12.dp.toPx()),
             size = Size(6.dp.toPx(), 12.dp.toPx()),
-            style = Stroke(width = 1.2.dp.toPx())
+            style = Stroke(width = 1.4.dp.toPx())
         )
         if (i < livesRemaining && !isGameOver) {
             drawCircle(
+                color = DoodleColors.LavaOrange,
+                radius = 5.dp.toPx(),
+                center = Offset(candleX, barY - 18.dp.toPx() + sin(wavePhase * 3f + i) * 1.5.dp.toPx())
+            )
+            drawCircle(
                 color = DoodleColors.DoodleYellow,
-                radius = 4.5.dp.toPx(),
-                center = Offset(candleX, barY - 17.dp.toPx() + sin(wavePhase * 3f + i) * 1.5.dp.toPx())
+                radius = 2.5.dp.toPx(),
+                center = Offset(candleX, barY - 18.dp.toPx() + sin(wavePhase * 3f + i) * 1.5.dp.toPx())
             )
         }
     }
 
-    // Swooping doodle ghost on left/right getting closer as candles go out
+    // Billowing sheet ghost swooping closer as candles go out
     val dangerRatio = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
-    val ghostX = w * 0.18f + (w * 0.22f) * dangerRatio
+    val ghostX = w * 0.22f + (w * 0.24f) * dangerRatio
     val ghostY = h * 0.44f + sin(wavePhase * 2f) * 8.dp.toPx()
-    drawCircle(color = Color(0xFFE1F5FE), radius = 16.dp.toPx(), center = Offset(ghostX, ghostY))
-    drawCircle(color = DoodleColors.InkBlack, radius = 16.dp.toPx(), center = Offset(ghostX, ghostY), style = Stroke(width = 2.dp.toPx()))
-    drawCircle(color = DoodleColors.InkBlack, radius = 2.2.dp.toPx(), center = Offset(ghostX - 5.dp.toPx(), ghostY - 2.dp.toPx()))
-    drawCircle(color = DoodleColors.InkBlack, radius = 2.2.dp.toPx(), center = Offset(ghostX + 5.dp.toPx(), ghostY - 2.dp.toPx()))
+    val ghostPath = Path().apply {
+        moveTo(ghostX - 16.dp.toPx(), ghostY - 4.dp.toPx())
+        quadraticTo(ghostX, ghostY - 24.dp.toPx(), ghostX + 16.dp.toPx(), ghostY - 4.dp.toPx())
+        lineTo(ghostX + 18.dp.toPx(), ghostY + 18.dp.toPx())
+        quadraticTo(ghostX + 9.dp.toPx(), ghostY + 12.dp.toPx(), ghostX, ghostY + 19.dp.toPx())
+        quadraticTo(ghostX - 9.dp.toPx(), ghostY + 12.dp.toPx(), ghostX - 18.dp.toPx(), ghostY + 18.dp.toPx())
+        close()
+    }
+    drawPath(path = ghostPath, color = Color(0xFFE1F5FE))
+    drawPath(path = ghostPath, color = DoodleColors.InkBlack, style = Stroke(width = 2.2.dp.toPx(), join = StrokeJoin.Round))
+    drawCircle(color = DoodleColors.InkBlack, radius = 2.6.dp.toPx(), center = Offset(ghostX - 5.dp.toPx(), ghostY - 5.dp.toPx()))
+    drawCircle(color = DoodleColors.InkBlack, radius = 2.6.dp.toPx(), center = Offset(ghostX + 5.dp.toPx(), ghostY - 5.dp.toPx()))
+    drawOval(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(ghostX - 2.5.dp.toPx(), ghostY + 1.dp.toPx()),
+        size = Size(6.dp.toPx(), 8.dp.toPx())
+    )
 
     // Stickman shivering on manor floor
     drawDoodleStickman(
-        handAnchor = Offset(w * 0.62f, h * 0.50f + bobOffset * 0.4f),
+        handAnchor = Offset(w * 0.66f, h * 0.50f + bobOffset * 0.4f),
         scale = 0.90f,
         isPanicking = livesRemaining <= 2,
         isSplashed = isGameOver || livesRemaining <= 0,
@@ -12229,7 +12449,7 @@ private fun DrawScope.drawGhostManorPeril(
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 14: TICKING_TIME_BOMB (Levels 261–280, etc.)
+// PERIL 14: TICKING_TIME_BOMB (Brass Collar, Specular Highlight & Spark Burst)
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawTickingTimeBombPeril(
     livesRemaining: Int,
@@ -12241,29 +12461,63 @@ private fun DrawScope.drawTickingTimeBombPeril(
     val w = size.width
     val h = size.height
     val bombCenter = Offset(w * 0.66f, h * 0.62f)
-    val bombR = 26.dp.toPx()
-    val fuseRatio = (animatedLives / 6f).coerceIn(0f, 1f)
+    val bombR = 27.dp.toPx()
+    val fuseRatio = (animatedLives / 6f).coerceIn(0.08f, 1f)
+
+    // Brass fuse collar
+    drawRoundRect(
+        color = DoodleColors.SubmarineSteel,
+        topLeft = Offset(bombCenter.x - 8.dp.toPx(), bombCenter.y - bombR - 7.dp.toPx()),
+        size = Size(16.dp.toPx(), 9.dp.toPx()),
+        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+    )
+    drawRoundRect(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(bombCenter.x - 8.dp.toPx(), bombCenter.y - bombR - 7.dp.toPx()),
+        size = Size(16.dp.toPx(), 9.dp.toPx()),
+        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx()),
+        style = Stroke(width = 2.dp.toPx())
+    )
 
     // Giant cartoon round bomb
     drawCircle(color = DoodleColors.ChalkboardDark, radius = bombR, center = bombCenter)
-    drawCircle(color = DoodleColors.InkBlack, radius = bombR, center = bombCenter, style = Stroke(width = 2.4.dp.toPx()))
+    drawCircle(color = DoodleColors.InkBlack, radius = bombR, center = bombCenter, style = Stroke(width = 2.6.dp.toPx()))
+    // Red danger badge on bomb
+    drawRoundRect(
+        color = DoodleColors.WrongRed,
+        topLeft = Offset(bombCenter.x - 13.dp.toPx(), bombCenter.y - 6.dp.toPx()),
+        size = Size(26.dp.toPx(), 12.dp.toPx()),
+        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+    )
+
     // Fuse burning down as lives drop
-    val fuseTipX = bombCenter.x + (34.dp.toPx() * fuseRatio)
-    val fuseTipY = bombCenter.y - bombR - (28.dp.toPx() * fuseRatio)
+    val fuseTipX = bombCenter.x + (32.dp.toPx() * fuseRatio)
+    val fuseTipY = bombCenter.y - bombR - 7.dp.toPx() - (26.dp.toPx() * fuseRatio)
     drawLine(
         color = DoodleColors.VineRopeBrown,
-        start = Offset(bombCenter.x, bombCenter.y - bombR),
+        start = Offset(bombCenter.x, bombCenter.y - bombR - 7.dp.toPx()),
         end = Offset(fuseTipX, fuseTipY),
-        strokeWidth = 3.dp.toPx(),
+        strokeWidth = 3.2.dp.toPx(),
         cap = StrokeCap.Round
     )
-    // Fuse spark
+    // Multi-rayed fuse spark
+    for (r in 0 until 6) {
+        val ang = wavePhase * 4f + (r * PI / 3.0).toFloat()
+        val rad = 8.dp.toPx() + sin(wavePhase * 8f + r) * 2.5.dp.toPx()
+        drawLine(
+            color = DoodleColors.LavaOrange,
+            start = Offset(fuseTipX, fuseTipY),
+            end = Offset(fuseTipX + cos(ang) * rad, fuseTipY + sin(ang) * rad),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
     drawCircle(color = DoodleColors.LavaOrange, radius = 6.dp.toPx() + sin(wavePhase * 6f) * 2.dp.toPx(), center = Offset(fuseTipX, fuseTipY))
     drawCircle(color = DoodleColors.DoodleYellow, radius = 3.dp.toPx(), center = Offset(fuseTipX, fuseTipY))
 
     // Stickman next to bomb
     drawDoodleStickman(
-        handAnchor = Offset(w * 0.30f, h * 0.48f + bobOffset * 0.4f),
+        handAnchor = Offset(w * 0.28f, h * 0.48f + bobOffset * 0.4f),
         scale = 0.90f,
         isPanicking = livesRemaining <= 2,
         isSplashed = isGameOver || livesRemaining <= 0,
@@ -12273,7 +12527,7 @@ private fun DrawScope.drawTickingTimeBombPeril(
 }
 
 // ----------------------------------------------------------------------------
-// PERIL 15: DRAGON_CAVE (Levels 281–300, etc.)
+// PERIL 15: DRAGON_CAVE (Full Sculpted Winged Dragon + Knight Heater Shield)
 // ----------------------------------------------------------------------------
 private fun DrawScope.drawDragonCavePeril(
     livesRemaining: Int,
@@ -12286,48 +12540,143 @@ private fun DrawScope.drawDragonCavePeril(
     val h = size.height
     val dangerRatio = ((6f - animatedLives) / 6f).coerceIn(0f, 1f)
 
-    // Dragon snout on the right breathing growing fire stream
-    val snoutX = w * 0.82f
-    val snoutY = h * 0.48f
-    drawRoundRect(
-        color = DoodleColors.WrongRed,
-        topLeft = Offset(snoutX - 18.dp.toPx(), snoutY - 16.dp.toPx()),
-        size = Size(34.dp.toPx(), 32.dp.toPx()),
-        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
-    )
-    drawRoundRect(
-        color = DoodleColors.InkBlack,
-        topLeft = Offset(snoutX - 18.dp.toPx(), snoutY - 16.dp.toPx()),
-        size = Size(34.dp.toPx(), 32.dp.toPx()),
-        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
-        style = Stroke(width = 2.2.dp.toPx())
-    )
+    val headX = w * 0.80f
+    val headY = h * 0.43f + sin(wavePhase * 1.5f) * 3.dp.toPx()
+    val jawOpen = (6f + dangerRatio * 10f).dp.toPx()
+    val mouthTipX = headX - 34.dp.toPx()
 
-    // Fire stream reaching closer to Stickman's shield
-    val fireLen = (w * 0.14f) + (w * 0.34f) * dangerRatio
-    val firePath = Path().apply {
-        moveTo(snoutX - 18.dp.toPx(), snoutY)
-        lineTo(snoutX - 18.dp.toPx() - fireLen, snoutY - 14.dp.toPx() - dangerRatio * 8.dp.toPx())
-        lineTo(snoutX - 18.dp.toPx() - fireLen, snoutY + 14.dp.toPx() + dangerRatio * 8.dp.toPx())
+    // 1. Bat-like Dragon Wing rising behind the dragon's back
+    val wingFlap = sin(wavePhase * 2.5f) * 5.dp.toPx()
+    val wingPath = Path().apply {
+        moveTo(headX + 10.dp.toPx(), headY + 14.dp.toPx())
+        lineTo(headX - 8.dp.toPx(), headY - 38.dp.toPx() + wingFlap)
+        lineTo(headX + 26.dp.toPx(), headY - 30.dp.toPx() + wingFlap * 0.7f)
+        quadraticTo(headX + 18.dp.toPx(), headY - 14.dp.toPx(), headX + 28.dp.toPx(), headY - 6.dp.toPx())
+        quadraticTo(headX + 18.dp.toPx(), headY + 4.dp.toPx(), headX + 14.dp.toPx(), headY + 20.dp.toPx())
         close()
     }
-    drawPath(path = firePath, color = DoodleColors.LavaOrange.copy(alpha = 0.82f))
-    drawPath(path = firePath, color = DoodleColors.DoodleYellow.copy(alpha = 0.55f))
+    drawPath(path = wingPath, color = Color(0xFFB71C1C))
+    drawPath(path = wingPath, color = DoodleColors.InkBlack, style = Stroke(width = 2.2.dp.toPx(), join = StrokeJoin.Round))
 
-    // Stickman holding a knight shield on the left
-    val stickX = w * 0.26f
+    // 2. Sculpted Dragon Neck & Golden Belly Scales
+    val neckPath = Path().apply {
+        moveTo(headX + 4.dp.toPx(), headY + 6.dp.toPx())
+        quadraticTo(w * 0.94f, headY + 26.dp.toPx(), w * 0.96f, h * 0.86f)
+        lineTo(w * 0.76f, h * 0.86f)
+        quadraticTo(headX - 4.dp.toPx(), headY + 38.dp.toPx(), headX - 6.dp.toPx(), headY + 14.dp.toPx())
+        close()
+    }
+    drawPath(path = neckPath, color = Color(0xFFD32F2F))
+    drawPath(path = neckPath, color = DoodleColors.InkBlack, style = Stroke(width = 2.4.dp.toPx(), join = StrokeJoin.Round))
+
+    for (s in 0..3) {
+        val sy = headY + (20 + s * 13).dp.toPx()
+        val sx = headX - 4.dp.toPx() + (s * 2).dp.toPx()
+        drawRoundRect(
+            color = DoodleColors.DoodleYellow,
+            topLeft = Offset(sx - 6.dp.toPx(), sy),
+            size = Size(14.dp.toPx(), 8.dp.toPx()),
+            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+        )
+        drawRoundRect(
+            color = DoodleColors.InkBlack,
+            topLeft = Offset(sx - 6.dp.toPx(), sy),
+            size = Size(14.dp.toPx(), 8.dp.toPx()),
+            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx()),
+            style = Stroke(width = 1.4.dp.toPx())
+        )
+    }
+
+    // 3. Curved Swept-Back Dragon Horns
+    val hornPath = Path().apply {
+        moveTo(headX + 2.dp.toPx(), headY - 12.dp.toPx())
+        quadraticTo(headX + 18.dp.toPx(), headY - 28.dp.toPx(), headX + 30.dp.toPx(), headY - 22.dp.toPx())
+        quadraticTo(headX + 18.dp.toPx(), headY - 14.dp.toPx(), headX + 6.dp.toPx(), headY - 6.dp.toPx())
+        close()
+    }
+    drawPath(path = hornPath, color = Color(0xFFFFF8E1))
+    drawPath(path = hornPath, color = DoodleColors.InkBlack, style = Stroke(width = 2.dp.toPx(), join = StrokeJoin.Round))
+
+    // 4. Hinged Lower Jaw
+    val jawPath = Path().apply {
+        moveTo(headX - 2.dp.toPx(), headY + 6.dp.toPx())
+        lineTo(mouthTipX + 4.dp.toPx(), headY + jawOpen + 8.dp.toPx())
+        quadraticTo(headX - 12.dp.toPx(), headY + jawOpen + 16.dp.toPx(), headX + 4.dp.toPx(), headY + 14.dp.toPx())
+        close()
+    }
+    drawPath(path = jawPath, color = Color(0xFFB71C1C))
+    drawPath(path = jawPath, color = DoodleColors.InkBlack, style = Stroke(width = 2.2.dp.toPx(), join = StrokeJoin.Round))
+
+    // 5. Multi-Layered Roaring Dragon Fire Breath
+    val fireLen = (w * 0.16f) + (w * 0.30f) * dangerRatio
+    val fireOriginX = mouthTipX + 2.dp.toPx()
+    val fireOriginY = headY + jawOpen * 0.35f
+    val fireEndX = fireOriginX - fireLen
+    val spread = (13f + dangerRatio * 9f).dp.toPx()
+
+    val outerFirePath = Path().apply {
+        moveTo(fireOriginX, fireOriginY - 4.dp.toPx())
+        quadraticTo(fireOriginX - fireLen * 0.5f, fireOriginY - spread * 1.15f, fireEndX, fireOriginY - spread * 0.65f)
+        lineTo(fireEndX - 8.dp.toPx(), fireOriginY)
+        lineTo(fireEndX, fireOriginY + spread * 0.65f)
+        quadraticTo(fireOriginX - fireLen * 0.5f, fireOriginY + spread * 1.15f, fireOriginX, fireOriginY + 6.dp.toPx())
+        close()
+    }
+    drawPath(path = outerFirePath, color = DoodleColors.LavaOrange.copy(alpha = 0.88f))
+
+    val innerFirePath = Path().apply {
+        moveTo(fireOriginX, fireOriginY - 2.dp.toPx())
+        quadraticTo(fireOriginX - fireLen * 0.4f, fireOriginY - spread * 0.55f, fireOriginX - fireLen * 0.72f, fireOriginY)
+        quadraticTo(fireOriginX - fireLen * 0.4f, fireOriginY + spread * 0.55f, fireOriginX, fireOriginY + 3.dp.toPx())
+        close()
+    }
+    drawPath(path = innerFirePath, color = DoodleColors.DoodleYellow.copy(alpha = 0.92f))
+
+    // 6. Sculpted Dragon Upper Head, Snout, Fangs & Reptile Eye
+    val upperHeadPath = Path().apply {
+        moveTo(headX + 10.dp.toPx(), headY + 6.dp.toPx())
+        lineTo(headX + 8.dp.toPx(), headY - 14.dp.toPx())
+        quadraticTo(headX - 6.dp.toPx(), headY - 20.dp.toPx(), headX - 16.dp.toPx(), headY - 10.dp.toPx())
+        lineTo(mouthTipX + 6.dp.toPx(), headY - 8.dp.toPx())
+        quadraticTo(mouthTipX - 2.dp.toPx(), headY - 9.dp.toPx(), mouthTipX, headY + 1.dp.toPx())
+        lineTo(headX - 4.dp.toPx(), headY + 6.dp.toPx())
+        close()
+    }
+    drawPath(path = upperHeadPath, color = DoodleColors.WrongRed)
+    drawPath(path = upperHeadPath, color = DoodleColors.InkBlack, style = Stroke(width = 2.4.dp.toPx(), join = StrokeJoin.Round))
+
+    // Fierce golden dragon eye
+    drawCircle(color = DoodleColors.DoodleYellow, radius = 4.5.dp.toPx(), center = Offset(headX - 9.dp.toPx(), headY - 7.dp.toPx()))
+    drawCircle(color = DoodleColors.InkBlack, radius = 4.5.dp.toPx(), center = Offset(headX - 9.dp.toPx(), headY - 7.dp.toPx()), style = Stroke(width = 1.6.dp.toPx()))
+    drawCircle(color = DoodleColors.InkBlack, radius = 1.8.dp.toPx(), center = Offset(headX - 9.dp.toPx(), headY - 7.dp.toPx()))
+
+    // 7. Stickman holding a Knight Heater Shield on the left
+    val stickX = w * 0.24f
+    val stickY = h * 0.46f + bobOffset * 0.4f
     drawDoodleStickman(
-        handAnchor = Offset(stickX, h * 0.46f + bobOffset * 0.4f),
+        handAnchor = Offset(stickX, stickY),
         scale = 0.88f,
         isPanicking = livesRemaining <= 2,
         isSplashed = isGameOver || livesRemaining <= 0,
         wavePhase = wavePhase,
         handsUp = false
     )
-    // Shield with 6 rivets
-    val shieldCenter = Offset(stickX + 18.dp.toPx(), h * 0.56f)
-    drawCircle(color = DoodleColors.SubmarineSteel, radius = 14.dp.toPx(), center = shieldCenter)
-    drawCircle(color = DoodleColors.InkBlack, radius = 14.dp.toPx(), center = shieldCenter, style = Stroke(width = 2.dp.toPx()))
+
+    // Knight heater shield with gold cross
+    val sx = stickX + 18.dp.toPx()
+    val sy = stickY + 26.dp.toPx()
+    val shieldPath = Path().apply {
+        moveTo(sx - 12.dp.toPx(), sy - 14.dp.toPx())
+        lineTo(sx + 12.dp.toPx(), sy - 14.dp.toPx())
+        lineTo(sx + 12.dp.toPx(), sy + 2.dp.toPx())
+        quadraticTo(sx + 10.dp.toPx(), sy + 14.dp.toPx(), sx, sy + 19.dp.toPx())
+        quadraticTo(sx - 10.dp.toPx(), sy + 14.dp.toPx(), sx - 12.dp.toPx(), sy + 2.dp.toPx())
+        close()
+    }
+    drawPath(path = shieldPath, color = DoodleColors.SubmarineSteel)
+    drawPath(path = shieldPath, color = DoodleColors.InkBlack, style = Stroke(width = 2.2.dp.toPx(), join = StrokeJoin.Round))
+    drawLine(color = DoodleColors.DoodleYellow, start = Offset(sx, sy - 10.dp.toPx()), end = Offset(sx, sy + 13.dp.toPx()), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+    drawLine(color = DoodleColors.DoodleYellow, start = Offset(sx - 8.dp.toPx(), sy - 1.dp.toPx()), end = Offset(sx + 8.dp.toPx(), sy - 1.dp.toPx()), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
 }
 
 // ----------------------------------------------------------------------------
@@ -12408,68 +12757,17 @@ private fun DrawScope.drawDoodleStickman(
     val headCenter = Offset(handAnchor.x, shoulderY - headRadius - 4.dp.toPx() * scale)
     val hipY = shoulderY + 28.dp.toPx() * scale
 
-    if (handsUp) {
-        drawLine(
-            color = DoodleColors.InkBlack,
-            start = Offset(handAnchor.x, shoulderY),
-            end = Offset(handAnchor.x - 7.dp.toPx() * scale, handAnchor.y + 8.dp.toPx() * scale),
-            strokeWidth = strokeW,
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = DoodleColors.InkBlack,
-            start = Offset(handAnchor.x - 7.dp.toPx() * scale, handAnchor.y + 8.dp.toPx() * scale),
-            end = handAnchor,
-            strokeWidth = strokeW,
-            cap = StrokeCap.Round
-        )
-    } else {
-        val armSwing = sin(wavePhase * 2f) * 6.dp.toPx() * scale
-        drawLine(
-            color = DoodleColors.InkBlack,
-            start = Offset(handAnchor.x, shoulderY),
-            end = Offset(handAnchor.x - 16.dp.toPx() * scale, shoulderY + 12.dp.toPx() * scale + armSwing),
-            strokeWidth = strokeW,
-            cap = StrokeCap.Round
-        )
+    fun drawCartoonHand(center: Offset, thumbDir: Float) {
+        val handR = 3.8.dp.toPx() * scale
+        val thumbR = 2.0.dp.toPx() * scale
+        val thumbCenter = Offset(center.x + thumbDir * 2.7.dp.toPx() * scale, center.y + 0.5.dp.toPx() * scale)
+        drawCircle(color = Color.White, radius = handR, center = center)
+        drawCircle(color = DoodleColors.InkBlack, radius = handR, center = center, style = Stroke(width = strokeW * 0.7f))
+        drawCircle(color = Color.White, radius = thumbR, center = thumbCenter)
+        drawCircle(color = DoodleColors.InkBlack, radius = thumbR, center = thumbCenter, style = Stroke(width = strokeW * 0.65f))
     }
 
-    if (isPanicking) {
-        val waveArmY = shoulderY - 10.dp.toPx() * scale + sin(wavePhase * 3f) * 8.dp.toPx()
-        drawLine(
-            color = DoodleColors.InkBlack,
-            start = Offset(handAnchor.x, shoulderY),
-            end = Offset(handAnchor.x + 22.dp.toPx() * scale, waveArmY),
-            strokeWidth = strokeW,
-            cap = StrokeCap.Round
-        )
-    } else if (handsUp) {
-        drawLine(
-            color = DoodleColors.InkBlack,
-            start = Offset(handAnchor.x, shoulderY),
-            end = Offset(handAnchor.x + 7.dp.toPx() * scale, handAnchor.y + 8.dp.toPx() * scale),
-            strokeWidth = strokeW,
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = DoodleColors.InkBlack,
-            start = Offset(handAnchor.x + 7.dp.toPx() * scale, handAnchor.y + 8.dp.toPx() * scale),
-            end = handAnchor,
-            strokeWidth = strokeW,
-            cap = StrokeCap.Round
-        )
-    } else {
-        val armSwing = cos(wavePhase * 2f) * 6.dp.toPx() * scale
-        drawLine(
-            color = DoodleColors.InkBlack,
-            start = Offset(handAnchor.x, shoulderY),
-            end = Offset(handAnchor.x + 16.dp.toPx() * scale, shoulderY + 12.dp.toPx() * scale + armSwing),
-            strokeWidth = strokeW,
-            cap = StrokeCap.Round
-        )
-    }
-
-    // Torso
+    // 1. Torso & Legs + Cartoon Shoes (drawn first)
     drawLine(
         color = DoodleColors.InkBlack,
         start = Offset(handAnchor.x, shoulderY),
@@ -12478,24 +12776,36 @@ private fun DrawScope.drawDoodleStickman(
         cap = StrokeCap.Round
     )
 
-    // Legs
     val kick = if (isPanicking) sin(wavePhase * 4f) * 7.dp.toPx() else sin(wavePhase) * 3.dp.toPx()
+    val leftFoot = Offset(handAnchor.x - 13.dp.toPx() * scale, hipY + 22.dp.toPx() * scale + kick)
+    val rightFoot = Offset(handAnchor.x + 13.dp.toPx() * scale, hipY + 22.dp.toPx() * scale - kick)
     drawLine(
         color = DoodleColors.InkBlack,
         start = Offset(handAnchor.x, hipY),
-        end = Offset(handAnchor.x - 13.dp.toPx() * scale, hipY + 22.dp.toPx() * scale + kick),
+        end = leftFoot,
         strokeWidth = strokeW,
         cap = StrokeCap.Round
     )
     drawLine(
         color = DoodleColors.InkBlack,
         start = Offset(handAnchor.x, hipY),
-        end = Offset(handAnchor.x + 13.dp.toPx() * scale, hipY + 22.dp.toPx() * scale - kick),
+        end = rightFoot,
         strokeWidth = strokeW,
         cap = StrokeCap.Round
+    )
+    // Cartoon shoes
+    drawOval(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(leftFoot.x - 6.dp.toPx() * scale, leftFoot.y - 1.5.dp.toPx() * scale),
+        size = Size(8.dp.toPx() * scale, 4.5.dp.toPx() * scale)
+    )
+    drawOval(
+        color = DoodleColors.InkBlack,
+        topLeft = Offset(rightFoot.x - 2.dp.toPx() * scale, rightFoot.y - 1.5.dp.toPx() * scale),
+        size = Size(8.dp.toPx() * scale, 4.5.dp.toPx() * scale)
     )
 
-    // Head
+    // 2. Head drawn BEFORE arms so raised arms & hands are never covered by the head circle!
     drawCircle(color = Color.White, radius = headRadius, center = headCenter)
     drawCircle(
         color = DoodleColors.InkBlack,
@@ -12518,7 +12828,6 @@ private fun DrawScope.drawDoodleStickman(
     )
 
     if (puffedCheeks) {
-        // Puffed out cheeks holding breath in Leaky Submarine!
         val cheekR = 4.2.dp.toPx() * scale
         val leftCheek = Offset(headCenter.x - headRadius * 0.62f, headCenter.y + headRadius * 0.25f)
         val rightCheek = Offset(headCenter.x + headRadius * 0.62f, headCenter.y + headRadius * 0.25f)
@@ -12561,6 +12870,43 @@ private fun DrawScope.drawDoodleStickman(
             style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
         )
     }
+
+    // 3. Left & Right Arms + Cartoon Hands (drawn AFTER head with wide elbows so they are always visible!)
+    val leftHandPos: Offset
+    if (handsUp) {
+        val elbow = Offset(handAnchor.x - 18.dp.toPx() * scale, headCenter.y - 2.dp.toPx() * scale)
+        leftHandPos = Offset(handAnchor.x - 5.dp.toPx() * scale, handAnchor.y)
+        drawLine(color = DoodleColors.InkBlack, start = Offset(handAnchor.x - 3.dp.toPx() * scale, shoulderY), end = elbow, strokeWidth = strokeW, cap = StrokeCap.Round)
+        drawLine(color = DoodleColors.InkBlack, start = elbow, end = leftHandPos, strokeWidth = strokeW, cap = StrokeCap.Round)
+    } else {
+        val armSwing = sin(wavePhase * 2f) * 6.dp.toPx() * scale
+        val elbow = Offset(handAnchor.x - 11.dp.toPx() * scale, shoulderY + 6.dp.toPx() * scale)
+        leftHandPos = Offset(handAnchor.x - 17.dp.toPx() * scale, shoulderY + 13.dp.toPx() * scale + armSwing)
+        drawLine(color = DoodleColors.InkBlack, start = Offset(handAnchor.x - 3.dp.toPx() * scale, shoulderY), end = elbow, strokeWidth = strokeW, cap = StrokeCap.Round)
+        drawLine(color = DoodleColors.InkBlack, start = elbow, end = leftHandPos, strokeWidth = strokeW, cap = StrokeCap.Round)
+    }
+    drawCartoonHand(leftHandPos, 1f)
+
+    val rightHandPos: Offset
+    if (handsUp) {
+        val elbow = Offset(handAnchor.x + 18.dp.toPx() * scale, headCenter.y - 2.dp.toPx() * scale)
+        rightHandPos = Offset(handAnchor.x + 5.dp.toPx() * scale, handAnchor.y)
+        drawLine(color = DoodleColors.InkBlack, start = Offset(handAnchor.x + 3.dp.toPx() * scale, shoulderY), end = elbow, strokeWidth = strokeW, cap = StrokeCap.Round)
+        drawLine(color = DoodleColors.InkBlack, start = elbow, end = rightHandPos, strokeWidth = strokeW, cap = StrokeCap.Round)
+    } else if (isPanicking) {
+        val waveArmY = shoulderY - 12.dp.toPx() * scale + sin(wavePhase * 3f) * 8.dp.toPx()
+        val elbow = Offset(handAnchor.x + 13.dp.toPx() * scale, shoulderY - 3.dp.toPx() * scale)
+        rightHandPos = Offset(handAnchor.x + 22.dp.toPx() * scale, waveArmY)
+        drawLine(color = DoodleColors.InkBlack, start = Offset(handAnchor.x + 3.dp.toPx() * scale, shoulderY), end = elbow, strokeWidth = strokeW, cap = StrokeCap.Round)
+        drawLine(color = DoodleColors.InkBlack, start = elbow, end = rightHandPos, strokeWidth = strokeW, cap = StrokeCap.Round)
+    } else {
+        val armSwing = cos(wavePhase * 2f) * 6.dp.toPx() * scale
+        val elbow = Offset(handAnchor.x + 11.dp.toPx() * scale, shoulderY + 6.dp.toPx() * scale)
+        rightHandPos = Offset(handAnchor.x + 17.dp.toPx() * scale, shoulderY + 13.dp.toPx() * scale + armSwing)
+        drawLine(color = DoodleColors.InkBlack, start = Offset(handAnchor.x + 3.dp.toPx() * scale, shoulderY), end = elbow, strokeWidth = strokeW, cap = StrokeCap.Round)
+        drawLine(color = DoodleColors.InkBlack, start = elbow, end = rightHandPos, strokeWidth = strokeW, cap = StrokeCap.Round)
+    }
+    drawCartoonHand(rightHandPos, -1f)
 }
 
 private fun DrawScope.drawCirclingSharkFin(
