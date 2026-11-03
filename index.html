@@ -362,10 +362,69 @@
       margin-bottom: 8px;
     }
 
+    /* Randomized Hand-Drawn Clue Card Container (8 Styles) */
+    .doodle-clue-card-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 225px;
+      min-height: 118px;
+      padding: 16px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transform-origin: center top;
+      animation: clueCardSway 3.8s ease-in-out infinite alternate;
+      z-index: 2;
+    }
+
+    @keyframes clueCardSway {
+      0% { transform: rotate(calc(var(--clue-tilt, -1.8deg) - 1.1deg)) translateY(0px); }
+      100% { transform: rotate(calc(var(--clue-tilt, -1.8deg) + 1.1deg)) translateY(-3px); }
+    }
+
+    #clueCardCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .clue-category-pill {
+      position: relative;
+      z-index: 2;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 2px 8px;
+      border-radius: 8px;
+      border: 1.5px solid var(--ink-black);
+      background: var(--doodle-yellow);
+      color: var(--ink-black);
+      margin-bottom: 5px;
+      box-shadow: 1px 1.5px 0 rgba(0,0,0,0.18);
+    }
+
+    .clue-style-tag {
+      position: relative;
+      z-index: 2;
+      font-size: 9px;
+      font-weight: 800;
+      opacity: 0.68;
+      margin-top: 4px;
+    }
+
     .clue-text {
-      font-size: 19px;
-      line-height: 1.28;
-      font-weight: 700;
+      position: relative;
+      z-index: 2;
+      font-size: 15.5px;
+      line-height: 1.24;
+      font-weight: 800;
+      color: var(--ink-black);
+      text-shadow: 0 1px 0 rgba(255,255,255,0.65);
     }
 
     /* Speech Bubble & Floating Hit Toast */
@@ -392,43 +451,56 @@
       bottom: 6px;
     }
 
-    /* Word Slots */
+    /* Word Slots with Elastic Spring-Slam */
     .word-slots {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
       gap: 8px;
       margin: 8px 0;
-      min-height: 46px;
+      min-height: 48px;
     }
 
     .slot-item {
-      width: 32px;
+      width: 34px;
       display: flex;
       flex-direction: column;
       align-items: center;
+      position: relative;
     }
 
     .slot-char {
-      height: 32px;
-      font-size: 26px;
-      font-weight: 700;
-      line-height: 32px;
-      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      height: 34px;
+      font-size: 27px;
+      font-weight: 800;
+      line-height: 34px;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .slot-char.slam-pop {
+      animation: slotLetterSlam 0.42s cubic-bezier(0.22, 1.65, 0.36, 1) forwards;
+    }
+
+    @keyframes slotLetterSlam {
+      0% { transform: scale(2.35) translateY(-12px) rotate(-8deg); filter: drop-shadow(0 6px 0 rgba(255,213,79,0.85)); }
+      60% { transform: scale(0.88) translateY(2px) rotate(3deg); }
+      82% { transform: scale(1.12) translateY(-1px) rotate(-1deg); }
+      100% { transform: scale(1.0) translateY(0) rotate(0deg); }
     }
 
     .slot-line {
       width: 100%;
-      height: 4px;
+      height: 4.5px;
       background: var(--ink-black);
       border-radius: 3px;
+      box-shadow: 0 1.5px 0 rgba(0,0,0,0.18);
     }
 
-    /* 4-Row Keyboard */
+    /* 4-Row 3D Sketchy Tactile Keyboard Caps */
     .keyboard {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 6px;
       width: 100%;
     }
 
@@ -441,28 +513,97 @@
     .kb-key {
       width: 44px;
       height: 44px;
-      border-radius: 50%;
+      border-radius: 12px;
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 22px;
-      font-weight: 700;
+      font-size: 21px;
+      font-weight: 800;
       cursor: pointer;
-      background: transparent;
-      border: none;
+      background: #FFFFFF;
+      border: 2.2px solid var(--ink-black);
+      box-shadow: 0 4px 0 var(--ink-black), 0 5px 6px rgba(0,0,0,0.14);
       font-family: var(--font-main);
       color: var(--ink-black);
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.15s ease;
+      user-select: none;
+    }
+
+    .kb-key:active:not(.correct):not(.wrong) {
+      transform: translateY(3px) scale(0.95);
+      box-shadow: 0 1px 0 var(--ink-black);
     }
 
     .kb-key.correct {
-      color: var(--correct-green);
+      background: #E8F5E9;
+      border-color: #1B5E20;
+      color: #1B5E20;
+      box-shadow: 0 2px 0 #1B5E20;
+      transform: translateY(2px);
       cursor: default;
+      animation: keyCorrectBounce 0.34s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     .kb-key.wrong {
-      color: rgba(30, 30, 30, 0.5);
+      background: #FFEBEE;
+      border-color: #B71C1C;
+      color: rgba(183, 28, 28, 0.55);
+      box-shadow: 0 1px 0 #B71C1C;
+      transform: translateY(3px);
       cursor: default;
+      animation: keyWrongShake 0.36s ease;
+    }
+
+    @keyframes keyCorrectBounce {
+      0% { transform: scale(0.8) translateY(3px); }
+      55% { transform: scale(1.18) translateY(-3px); }
+      100% { transform: scale(1.0) translateY(2px); }
+    }
+
+    @keyframes keyWrongShake {
+      0%, 100% { transform: translateX(0) translateY(3px); }
+      20% { transform: translateX(-6px) translateY(3px) rotate(-5deg); }
+      40% { transform: translateX(6px) translateY(3px) rotate(5deg); }
+      60% { transform: translateX(-4px) translateY(3px) rotate(-3deg); }
+      80% { transform: translateX(4px) translateY(3px) rotate(3deg); }
+    }
+
+    /* x5 MAX OVERDRIVE Pulsing Screen Border & Juice FX Canvas */
+    #overdriveScreenBorder {
+      position: absolute;
+      inset: 2px;
+      border-radius: 18px;
+      pointer-events: none;
+      z-index: 30;
+      display: none;
+      border: 4px solid #FFD600;
+      box-shadow: inset 0 0 18px rgba(255, 214, 0, 0.65), 0 0 16px rgba(0, 229, 255, 0.65);
+      animation: overdriveBorderPulse 0.55s ease-in-out infinite alternate;
+    }
+
+    @keyframes overdriveBorderPulse {
+      0% { border-color: #FFD600; box-shadow: inset 0 0 14px rgba(255, 214, 0, 0.65), 0 0 12px rgba(255, 109, 0, 0.6); }
+      100% { border-color: #00E5FF; box-shadow: inset 0 0 24px rgba(0, 229, 255, 0.78), 0 0 20px rgba(255, 214, 0, 0.85); }
+    }
+
+    #juiceFxOverlayCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 35;
+    }
+
+    .coin-pill.pulse-hit {
+      animation: coinPillPulse 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes coinPillPulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.26); background: #FFF59D; }
+      100% { transform: scale(1); }
     }
 
     .kb-key svg.key-mark {
@@ -887,7 +1028,9 @@
     </div>
 
     <!-- ================= SCREEN 2: GAMEPLAY ================= -->
-    <div id="gameScreen" class="screen">
+    <div id="gameScreen" class="screen" style="position:relative;">
+      <div id="overdriveScreenBorder"></div>
+      <canvas id="juiceFxOverlayCanvas" width="420" height="760"></canvas>
       <div class="top-bar">
         <button class="sketch-box sketch-btn icon-btn" onclick="goMainMenu()" title="Back">←</button>
         <div style="text-align:center;">
@@ -895,7 +1038,7 @@
           <div id="gameHeaderSub" style="font-size:12px;color:var(--ink-blue);font-weight:700;">Shark &amp; Balloons</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-          <div class="sketch-box coin-pill" onclick="openCoinModal()">
+          <div id="gameCoinPill" class="sketch-box coin-pill" onclick="openCoinModal()">
             <span>⭐</span>
             <span id="gameCoinText">1231</span>
             <span class="coin-plus">+</span>
@@ -914,7 +1057,12 @@
           <div id="bossBadge" class="boss-badge" style="display:none;">💣 BOSS: Hidden Bomb Keys = -2 ❤️</div>
           <div id="bossArmorBadge" class="boss-badge" style="display:none;background:#FFF3E0;border-color:#E65100;color:#BF360C;">🛡️ Boss Armor: 2/2 Hits • ⛓️ Chains Active</div>
           <div id="frozenBadge" class="boss-badge" style="display:none;background:rgba(129,212,250,0.28);border-color:#0288D1;color:#01579B;">🧊 Frozen Vowels: 0/3 Consonants</div>
-          <div id="clueText" class="clue-text">Guess a precious gemstone</div>
+          <div id="doodleClueCardWrap" class="doodle-clue-card-wrap">
+            <canvas id="clueCardCanvas" width="220" height="136"></canvas>
+            <div id="clueCategoryBadge" class="clue-category-pill">Hard Science &amp; Tech</div>
+            <div id="clueText" class="clue-text">Guess a precious gemstone</div>
+            <div id="clueStyleTag" class="clue-style-tag">📸 Polaroid Frame</div>
+          </div>
         </div>
       </div>
 
@@ -1277,6 +1425,28 @@
       return audioCtx;
     }
 
+    function playHarmonicBellNote(ctx, freq, startTime, duration, peakGain) {
+      // Rich harmonic bell synthesis: Fundamental (1.0) + Octave (0.5) + Fifth/Twelfth (0.25)
+      const harmonics = [
+        { mult: 1.0, amp: 1.0 },
+        { mult: 2.0, amp: 0.5 },
+        { mult: 3.0, amp: 0.25 }
+      ];
+      harmonics.forEach(h => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq * h.mult, startTime);
+        gain.gain.setValueAtTime(0.0001, startTime);
+        gain.gain.linearRampToValueAtTime(peakGain * h.amp, startTime + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0008, startTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + duration + 0.02);
+      });
+    }
+
     function playProceduralSound(type) {
       if (!soundEnabled) return;
       const ctx = getAudioCtx();
@@ -1284,17 +1454,18 @@
       const now = ctx.currentTime;
 
       if (type === 'pop') {
+        // Crisp warm bubble pop + soft bass thud
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(720, now);
-        osc.frequency.exponentialRampToValueAtTime(110, now + 0.11);
-        gain.gain.setValueAtTime(0.45, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(95, now + 0.13);
+        gain.gain.setValueAtTime(0.38, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.12);
+        osc.stop(now + 0.14);
       } else if (type === 'splash') {
         const bufferSize = ctx.sampleRate * 0.45;
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
@@ -1307,81 +1478,53 @@
         noise.buffer = buffer;
         const filter = ctx.createBiquadFilter();
         filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(900, now);
-        filter.frequency.exponentialRampToValueAtTime(280, now + 0.45);
+        filter.frequency.setValueAtTime(860, now);
+        filter.frequency.exponentialRampToValueAtTime(260, now + 0.45);
         const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.setValueAtTime(0.45, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
         noise.connect(filter);
         filter.connect(gain);
         gain.connect(ctx.destination);
         noise.start(now);
       } else if (type === 'crunch') {
-        const bufferSize = ctx.sampleRate * 0.32;
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          const t = i / ctx.sampleRate;
-          const grain = Math.sin(t * 190 * Math.PI * 2) * 0.4 + (Math.random() * 2 - 1) * 0.6;
-          const pulse = (i % 1200 < 750) ? 1.0 : 0.25;
-          data[i] = grain * pulse * Math.exp(-t * 6.5);
-        }
-        const src = ctx.createBufferSource();
-        src.buffer = buffer;
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.48, now);
-        src.connect(gain);
-        gain.connect(ctx.destination);
-        src.start(now);
-      } else if (type === 'zap') {
+        // Warm low-pass filtered bass thud + gentle woody knock
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(920, now);
-        osc.frequency.linearRampToValueAtTime(340, now + 0.18);
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.19);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(165, now);
+        osc.frequency.exponentialRampToValueAtTime(52, now + 0.18);
+        gain.gain.setValueAtTime(0.36, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      } else if (type === 'zap') {
+        // Smooth sci-fi sine/triangle pitch glide (no harsh sawtooth buzz)
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(760, now);
+        osc.frequency.exponentialRampToValueAtTime(210, now + 0.18);
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(now);
         osc.stop(now + 0.2);
       } else if (type === 'clang') {
-        [580, 930, 1380].forEach(freq => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(freq, now);
-          gain.gain.setValueAtTime(0.18, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(now);
-          osc.stop(now + 0.3);
-        });
+        playHarmonicBellNote(ctx, 440, now, 0.24, 0.16);
+        playHarmonicBellNote(ctx, 554.37, now + 0.02, 0.24, 0.12);
       } else if (type === 'chime') {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(587.33, now);
-        osc.frequency.setValueAtTime(880, now + 0.06);
-        gain.gain.setValueAtTime(0.22, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.19);
+        // Pure harmonic 2-note ascending bell chime (D5 -> A5)
+        playHarmonicBellNote(ctx, 587.33, now, 0.22, 0.18);
+        playHarmonicBellNote(ctx, 880.0, now + 0.055, 0.28, 0.20);
       } else if (type === 'victory') {
-        [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(freq, now + idx * 0.09);
-          gain.gain.setValueAtTime(0.25, now + idx * 0.09);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.28);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(now + idx * 0.09);
-          osc.stop(now + idx * 0.09 + 0.3);
+        // Pure Harmonic C-Major Arpeggio Chime (C5 -> E5 -> G5 -> C6)
+        const cMajorArpeggio = [523.25, 659.25, 783.99, 1046.50];
+        cMajorArpeggio.forEach((freq, idx) => {
+          playHarmonicBellNote(ctx, freq, now + idx * 0.085, 0.42, 0.20);
         });
       }
     }
@@ -3372,16 +3515,311 @@
       if (timerEl) {
         timerEl.textContent = comboTimeRemainingMs > 0 ? `${(comboTimeRemainingMs / 1000).toFixed(1)}s` : '4.0s';
       }
+      const overdriveBorder = document.getElementById('overdriveScreenBorder');
+      if (overdriveBorder) {
+        overdriveBorder.style.display = (enableKiComboFuse && comboCount >= 5 && comboTimeRemainingMs > 0) ? 'block' : 'none';
+      }
+    }
+
+    // Game Juice State: Stickman Kamehameha Pose, Peril Squash/Stretch, Confetti, Smoke & Flying Star Coins
+    let kiAttackPoseTimer = 0;
+    let perilSquashTimer = 0;
+    let perilImpactText = 'POW!';
+    const COMIC_IMPACT_WORDS = ['POW!', 'ZAP!', 'BAM!', 'CRACK!', 'BOOM!'];
+    let lastSlammedChar = null;
+    const juiceConfettiParticles = [];
+    const juiceSmokeParticles = [];
+    const flyingStarCoins = [];
+
+    const CLUE_CARD_STYLES = [
+      { id: 0, name: '📸 Polaroid Frame', tilt: '-2.1deg' },
+      { id: 1, name: '💬 Comic Speech Balloon', tilt: '1.8deg' },
+      { id: 2, name: '📜 Ancient Parchment Scroll', tilt: '-1.5deg' },
+      { id: 3, name: '📋 Wooden Clipboard', tilt: '2.0deg' },
+      { id: 4, name: '🪧 Hanging Wooden Sign', tilt: '-1.9deg' },
+      { id: 5, name: '🗂️ Spiral Index Flashcard', tilt: '1.6deg' },
+      { id: 6, name: '💠 Hologram HUD Blueprint', tilt: '-2.2deg' },
+      { id: 7, name: '📌 Pinned Sticky Note', tilt: '2.3deg' }
+    ];
+
+    function splitClueCategoryAndBody(rawClue) {
+      const idx = (rawClue || '').indexOf(':');
+      if (idx > 0 && idx < 38) {
+        return {
+          category: rawClue.slice(0, idx).trim(),
+          body: rawClue.slice(idx + 1).trim()
+        };
+      }
+      return {
+        category: 'Doodle Word Clue',
+        body: rawClue || ''
+      };
+    }
+
+    function renderDoodleClueCard(levelObj) {
+      const lvlNum = (levelObj && levelObj.number) || 1;
+      const styleIdx = Math.abs((lvlNum * 31 + 7) % 8);
+      const styleMeta = CLUE_CARD_STYLES[styleIdx];
+      const parsed = splitClueCategoryAndBody(levelObj ? levelObj.clue : '');
+
+      const wrapEl = document.getElementById('doodleClueCardWrap');
+      const catEl = document.getElementById('clueCategoryBadge');
+      const textEl = document.getElementById('clueText');
+      const tagEl = document.getElementById('clueStyleTag');
+
+      if (wrapEl) wrapEl.style.setProperty('--clue-tilt', styleMeta.tilt);
+      if (catEl) {
+        catEl.textContent = parsed.category;
+        catEl.style.background = styleIdx === 6 ? '#00E5FF' : styleIdx === 4 ? '#FFE082' : '#FFD54F';
+        catEl.style.color = '#1E1E1E';
+      }
+      if (textEl) {
+        textEl.textContent = parsed.body;
+        textEl.style.color = styleIdx === 6 ? '#004D40' : styleIdx === 4 ? '#3E2723' : '#1E1E1E';
+      }
+      if (tagEl) {
+        tagEl.textContent = styleMeta.name;
+      }
+
+      const canvas = document.getElementById('clueCardCanvas');
+      if (!canvas) return;
+      const { ctx, w, h } = syncCanvasHD(canvas, 220, 136);
+      ctx.clearRect(0, 0, w, h);
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (styleIdx === 0) {
+        // 1. Taped Polaroid Snapshot Frame
+        ctx.fillStyle = 'rgba(0,0,0,0.14)';
+        ctx.fillRect(10, 12, w - 14, h - 14);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.4;
+        ctx.fillRect(6, 8, w - 14, h - 14);
+        ctx.strokeRect(6, 8, w - 14, h - 14);
+        ctx.fillStyle = '#F5F7FA';
+        ctx.fillRect(13, 15, w - 28, h - 40);
+        ctx.strokeRect(13, 15, w - 28, h - 40);
+        // Crisscrossed masking tape on top corners
+        ctx.fillStyle = 'rgba(255, 235, 153, 0.82)';
+        ctx.strokeStyle = '#8D6E63';
+        ctx.lineWidth = 1.3;
+        ctx.save();
+        ctx.translate(22, 12);
+        ctx.rotate(-0.42);
+        ctx.fillRect(-16, -5, 32, 10);
+        ctx.strokeRect(-16, -5, 32, 10);
+        ctx.restore();
+        ctx.save();
+        ctx.translate(w - 24, 12);
+        ctx.rotate(0.42);
+        ctx.fillRect(-16, -5, 32, 10);
+        ctx.strokeRect(-16, -5, 32, 10);
+        ctx.restore();
+      } else if (styleIdx === 1) {
+        // 2. Comic Book Speech Bubble / Thought Cloud
+        ctx.fillStyle = '#FFFDE7';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.roundRect(10, 8, w - 18, h - 20, 20);
+        ctx.fill();
+        ctx.stroke();
+        // Comic tail pointing left toward Stickman
+        ctx.beginPath();
+        ctx.moveTo(12, h * 0.52);
+        ctx.lineTo(1, h * 0.62);
+        ctx.lineTo(14, h * 0.68);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Halftone corner dots
+        ctx.fillStyle = 'rgba(255, 152, 0, 0.32)';
+        for (let dx = 0; dx < 3; dx++) {
+          for (let dy = 0; dy < 3; dy++) {
+            ctx.beginPath();
+            ctx.arc(w - 20 - dx * 6, 18 + dy * 6, 1.8, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      } else if (styleIdx === 2) {
+        // 3. Ancient Rolled Parchment Scroll
+        ctx.fillStyle = '#F5E6C8';
+        ctx.strokeStyle = '#4E342E';
+        ctx.lineWidth = 2.2;
+        ctx.fillRect(12, 14, w - 24, h - 28);
+        ctx.strokeRect(12, 14, w - 24, h - 28);
+        // Top & bottom wooden scroll rollers
+        ctx.fillStyle = '#8D6E63';
+        ctx.fillRect(4, 6, w - 8, 10);
+        ctx.strokeRect(4, 6, w - 8, 10);
+        ctx.fillRect(4, h - 16, w - 8, 10);
+        ctx.strokeRect(4, h - 16, w - 8, 10);
+      } else if (styleIdx === 3) {
+        // 4. Wooden Clipboard & Metal Clip
+        ctx.fillStyle = '#A1887F';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.roundRect(6, 10, w - 12, h - 14, 12);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(13, 18, w - 26, h - 28);
+        ctx.strokeRect(13, 18, w - 26, h - 28);
+        // Silver metallic clip at top center
+        ctx.fillStyle = '#CFD8DC';
+        ctx.fillRect(w * 0.5 - 24, 3, 48, 13);
+        ctx.strokeRect(w * 0.5 - 24, 3, 48, 13);
+      } else if (styleIdx === 4) {
+        // 5. Hanging Wooden Signboard
+        ctx.strokeStyle = '#5D4037';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(30, 0); ctx.lineTo(30, 14);
+        ctx.moveTo(w - 30, 0); ctx.lineTo(w - 30, 14);
+        ctx.stroke();
+        ctx.fillStyle = '#FFE0B2';
+        ctx.strokeStyle = '#3E2723';
+        ctx.beginPath();
+        ctx.roundRect(8, 12, w - 16, h - 18, 10);
+        ctx.fill();
+        ctx.stroke();
+        // Corner nail heads
+        ctx.fillStyle = '#5D4037';
+        [[16,20],[w-16,20],[16,h-14],[w-16,h-14]].forEach(([nx, ny]) => {
+          ctx.beginPath(); ctx.arc(nx, ny, 2.6, 0, Math.PI * 2); ctx.fill();
+        });
+      } else if (styleIdx === 5) {
+        // 6. Spiral-Bound Index Flashcard
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.3;
+        ctx.beginPath();
+        ctx.roundRect(8, 12, w - 16, h - 18, 10);
+        ctx.fill();
+        ctx.stroke();
+        // Red & blue ruled lines
+        ctx.strokeStyle = 'rgba(229, 57, 53, 0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(10, 32); ctx.lineTo(w - 10, 32); ctx.stroke();
+        ctx.strokeStyle = 'rgba(30, 136, 229, 0.22)';
+        for (let ry = 50; ry < h - 14; ry += 18) {
+          ctx.beginPath(); ctx.moveTo(10, ry); ctx.lineTo(w - 10, ry); ctx.stroke();
+        }
+        // Top spiral wire loops
+        ctx.strokeStyle = '#37474F';
+        ctx.lineWidth = 2.2;
+        for (let sx = 24; sx < w - 20; sx += 18) {
+          ctx.beginPath();
+          ctx.arc(sx, 11, 5, Math.PI * 0.8, Math.PI * 2.2);
+          ctx.stroke();
+        }
+      } else if (styleIdx === 6) {
+        // 7. Futuristic Hologram HUD Blueprint
+        ctx.fillStyle = 'rgba(224, 247, 250, 0.88)';
+        ctx.strokeStyle = '#00ACC1';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(10, 10, w - 20, h - 20);
+        ctx.fillRect(10, 10, w - 20, h - 20);
+        ctx.setLineDash([]);
+        // Corner targeting brackets
+        ctx.strokeStyle = '#7C4DFF';
+        ctx.lineWidth = 3;
+        const bLen = 14;
+        ctx.beginPath();
+        ctx.moveTo(8, 8 + bLen); ctx.lineTo(8, 8); ctx.lineTo(8 + bLen, 8);
+        ctx.moveTo(w - 8 - bLen, 8); ctx.lineTo(w - 8, 8); ctx.lineTo(w - 8, 8 + bLen);
+        ctx.moveTo(8, h - 8 - bLen); ctx.lineTo(8, h - 8); ctx.lineTo(8 + bLen, h - 8);
+        ctx.moveTo(w - 8 - bLen, h - 8); ctx.lineTo(w - 8, h - 8); ctx.lineTo(w - 8, h - 8 - bLen);
+        ctx.stroke();
+      } else {
+        // 8. Torn Notebook Sticky Note with 3D Red Pushpin
+        ctx.fillStyle = 'rgba(0,0,0,0.16)';
+        ctx.beginPath();
+        ctx.moveTo(12, 16); ctx.lineTo(w - 6, 16); ctx.lineTo(w - 10, h - 4); ctx.lineTo(14, h - 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#FFF59D';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 2.3;
+        ctx.fillRect(8, 12, w - 18, h - 20);
+        ctx.strokeRect(8, 12, w - 18, h - 20);
+        // Red 3D pushpin at top center
+        ctx.fillStyle = '#E53935';
+        ctx.beginPath();
+        ctx.arc(w * 0.5, 11, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#FFCDD2';
+        ctx.beginPath();
+        ctx.arc(w * 0.5 - 2, 9, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function spawnJuiceConfettiFromKey(ch, isSlotBurst) {
+      const colors = ['#FF595E', '#FFD166', '#2ECC71', '#29B6F6', '#AB47BC', '#FF9800'];
+      const count = isSlotBurst ? 20 : 14;
+      for (let i = 0; i < count; i++) {
+        const ang = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+        const spd = 95 + Math.random() * 165;
+        juiceConfettiParticles.push({
+          rx: isSlotBurst ? (0.28 + Math.random() * 0.44) : 0.5,
+          ry: isSlotBurst ? 0.48 : 0.72,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd - 90,
+          rot: Math.random() * Math.PI * 2,
+          vrot: (Math.random() - 0.5) * 12,
+          color: colors[i % colors.length],
+          w: 6 + Math.random() * 4,
+          h: 4 + Math.random() * 3,
+          life: 1.0
+        });
+      }
+    }
+
+    function spawnWrongKeySmokePuffs() {
+      for (let i = 0; i < 8; i++) {
+        juiceSmokeParticles.push({
+          rx: 0.35 + Math.random() * 0.3,
+          ry: 0.74 + (Math.random() - 0.5) * 0.08,
+          vx: (Math.random() - 0.5) * 45,
+          vy: -45 - Math.random() * 45,
+          radius: 7 + Math.random() * 6,
+          life: 1.0
+        });
+      }
+    }
+
+    function spawnBezierFlyingStars(count) {
+      const total = count || 10;
+      for (let i = 0; i < total; i++) {
+        flyingStarCoins.push({
+          prog: -i * 0.06,
+          startX: 0.35 + (Math.random() - 0.5) * 0.25,
+          startY: 0.48 + (Math.random() - 0.5) * 0.06,
+          ctrlX: 0.15 + Math.random() * 0.7,
+          ctrlY: 0.14 + Math.random() * 0.22,
+          endX: 0.86,
+          endY: 0.055,
+          arrived: false
+        });
+      }
     }
 
     function spawnKiBlastTowardPeril() {
       if (!enableStickmanKiBlasts) return;
       const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
       const rank = getActiveMenuRank(curLvl);
+      kiAttackPoseTimer = 0.42;
       kiBlasts.push({
         prog: 0,
         startX: 0.30,
-        startY: 0.54,
+        startY: 0.52,
         endX: 0.68,
         endY: 0.38,
         color: (rank && rank.primaryColor) || '#FFD166',
@@ -3424,7 +3862,7 @@
         frozenBadge.style.display = 'none';
       }
 
-      document.getElementById('clueText').textContent = activeLevel.clue;
+      renderDoodleClueCard(activeLevel);
       const potionBadge = document.getElementById('potionBadge');
       if (potionBadge) {
         potionBadge.textContent = shieldGuardActive ? 'ACTIVE' : (freePotions > 0 ? `🛡️ ${freePotions}` : '⭐ 40');
@@ -3460,14 +3898,15 @@
         dotsEl.appendChild(d);
       }
 
-      // Word slots
+      // Word slots with elastic slam-pop on newly revealed letter
       const slotsEl = document.getElementById('wordSlots');
       slotsEl.innerHTML = '';
       activeLevel.word.toUpperCase().split('').forEach((ch, idx) => {
         const item = document.createElement('div');
         item.className = 'slot-item';
         const charDiv = document.createElement('div');
-        charDiv.className = 'slot-char';
+        const isSlam = revealed.has(ch) && lastSlammedChar === ch;
+        charDiv.className = 'slot-char' + (isSlam ? ' slam-pop' : '');
         charDiv.style.color = (idx % 2 === 0) ? 'var(--correct-green)' : 'var(--ink-blue)';
         charDiv.textContent = revealed.has(ch) ? ch : '';
         const lineDiv = document.createElement('div');
@@ -3477,7 +3916,7 @@
         slotsEl.appendChild(item);
       });
 
-      // Keyboard (A-G, H-N, O-U, V-Z)
+      // Keyboard (A-G, H-N, O-U, V-Z) with 3D Sketchy Key Caps
       const rows = ['ABCDEFG', 'HIJKLMN', 'OPQRSTU', 'VWXYZ'];
       const kbEl = document.getElementById('keyboard');
       kbEl.innerHTML = '';
@@ -3493,6 +3932,7 @@
           btn.textContent = ch;
           if (isFrozenKey) {
             btn.style.color = '#01579B';
+            btn.style.background = '#E1F5FE';
           } else if (isChainedKey) {
             btn.style.color = '#455A64';
             btn.style.background = '#CFD8DC';
@@ -3548,7 +3988,9 @@
       if (word.includes(ch)) {
         keyStatuses[ch] = 'CORRECT';
         revealed.add(ch);
+        lastSlammedChar = ch;
         spawnKiBlastTowardPeril();
+        spawnJuiceConfettiFromKey(ch, true);
 
         if (enableKiComboFuse) {
           if (comboTimeRemainingMs > 0) {
@@ -3559,15 +4001,17 @@
           comboTimeRemainingMs = COMBO_MAX_DURATION_MS;
           fastCorrectStreak++;
           playProceduralKiBurstSound(comboCount, Math.floor(campaignIdx / 50) + 1);
+          playProceduralSound('chime');
 
           if (comboCount >= 2) {
-            const label = comboCount >= 5 ? '🔥 MAX OVERDRIVE!' : comboCount === 4 ? '⚡ 4x ULTRA!' : comboCount === 3 ? '⚡ 3x SUPER!' : '⚡ 2x COMBO!';
+            const label = comboCount >= 5 ? '🔥 x5 MAX OVERDRIVE!' : comboCount === 4 ? '⚡ 4x ULTRA!' : comboCount === 3 ? '⚡ 3x SUPER!' : '⚡ 2x COMBO!';
             floatingHits.push({ text: label, rx: 0.48, ry: 0.30, life: 1.1 });
           }
 
           if (fastCorrectStreak >= 3) {
             fastCorrectStreak = 0;
             coins += 10;
+            spawnBezierFlyingStars(8);
             if (lives < 6) {
               lives = Math.min(6, lives + 1);
               showToast('💥 KI COUNTER-PUSHBACK! +1 ❤️ Restored & +10 ⭐!');
@@ -3596,9 +4040,11 @@
         checkVictory();
       } else {
         keyStatuses[ch] = 'WRONG';
+        lastSlammedChar = null;
         comboCount = 0;
         comboTimeRemainingMs = 0;
         fastCorrectStreak = 0;
+        spawnWrongKeySmokePuffs();
 
         if (shieldGuardActive) {
           shieldGuardActive = false;
@@ -3644,6 +4090,7 @@
       if (uniqueChars.every(c => revealed.has(c))) {
         if (!levelVictoryRewarded) {
           levelVictoryRewarded = true;
+          spawnBezierFlyingStars(12);
           const baseReward = isBoss(activeLevel) ? 50 : 25;
           const comboBonus = enableKiComboFuse && comboCount >= 2 ? comboCount * 5 : 0;
           const reward = (baseReward + comboBonus) * (doubleOrNothingActive ? 2 : 1);
@@ -3994,14 +4441,50 @@
 
     function drawStickman(ctx, x, handY, scale, panicking, handsUp, t) {
       ctx.save();
-      ctx.strokeStyle = '#1E1E1E';
-      ctx.lineWidth = 3 * scale;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
 
       const shoulderY = handY + 20 * scale;
       const headY = shoulderY - 16 * scale;
       const hipY = shoulderY + 26 * scale;
+      const centerBodyY = (headY + hipY) * 0.5;
+
+      // Active Player Tier Cosmic Aura around Stickman during Gameplay!
+      const curLvl = (activeLevel && activeLevel.number) ? activeLevel.number : ((campaignIdx % CAMPAIGN_LEVELS.length) + 1);
+      const rank = getActiveMenuRank(curLvl);
+      const auraPrimary = (rank && rank.primaryColor) || '#FFF59D';
+      const auraSecondary = (rank && rank.secondaryColor) || '#29B6F6';
+      const auraPulse = 1 + Math.sin(t * 7.5) * 0.11 + (comboCount > 0 ? comboCount * 0.04 : 0);
+
+      ctx.save();
+      ctx.globalAlpha = 0.34;
+      ctx.fillStyle = auraPrimary;
+      ctx.beginPath();
+      ctx.ellipse(x, centerBodyY, 24 * scale * auraPulse, 36 * scale * auraPulse, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.58;
+      ctx.strokeStyle = auraSecondary;
+      ctx.lineWidth = 2 * scale;
+      ctx.setLineDash([5 * scale, 4 * scale]);
+      ctx.beginPath();
+      ctx.ellipse(x, centerBodyY, 27 * scale * auraPulse, 39 * scale * auraPulse, Math.sin(t * 2) * 0.15, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Rising Ki aura sparks
+      for (let sp = 0; sp < 4; sp++) {
+        const spProg = (t * 1.8 + sp * 0.25) % 1;
+        const sx = x + Math.sin(t * 5 + sp * 2.1) * 18 * scale;
+        const sy = hipY + 14 * scale - spProg * 58 * scale;
+        ctx.fillStyle = sp % 2 === 0 ? auraPrimary : auraSecondary;
+        ctx.globalAlpha = (1 - spProg) * 0.75;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2.4 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      ctx.strokeStyle = '#1E1E1E';
+      ctx.lineWidth = 3 * scale;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
       // Ground/floating shadow
       ctx.fillStyle = 'rgba(30, 30, 30, 0.08)';
@@ -4022,18 +4505,36 @@
       }
       ctx.stroke();
 
-      // Right arm
+      // Right arm (with Ki Kamehameha Forward Thrust Pose when attacking!)
       ctx.beginPath();
       ctx.moveTo(x, shoulderY);
-      if (panicking) {
+      if (kiAttackPoseTimer > 0) {
+        const thrustX = x + 23 * scale;
+        const thrustY = shoulderY - 3 * scale;
+        ctx.lineTo(thrustX, thrustY);
+        ctx.stroke();
+        // Glowing Ki palm flare
+        ctx.save();
+        ctx.fillStyle = auraSecondary;
+        ctx.beginPath();
+        ctx.arc(thrustX + 3 * scale, thrustY, 6.5 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(thrustX + 3 * scale, thrustY, 3.2 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (panicking) {
         ctx.lineTo(x + 20 * scale, shoulderY - 10 * scale + Math.sin(t * 9) * 8 * scale);
+        ctx.stroke();
       } else if (handsUp) {
         ctx.lineTo(x + 8 * scale, handY + 9 * scale);
         ctx.lineTo(x, handY);
+        ctx.stroke();
       } else {
         ctx.lineTo(x + 15 * scale, shoulderY + 12 * scale + Math.cos(t * 3) * 5 * scale);
+        ctx.stroke();
       }
-      ctx.stroke();
 
       // Torso & Animated Legs
       const kick = panicking ? Math.sin(t * 10) * 7.5 * scale : Math.sin(t * 2.6) * 3.2 * scale;
@@ -4488,6 +4989,15 @@
       if (!isPreview && shakeTimer > 0) {
         const mag = shakeTimer * 10;
         ctx.translate(Math.sin(t * 55) * mag, Math.cos(t * 48) * mag * 0.7);
+      }
+      if (!isPreview && perilSquashTimer > 0) {
+        // Elastic Hit-Stop Squash & Stretch Recoil on Peril Hit!
+        const sq = Math.sin((perilSquashTimer / 0.28) * Math.PI);
+        const sx = 1 + sq * 0.22;
+        const sy = 1 - sq * 0.18;
+        ctx.translate(w * 0.5, h * 0.5);
+        ctx.scale(sx, sy);
+        ctx.translate(-w * 0.5, -h * 0.5);
       }
 
       const cx = w * 0.5;
@@ -5314,41 +5824,98 @@
           ctx.restore();
         }
 
-        // Stickman Ki Blast Projectiles & Peril Hit Flash
+        // Stickman Ki Kamehameha Beam, Projectiles & Peril Hit-Stop Starburst
+        if (kiAttackPoseTimer > 0) {
+          kiAttackPoseTimer = Math.max(0, kiAttackPoseTimer - dt);
+        }
+        if (perilSquashTimer > 0) {
+          perilSquashTimer = Math.max(0, perilSquashTimer - dt);
+        }
+
         if (enableStickmanKiBlasts) {
           for (let i = kiBlasts.length - 1; i >= 0; i--) {
             const kb = kiBlasts[i];
-            kb.prog += dt * 3.4;
+            kb.prog += dt * 3.6;
             if (kb.prog >= 1) {
-              perilHitFlashTimer = 0.25;
-              shakeTimer = Math.max(shakeTimer, 0.18);
+              perilHitFlashTimer = 0.26;
+              perilSquashTimer = 0.28;
+              perilImpactText = COMIC_IMPACT_WORDS[Math.floor(Math.random() * COMIC_IMPACT_WORDS.length)];
+              shakeTimer = Math.max(shakeTimer, 0.20);
               kiBlasts.splice(i, 1);
               continue;
             }
+            const sx = kb.startX * w;
+            const sy = kb.startY * h;
             const kx = (kb.startX + (kb.endX - kb.startX) * kb.prog) * w;
             const ky = (kb.startY + (kb.endY - kb.startY) * kb.prog - Math.sin(kb.prog * Math.PI) * 0.08) * h;
             ctx.save();
+            // Kamehameha energy beam trail
             ctx.strokeStyle = kb.color;
-            ctx.lineWidth = 5;
+            ctx.lineWidth = 10 * (1 - kb.prog * 0.3);
+            ctx.globalAlpha = 0.55;
             ctx.beginPath();
-            ctx.moveTo(kx - 18, ky + 6);
+            ctx.moveTo(sx, sy);
             ctx.lineTo(kx, ky);
             ctx.stroke();
+
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 4;
+            ctx.globalAlpha = 0.92;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(kx, ky);
+            ctx.stroke();
+
+            // Leading energy sphere
             ctx.fillStyle = kb.coreColor;
             ctx.strokeStyle = '#1E1E1E';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 2.2;
             ctx.beginPath();
-            ctx.arc(kx, ky, 9, 0, Math.PI * 2);
+            ctx.arc(kx, ky, 11, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(kx - 2, ky - 2, 4.5, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
           }
 
           if (perilHitFlashTimer > 0) {
             perilHitFlashTimer = Math.max(0, perilHitFlashTimer - dt);
+            const flashFrac = perilHitFlashTimer / 0.26;
             ctx.save();
-            ctx.fillStyle = `rgba(255, 255, 255, ${(perilHitFlashTimer / 0.25) * 0.45})`;
-            ctx.fillRect(0, 0, w, h);
+            // 2-frame crisp white hit-stop flash
+            if (flashFrac > 0.72) {
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.68)';
+              ctx.fillRect(0, 0, w, h);
+            }
+            // Comic Impact Starburst ("POW!", "ZAP!", "BAM!") at Peril target
+            const impX = w * 0.66;
+            const impY = h * 0.38;
+            const starR = 26 * (1.25 - flashFrac * 0.4);
+            ctx.translate(impX, impY);
+            ctx.fillStyle = '#FFD600';
+            ctx.strokeStyle = '#1E1E1E';
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            for (let pt = 0; pt < 16; pt++) {
+              const ang = (pt * Math.PI) / 8;
+              const rad = pt % 2 === 0 ? starR : starR * 0.52;
+              const px = Math.cos(ang) * rad;
+              const py = Math.sin(ang) * rad;
+              if (pt === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.font = '800 13px var(--font-main)';
+            ctx.fillStyle = '#D50000';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(perilImpactText, 0, 1);
             ctx.restore();
           }
 
@@ -5365,6 +5932,98 @@
       }
 
       ctx.restore();
+    }
+
+    function renderJuiceFxOverlay(t, dt) {
+      const canvas = document.getElementById('juiceFxOverlayCanvas');
+      if (!canvas) return;
+      const { ctx, w, h } = syncCanvasHD(canvas, 420, 760);
+      ctx.clearRect(0, 0, w, h);
+
+      // 1. Key & Word-Slot Confetti Particles
+      for (let i = juiceConfettiParticles.length - 1; i >= 0; i--) {
+        const cf = juiceConfettiParticles[i];
+        cf.rx += (cf.vx * dt) / w;
+        cf.ry += (cf.vy * dt) / h;
+        cf.vy += 340 * dt;
+        cf.rot += cf.vrot * dt;
+        cf.life -= dt * 1.55;
+        if (cf.life <= 0) {
+          juiceConfettiParticles.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, cf.life);
+        ctx.translate(cf.rx * w, cf.ry * h);
+        ctx.rotate(cf.rot);
+        ctx.fillStyle = cf.color;
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1;
+        ctx.fillRect(-cf.w * 0.5, -cf.h * 0.5, cf.w, cf.h);
+        ctx.strokeRect(-cf.w * 0.5, -cf.h * 0.5, cf.w, cf.h);
+        ctx.restore();
+      }
+
+      // 2. Wrong Key Smoke Puffs
+      for (let i = juiceSmokeParticles.length - 1; i >= 0; i--) {
+        const sm = juiceSmokeParticles[i];
+        sm.rx += (sm.vx * dt) / w;
+        sm.ry += (sm.vy * dt) / h;
+        sm.radius += 12 * dt;
+        sm.life -= dt * 1.75;
+        if (sm.life <= 0) {
+          juiceSmokeParticles.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, sm.life * 0.55);
+        ctx.fillStyle = '#90A4AE';
+        ctx.strokeStyle = '#455A64';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(sm.rx * w, sm.ry * h, sm.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 3. Bezier Flying Star Coins soaring to Top-Right Star Counter
+      for (let i = flyingStarCoins.length - 1; i >= 0; i--) {
+        const sc = flyingStarCoins[i];
+        sc.prog += dt * 1.75;
+        if (sc.prog < 0) continue;
+        if (sc.prog >= 1) {
+          flyingStarCoins.splice(i, 1);
+          const pill = document.getElementById('gameCoinPill');
+          if (pill) {
+            pill.classList.remove('pulse-hit');
+            void pill.offsetWidth;
+            pill.classList.add('pulse-hit');
+          }
+          continue;
+        }
+        const u = 1 - sc.prog;
+        const bx = (u * u * sc.startX + 2 * u * sc.prog * sc.ctrlX + sc.prog * sc.prog * sc.endX) * w;
+        const by = (u * u * sc.startY + 2 * u * sc.prog * sc.ctrlY + sc.prog * sc.prog * sc.endY) * h;
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(sc.prog * Math.PI * 4);
+        ctx.fillStyle = '#FFD600';
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        for (let p = 0; p < 10; p++) {
+          const a = (p * Math.PI) / 5 - Math.PI * 0.5;
+          const r = p % 2 === 0 ? 10 : 4.5;
+          const px = Math.cos(a) * r;
+          const py = Math.sin(a) * r;
+          if (p === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // =========================================================================
@@ -5669,6 +6328,7 @@
         const gameCanvas = document.getElementById('gameCanvas');
         if (gameCanvas && gameScreenEl && gameScreenEl.classList.contains('active')) {
           renderPerilScene(gameCanvas, getActiveGamePeril(), lives, smoothLives, false, t, dt);
+          renderJuiceFxOverlay(t, dt);
         }
       } catch (err) {
         console.error('Game canvas render error:', err);
