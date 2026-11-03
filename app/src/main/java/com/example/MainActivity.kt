@@ -36,6 +36,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -592,18 +596,19 @@ enum class PerilType(
         val SLEEPING_TREX: PerilType get() = DINO_STEALTH
 
         /**
-         * Rotates every 20 levels across all 15 Peril Scenarios (1–20, 21–40, ..., 281–300)
+         * Rotates every single level across all 15 Peril Scenarios using (currentLevel - 1) % 15
+         * (Level 1 = Shark & Balloons, Level 2 = UFO Abduction, Level 3 = Volcano, etc.)
          * and cycles continuously up to Level 1,000.
          */
         fun forLevel(levelNumber: Int): PerilType {
             val safeLvl = if (levelNumber <= 0) 1 else levelNumber
-            val tierIdx = ((safeLvl - 1) / 20) % entries.size
-            return entries[tierIdx]
+            val idx = (safeLvl - 1) % entries.size
+            return entries[idx]
         }
     }
 
     val representativeLevel: Int
-        get() = ordinal * 20 + 1
+        get() = ordinal + 1
 }
 
 typealias PerilScenario = PerilType
@@ -716,30 +721,50 @@ object ProceduralSoundEngine {
     }
 
     /**
-     * Plays an ascending procedural AudioTrack power chime as `comboCount` escalates from x1 to x5 OVERDRIVE.
+     * Plays a crisp, bright sine/triangle harmonic C-Major chord arpeggio (523.25Hz -> 659.25Hz -> 783.99Hz)
+     * that pitches up by +1 semitone for each combo level (x1 to x5) with a soft exponential volume decay envelope.
      */
     fun playComboPowerChime(comboLevel: Int) {
         if (!soundEnabled) return
         lastPlayedEffect = DoodleSoundEffect.CHIME
         val clamped = comboLevel.coerceIn(1, 5)
         runCatching {
-            val durationSec = 0.22
+            val durationSec = 0.27
             val count = (SAMPLE_RATE * durationSec).toInt()
-            val semitoneShift = (clamped - 1) * 2.5
-            val baseFreq = 523.25 * Math.pow(2.0, semitoneShift / 12.0)
-            val highFreq = baseFreq * 1.498 // Fifth interval
-            val overdriveFreq = baseFreq * 2.0 // Octave shimmer on x5 Overdrive
+            val semitoneFactor = Math.pow(2.0, (clamped - 1).toDouble() / 12.0)
+            val chordNotes = doubleArrayOf(
+                523.25 * semitoneFactor, // C5
+                659.25 * semitoneFactor, // E5
+                783.99 * semitoneFactor  // G5
+            )
+            val noteWindow = count / chordNotes.size
+            val attackSamples = (SAMPLE_RATE * 0.004).toInt().coerceAtLeast(1)
+
             val samples = ShortArray(count) { i ->
                 val t = i.toDouble() / SAMPLE_RATE
                 val progress = i.toDouble() / count
-                val f = when {
-                    progress < 0.38 -> baseFreq
-                    progress < 0.75 || clamped < 5 -> highFreq
-                    else -> overdriveFreq
+                val noteIdx = (i / noteWindow).coerceIn(0, chordNotes.lastIndex)
+                val localSample = i % noteWindow
+                val localProg = localSample.toDouble() / noteWindow
+                val freq = chordNotes[noteIdx]
+
+                // Blend pure sine fundamental + soft triangle harmonic + subtle octave shimmer
+                val phase = (freq * t) % 1.0
+                val sineWave = sin(2.0 * PI * phase)
+                val triangleWave = 1.0 - 4.0 * abs(phase - 0.5)
+                val shimmerWave = sin(4.0 * PI * phase) * 0.14
+                val harmonic = sineWave * 0.72 + triangleWave * 0.22 + shimmerWave
+
+                // Smooth de-clicked attack & soft exponential bell decay envelope
+                val attackEnv = if (localSample < attackSamples) {
+                    localSample.toDouble() / attackSamples
+                } else {
+                    1.0
                 }
-                val harmonic = sin(2.0 * PI * f * t) * 0.72 + sin(4.0 * PI * f * t) * 0.28
-                val env = exp(-progress * 3.4)
-                (harmonic * env * Short.MAX_VALUE * 0.75).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+                val noteDecay = exp(-localProg * 3.8)
+                val globalDecay = exp(-progress * 1.9) * (1.0 - progress * 0.25)
+                val sampleVal = harmonic * attackEnv * noteDecay * globalDecay * 0.68
+                (sampleVal.coerceIn(-1.0, 1.0) * Short.MAX_VALUE).toInt().toShort()
             }
 
             val audioTrack = AudioTrack.Builder()
@@ -854,13 +879,23 @@ object ProceduralSoundEngine {
             }
 
             DoodleSoundEffect.CHIME -> {
-                val count = (SAMPLE_RATE * 0.16).toInt()
+                val chordNotes = doubleArrayOf(523.25, 659.25, 783.99)
+                val count = (SAMPLE_RATE * 0.26).toInt()
+                val noteWindow = count / chordNotes.size
+                val attackSamples = (SAMPLE_RATE * 0.004).toInt().coerceAtLeast(1)
                 ShortArray(count) { i ->
                     val t = i.toDouble() / SAMPLE_RATE
                     val progress = i.toDouble() / count
-                    val freq = if (progress < 0.45) 587.33 else 880.0
-                    val env = exp(-progress * 4.0)
-                    (sin(2.0 * PI * freq * t) * env * Short.MAX_VALUE * 0.65).toInt().toShort()
+                    val noteIdx = (i / noteWindow).coerceIn(0, chordNotes.lastIndex)
+                    val localSample = i % noteWindow
+                    val localProg = localSample.toDouble() / noteWindow
+                    val freq = chordNotes[noteIdx]
+                    val phase = (freq * t) % 1.0
+                    val sineWave = sin(2.0 * PI * phase)
+                    val triangleWave = 1.0 - 4.0 * abs(phase - 0.5)
+                    val attackEnv = if (localSample < attackSamples) localSample.toDouble() / attackSamples else 1.0
+                    val env = attackEnv * exp(-localProg * 3.8) * exp(-progress * 1.9)
+                    ((sineWave * 0.76 + triangleWave * 0.24) * env * Short.MAX_VALUE * 0.65).toInt().toShort()
                 }
             }
 
@@ -1987,6 +2022,46 @@ class WordGameViewModel : ViewModel() {
                 val foundRes = repo.findPlayerAccountByIdentifier(rawIdent, enteredHash)
                 val remoteAccount = foundRes.getOrNull()
                 if (remoteAccount == null || remoteAccount.userId.isBlank()) {
+                    val isEmailLogin = rawIdent.contains("@") && rawIdent.contains(".")
+                    if (isEmailLogin && cleanPassword.length >= 4) {
+                        val autoNick = rawIdent.substringBefore("@").trim().take(50).ifEmpty { "Doodle Player" }
+                        val autoUid = buildDirectAccountUid(rawIdent)
+                        if (!isGuestSession) {
+                            resetLocalStateToFresh()
+                        }
+                        isGuestSession = false
+                        registeredPlayerUid = autoUid
+                        prefs?.edit()?.apply {
+                            putString("registeredPlayerUid", autoUid)
+                            putString("registeredPlayerName", autoNick)
+                            putString("registeredPlayerEmail", rawIdent)
+                            putString("registeredPlayerMode", "gmail")
+                            putString("account_pwd_$autoUid", cleanPassword)
+                            apply()
+                        }
+                        val createRes = repo.createOrSyncPlayerAccount(
+                            displayName = autoNick,
+                            email = rawIdent,
+                            passwordHash = enteredHash,
+                            authMethod = "gmail",
+                            campaignLevelIndex = campaignLevelIndex,
+                            coins = coins,
+                            perfectCount = perfectCount,
+                            currentStreak = currentStreak,
+                            maxStreak = maxStreak,
+                            completedLevelsCount = completedCampaignLevels.size,
+                            userId = autoUid
+                        )
+                        isSyncingCloud = false
+                        createRes.onSuccess { created ->
+                            applyRemoteAccountToLocalState(created)
+                            statusBannerMessage = "👋 Welcome, ${created.displayName}! Gmail synced to Cloud."
+                            currentScreen = ScreenState.MAIN_MENU
+                        }.onFailure { err ->
+                            authErrorMessage = err.localizedMessage ?: "Failed to sign in with Gmail."
+                        }
+                        return@launch
+                    }
                     isSyncingCloud = false
                     authErrorMessage = "❌ Account '$rawIdent' not found! Check your spelling or tap 'Create new account'."
                     return@launch
@@ -2780,9 +2855,8 @@ class WordGameViewModel : ViewModel() {
                     balloonsRemaining = (balloonsRemaining + 1).coerceAtMost(maxBalloons)
                 }
                 coins += 10
-                comboPopupText = "⚡ KI COUNTER-PUSHBACK! +10 ★"
+                comboPopupText = "💥 KI COUNTER-PUSHBACK! +10 ★"
                 comboPopupTrigger++
-                statusBannerMessage = "⚡ KI COUNTER-PUSHBACK! Peril Reversed +1 ❤️ & +10 ★!"
                 saveStateToPrefs()
             }
 
@@ -6704,10 +6778,14 @@ fun GameplayScreen(
     fontFamily: FontFamily
 ) {
     val level = viewModel.activeLevel
-    val perilType = viewModel.activePerilType
+    val currentLevel = level.number.coerceAtLeast(1)
+    // Rotate cleanly through all 15 Peril Scenarios every single level using (currentLevel - 1) % 15
+    val perilType = viewModel.gameplayPerilOverride
+        ?: PerilType.entries[(currentLevel - 1) % PerilType.entries.size]
     val targetWord = level.word.uppercase()
     val rankTier = viewModel.currentRankTier
     val isLastStand = viewModel.isLastStandDangerMode
+    val comboCount = viewModel.comboCount
 
     // Real-time 50ms ticker for the 4.0s decaying Ki Combo Fuse & 3.0s Hint Spark Gold Flash
     LaunchedEffect(viewModel.roundOutcome, viewModel.comboFuseRemainingMs > 0L, viewModel.hintSparkRemainingMs > 0L) {
@@ -6720,8 +6798,8 @@ fun GameplayScreen(
         }
     }
 
-    val dangerInfinite = rememberInfiniteTransition(label = "lastStandDangerTransition")
-    val dangerPulse by dangerInfinite.animateFloat(
+    val infiniteTransition = rememberInfiniteTransition(label = "gameplayJuiceInfinite")
+    val dangerPulse by infiniteTransition.animateFloat(
         initialValue = 0.25f,
         targetValue = 0.92f,
         animationSpec = infiniteRepeatable(
@@ -6731,15 +6809,106 @@ fun GameplayScreen(
         label = "dangerPulse"
     )
 
+    val feverPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "feverPhase"
+    )
+
+    // Wrong guess shake & brief red danger vignette flash
+    val wrongGuessAnim = remember { Animatable(1f) }
+    LaunchedEffect(viewModel.popAnimationTrigger) {
+        if (viewModel.popAnimationTrigger > 0) {
+            wrongGuessAnim.snapTo(0f)
+            wrongGuessAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 460, easing = FastOutSlowInEasing)
+            )
+        }
+    }
+    val wordRowWrongShakeX = if (viewModel.popAnimationTrigger > 0 && wrongGuessAnim.value < 0.98f) {
+        val progress = wrongGuessAnim.value
+        sin(progress * 40f) * 14f * (1f - progress)
+    } else {
+        0f
+    }
+
+    // 5 Flying Star Coins along a curved Bezier arc + elastic Counter-Pushback badge + Coin pill 1.3f scale-pop!
+    val pushbackFlightAnim = remember { Animatable(1f) }
+    val coinPillScale = remember { Animatable(1f) }
+    var showPushbackElasticBadge by remember { mutableStateOf(false) }
+
+    LaunchedEffect(viewModel.counterPushbackTrigger) {
+        if (viewModel.counterPushbackTrigger > 0) {
+            showPushbackElasticBadge = true
+            pushbackFlightAnim.snapTo(0f)
+            launch {
+                pushbackFlightAnim.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 1050, easing = FastOutSlowInEasing)
+                )
+            }
+            // Pop the top-right [ ⭐ ] Star Counter 1.3f as each of the 5 Bezier-arc coins lands!
+            launch {
+                delay(380L)
+                repeat(5) {
+                    coinPillScale.snapTo(1.3f)
+                    coinPillScale.animateTo(
+                        targetValue = 1.0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioHighBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    )
+                    delay(85L)
+                }
+            }
+            delay(1650L)
+            showPushbackElasticBadge = false
+        }
+    }
+
+    // Auto-dismiss Counter-Pushback badge immediately before Victory dialog opens
+    LaunchedEffect(viewModel.roundOutcome) {
+        if (viewModel.roundOutcome != RoundOutcome.PLAYING) {
+            showPushbackElasticBadge = false
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        // Last-Stand Danger Mode: Pulsing Red Sketchy Vignette around the Graph Paper when 1 mistake remains!
-        if (isLastStand) {
+        // 1. Last-Stand Danger Mode OR Wrong-Guess Red Danger Vignette Flash around screen edges
+        val wrongVignetteFlash = if (viewModel.popAnimationTrigger > 0 && wrongGuessAnim.value < 0.85f) {
+            (1f - wrongGuessAnim.value / 0.85f).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+        if (isLastStand || wrongVignetteFlash > 0.01f) {
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("last_stand_danger_vignette")
             ) {
-                drawLastStandSketchyVignette(pulse = dangerPulse)
+                val effectivePulse = if (isLastStand) max(dangerPulse, wrongVignetteFlash) else wrongVignetteFlash
+                drawLastStandSketchyVignette(pulse = effectivePulse)
+            }
+        }
+
+        // 2. Full-Screen "x3 to x5 MAX OVERDRIVE" Fever Mode Golden/Rainbow Sketchy Energy Border!
+        if (comboCount >= 3 && viewModel.roundOutcome == RoundOutcome.PLAYING) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("fever_mode_overdrive_border")
+            ) {
+                drawFeverModeOverdriveBorder(
+                    comboCount = comboCount,
+                    phase = feverPhase,
+                    rankTier = rankTier
+                )
             }
         }
 
@@ -6828,12 +6997,14 @@ fun GameplayScreen(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    CoinBalancePill(
-                        coins = viewModel.coins,
-                        fontFamily = fontFamily,
-                        onClickAdd = { viewModel.showCoinShopDialog = true },
-                        testTag = "game_coin_pill"
-                    )
+                    Box(modifier = Modifier.scale(coinPillScale.value)) {
+                        CoinBalancePill(
+                            coins = viewModel.coins,
+                            fontFamily = fontFamily,
+                            onClickAdd = { viewModel.showCoinShopDialog = true },
+                            testTag = "game_coin_pill"
+                        )
+                    }
                     if (viewModel.isGmLoggedIn) {
                         FloatingGmBadge(
                             isConsoleOpen = viewModel.showGmConsoleDrawer,
@@ -6845,9 +7016,53 @@ fun GameplayScreen(
                 }
             }
 
+            // Elastic Spring "💥 KI COUNTER-PUSHBACK!" Badge BELOW the header (auto-dismisses before Victory dialog!)
+            AnimatedVisibility(
+                visible = showPushbackElasticBadge && viewModel.roundOutcome == RoundOutcome.PLAYING,
+                enter = slideInVertically(
+                    initialOffsetY = { -it },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioHighBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                ) + scaleIn(
+                    initialScale = 0.55f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioHighBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                ) + fadeIn(),
+                exit = fadeOut(animationSpec = tween(180)) + scaleOut(targetScale = 0.8f),
+                modifier = Modifier
+                    .padding(vertical = 2.dp)
+                    .testTag("counter_pushback_header_badge")
+            ) {
+                SketchyContainer(
+                    fillColor = Color(0xFFFFF176),
+                    borderColor = DoodleColors.InkBlack,
+                    cornerRadius = 14.dp,
+                    strokeWidth = 2.2.dp,
+                    shadowOffset = 2.5.dp
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "💥 KI COUNTER-PUSHBACK!  •  +1 ❤️ HEALED  •  +10 ⭐",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.5.sp,
+                            color = DoodleColors.InkBlack
+                        )
+                    }
+                }
+            }
+
             // 2. Upper Split Scene:
             // Left Half: Custom Compose Canvas rendering active PerilType + Active Stickman Ki Combat & Ink Shield
-            // Right Half: Lives + Boss 2-Hit Armor Shield + Category/Clue prompt
+            // Right Half: Lives + Boss 2-Hit Armor Shield + Randomized Hand-Drawn Clue Card (8 styles!)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -6855,13 +7070,13 @@ fun GameplayScreen(
                     .heightIn(min = 165.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left Half: Dynamic Peril Canvas with Active Stickman Combat
+                // Left Half: Dynamic Peril Canvas with Active Stickman Combat & Tier Aura
                 Box(
                     modifier = Modifier
-                        .weight(0.53f)
+                        .weight(0.52f)
                         .fillMaxHeight()
                         .heightIn(min = 160.dp)
-                        .padding(end = 5.dp)
+                        .padding(end = 4.dp)
                 ) {
                     DynamicPerilSceneCanvas(
                         perilType = perilType,
@@ -6874,6 +7089,7 @@ fun GameplayScreen(
                         isMenuPreview = false,
                         fontFamily = fontFamily,
                         rankTier = rankTier,
+                        comboCount = comboCount,
                         kiAttackTrigger = viewModel.kiAttackTrigger,
                         counterPushbackTrigger = viewModel.counterPushbackTrigger,
                         inkShieldActive = viewModel.inkShieldActive,
@@ -6885,24 +7101,24 @@ fun GameplayScreen(
                     )
                 }
 
-                // Right Half: Clue / Category prompt + Lives + Boss Armor Shield + Frozen Vowels indicator
+                // Right Half: Lives + Boss Armor Shield + Randomized Doodle Clue Card (1 of 8 hand-drawn frames)
                 Box(
                     modifier = Modifier
-                        .weight(0.47f)
+                        .weight(0.48f)
                         .fillMaxHeight()
-                        .padding(start = 5.dp),
+                        .padding(start = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(horizontal = 2.dp)
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         // 6 Lives status dots + Ink Shield indicator
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                            modifier = Modifier.padding(bottom = 3.dp)
                         ) {
                             repeat(6) { idx ->
                                 val alive = idx < viewModel.balloonsRemaining
@@ -6943,28 +7159,8 @@ fun GameplayScreen(
                                     !viewModel.bossChainsShattered,
                                 fontFamily = fontFamily,
                                 modifier = Modifier
-                                    .padding(bottom = 4.dp)
+                                    .padding(bottom = 3.dp)
                                     .testTag("boss_warning_badge")
-                            )
-                        }
-
-                        // Category Badge
-                        SketchyContainer(
-                            fillColor = Color(0xFFFFF9C4),
-                            cornerRadius = 10.dp,
-                            strokeWidth = 1.4.dp,
-                            shadowOffset = 1.5.dp,
-                            modifier = Modifier
-                                .padding(bottom = 4.dp)
-                                .testTag("category_badge")
-                        ) {
-                            Text(
-                                text = "📂 ${level.category}",
-                                fontFamily = fontFamily,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 10.sp,
-                                color = DoodleColors.InkBlack,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                             )
                         }
 
@@ -6977,7 +7173,7 @@ fun GameplayScreen(
                                 strokeWidth = 1.5.dp,
                                 shadowOffset = 1.2.dp,
                                 modifier = Modifier
-                                    .padding(bottom = 4.dp)
+                                    .padding(bottom = 3.dp)
                                     .testTag("frozen_vowels_badge")
                             ) {
                                 Text(
@@ -6995,15 +7191,15 @@ fun GameplayScreen(
                             }
                         }
 
-                        Text(
-                            text = level.clue,
+                        // Randomized Hand-Drawn Clue Card (8 Distinct Procedural Canvas + Path Frame Designs!)
+                        RandomizedDoodleClueCard(
+                            currentLevel = currentLevel,
+                            category = level.category,
+                            clue = level.clue,
                             fontFamily = fontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            lineHeight = 20.sp,
-                            color = DoodleColors.InkBlack,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.testTag("clue_text")
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f, fill = false)
                         )
                     }
                 }
@@ -7023,12 +7219,13 @@ fun GameplayScreen(
                 )
             }
 
-            // 4. Middle Area (Word Slots with Boss Armor Shield overlay if active)
+            // 4. Middle Area: Word Slots with 2.2f -> 1.0f bouncy slam-in on correct guess & violent horizontal shake on wrong guess!
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
+                    .offset(x = wordRowWrongShakeX.dp)
             ) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -7052,7 +7249,7 @@ fun GameplayScreen(
                 }
             }
 
-            // 5. Real-Time "Ki Combo" Speed Meter & Overdrive Fuse Bar (Right above the Keyboard!)
+            // 5. Real-Time "Ki Combo" Speed Meter & Overdrive Fuse Bar (Twice as thick: 22.dp track with glowing animated flame tip!)
             if (viewModel.gmToggleKiComboFuse) {
                 KiComboSpeedMeterBar(
                     comboCount = viewModel.comboCount,
@@ -7068,8 +7265,7 @@ fun GameplayScreen(
 
             Spacer(modifier = Modifier.height(3.dp))
 
-            // 6. Keyboard Area: Custom 4-row alphabetical grid
-            //    (with Boss Locked/Slime Keys, Chain Shatter FX, Hint Spark Gold Flash, & Frozen Vowels)
+            // 6. Keyboard Area: Tactile 3D Sketchy Key Caps with spring depression & 8 green/gold confetti burst on correct tap
             DoodleAlphabetKeyboard(
                 keyStatuses = viewModel.keyStatuses,
                 bombLetters = viewModel.bombLetters.toSet(),
@@ -7086,6 +7282,678 @@ fun GameplayScreen(
                 fontFamily = fontFamily,
                 onKeyPress = { ch -> viewModel.onLetterTapped(ch) }
             )
+        }
+
+        // 5 Physical Spinning Star Coins flying in a curved Bezier arc from Stickman -> Top-Right [ ⭐ ] Counter!
+        if (viewModel.counterPushbackTrigger > 0 && pushbackFlightAnim.value < 0.99f && viewModel.roundOutcome == RoundOutcome.PLAYING) {
+            val flightProgress = pushbackFlightAnim.value
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("flying_bezier_star_coins_canvas")
+            ) {
+                drawFlyingBezierStarCoinsToCounter(
+                    overallProgress = flightProgress,
+                    rankTier = rankTier
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Renders the Category & Clue inside 1 of 8 distinct procedural hand-drawn `Canvas` + `Path` frame designs
+ * every level with a subtle tilted angle (-2.5f..2.5f degrees) and a gently swaying idle animation.
+ */
+@Composable
+fun RandomizedDoodleClueCard(
+    currentLevel: Int,
+    category: String,
+    clue: String,
+    fontFamily: FontFamily,
+    modifier: Modifier = Modifier
+) {
+    val clueStyleIndex = remember(currentLevel) { Random(currentLevel * 31).nextInt(8) }
+    val baseTiltDeg = remember(currentLevel) {
+        val r = Random(currentLevel * 73 + 19).nextFloat()
+        -2.5f + r * 5.0f
+    }
+
+    val swayInfinite = rememberInfiniteTransition(label = "clueCardSway_$currentLevel")
+    val swayOffsetDeg by swayInfinite.animateFloat(
+        initialValue = -1.1f,
+        targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "clueCardSwayAngle"
+    )
+    val swayBobY by swayInfinite.animateFloat(
+        initialValue = -2f,
+        targetValue = 2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "clueCardSwayBobY"
+    )
+
+    val isDarkBlueprint = clueStyleIndex == 6
+    val categoryBgColor = when (clueStyleIndex) {
+        0 -> Color(0xFFFFF59D) // Polaroid
+        1 -> Color(0xFFFFECB3) // Comic Bubble
+        2 -> Color(0xFFD7CCC8) // Parchment Scroll
+        3 -> Color(0xFFFFCCBC) // Wooden Clipboard
+        4 -> Color(0xFFFFE082) // Hanging Wooden Signboard
+        5 -> Color(0xFFFFCDD2) // Spiral Index Flashcard tab
+        6 -> Color(0xFF00E5FF).copy(alpha = 0.25f) // Hologram HUD Blueprint
+        else -> Color(0xFFE1BEE7) // Postage Stamp / Vintage Ticket
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .padding(horizontal = 2.dp, vertical = 2.dp)
+            .offset(y = swayBobY.dp)
+            .graphicsLayer {
+                rotationZ = baseTiltDeg + swayOffsetDeg
+            }
+            .testTag("randomized_clue_card_style_$clueStyleIndex")
+    ) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val w = size.width
+            val h = size.height
+            when (clueStyleIndex) {
+                0 -> {
+                    // 1. Taped Polaroid Snapshot Frame: Crisp white border, thick bottom caption strip, translucent crisscrossed masking tape on top corners
+                    drawRoundRect(
+                        color = DoodleColors.InkBlack.copy(alpha = 0.22f),
+                        topLeft = Offset(4.dp.toPx(), 5.dp.toPx()),
+                        size = Size(w, h),
+                        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
+                    )
+                    drawRoundRect(
+                        color = Color.White,
+                        topLeft = Offset.Zero,
+                        size = Size(w, h),
+                        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
+                    )
+                    // Inner photo window
+                    val pad = 7.dp.toPx()
+                    val bottomStrip = 20.dp.toPx()
+                    drawRoundRect(
+                        color = Color(0xFFF5F7FA),
+                        topLeft = Offset(pad, pad),
+                        size = Size(w - pad * 2f, (h - pad - bottomStrip).coerceAtLeast(20f)),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    )
+                    drawRoundRect(
+                        color = DoodleColors.InkBlack,
+                        topLeft = Offset(pad, pad),
+                        size = Size(w - pad * 2f, (h - pad - bottomStrip).coerceAtLeast(20f)),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                        style = Stroke(width = 1.4.dp.toPx())
+                    )
+                    drawRoundRect(
+                        color = DoodleColors.InkBlack,
+                        topLeft = Offset.Zero,
+                        size = Size(w, h),
+                        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+                        style = Stroke(width = 2.4.dp.toPx())
+                    )
+                    // Translucent crisscrossed masking tape strips on top-left & top-right corners
+                    val tapeColor = Color(0xFFFFF59D).copy(alpha = 0.78f)
+                    val tapeStroke = DoodleColors.InkBlack.copy(alpha = 0.55f)
+                    val leftTape = Path().apply {
+                        moveTo(-4.dp.toPx(), 12.dp.toPx())
+                        lineTo(22.dp.toPx(), -4.dp.toPx())
+                        lineTo(28.dp.toPx(), 4.dp.toPx())
+                        lineTo(2.dp.toPx(), 20.dp.toPx())
+                        close()
+                    }
+                    drawPath(leftTape, tapeColor)
+                    drawPath(leftTape, tapeStroke, style = Stroke(width = 1.1.dp.toPx()))
+
+                    val rightTape = Path().apply {
+                        moveTo(w - 22.dp.toPx(), -4.dp.toPx())
+                        lineTo(w + 4.dp.toPx(), 12.dp.toPx())
+                        lineTo(w - 2.dp.toPx(), 20.dp.toPx())
+                        lineTo(w - 28.dp.toPx(), 4.dp.toPx())
+                        close()
+                    }
+                    drawPath(rightTape, tapeColor)
+                    drawPath(rightTape, tapeStroke, style = Stroke(width = 1.1.dp.toPx()))
+                }
+
+                1 -> {
+                    // 2. Comic Book Speech Bubble / Thought Cloud: Bold ink comic balloon with halftone corner dots and a tail pointing left toward the Stickman
+                    val bubblePath = Path().apply {
+                        val r = 16.dp.toPx()
+                        addRoundRect(
+                            androidx.compose.ui.geometry.RoundRect(
+                                left = 6.dp.toPx(),
+                                top = 2.dp.toPx(),
+                                right = w - 2.dp.toPx(),
+                                bottom = h - 6.dp.toPx(),
+                                cornerRadius = CornerRadius(r, r)
+                            )
+                        )
+                        // Speech tail pointing toward the Stickman on the left
+                        moveTo(6.dp.toPx(), h * 0.52f)
+                        lineTo(-8.dp.toPx(), h * 0.62f)
+                        lineTo(8.dp.toPx(), h * 0.68f)
+                        close()
+                    }
+                    drawPath(
+                        path = bubblePath,
+                        color = Color(0xFFFFFDE7)
+                    )
+                    // Halftone-style corner dots
+                    val dotColor = Color(0xFFFFCA28).copy(alpha = 0.48f)
+                    for (gx in 0..3) {
+                        for (gy in 0..2) {
+                            drawCircle(
+                                color = dotColor,
+                                radius = (2.2f - (gx + gy) * 0.3f).coerceAtLeast(0.8f).dp.toPx(),
+                                center = Offset(14.dp.toPx() + gx * 6.dp.toPx(), 10.dp.toPx() + gy * 6.dp.toPx())
+                            )
+                            drawCircle(
+                                color = dotColor,
+                                radius = (2.2f - (gx + gy) * 0.3f).coerceAtLeast(0.8f).dp.toPx(),
+                                center = Offset(w - 10.dp.toPx() - gx * 6.dp.toPx(), h - 14.dp.toPx() - gy * 6.dp.toPx())
+                            )
+                        }
+                    }
+                    drawPath(
+                        path = bubblePath,
+                        color = DoodleColors.InkBlack,
+                        style = Stroke(width = 2.6.dp.toPx(), join = StrokeJoin.Round)
+                    )
+                }
+
+                2 -> {
+                    // 3. Ancient Rolled Parchment Scroll: Warm tan paper with sketched wooden rollers at top & bottom edges
+                    val rollerH = 8.dp.toPx()
+                    // Scroll body
+                    drawRoundRect(
+                        color = Color(0xFFF5E6C8),
+                        topLeft = Offset(5.dp.toPx(), rollerH * 0.7f),
+                        size = Size(w - 10.dp.toPx(), (h - rollerH * 1.4f).coerceAtLeast(20f)),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    )
+                    drawRoundRect(
+                        color = Color(0xFF5D4037),
+                        topLeft = Offset(5.dp.toPx(), rollerH * 0.7f),
+                        size = Size(w - 10.dp.toPx(), (h - rollerH * 1.4f).coerceAtLeast(20f)),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                        style = Stroke(width = 2.dp.toPx())
+                    )
+                    // Top & Bottom Wooden Rollers + End Knobs
+                    listOf(0f, h - rollerH).forEach { ry ->
+                        drawRoundRect(
+                            color = Color(0xFF8D6E63),
+                            topLeft = Offset(-3.dp.toPx(), ry),
+                            size = Size(w + 6.dp.toPx(), rollerH),
+                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = DoodleColors.InkBlack,
+                            topLeft = Offset(-3.dp.toPx(), ry),
+                            size = Size(w + 6.dp.toPx(), rollerH),
+                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                            style = Stroke(width = 1.8.dp.toPx())
+                        )
+                        // Parchment rolled inner spiral highlight
+                        drawLine(
+                            color = Color(0xFFD7CCC8),
+                            start = Offset(4.dp.toPx(), ry + rollerH * 0.5f),
+                            end = Offset(w - 4.dp.toPx(), ry + rollerH * 0.5f),
+                            strokeWidth = 1.5.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                    }
+                }
+
+                3 -> {
+                    // 4. Wooden Clipboard & Metal Clip: Sketchy brown hardboard backing with a silver metallic clip drawn at top center
+                    val clipH = 10.dp.toPx()
+                    drawRoundRect(
+                        color = Color(0xFF8D6E63),
+                        topLeft = Offset(0f, clipH * 0.5f),
+                        size = Size(w, (h - clipH * 0.5f).coerceAtLeast(20f)),
+                        cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
+                    )
+                    drawRoundRect(
+                        color = DoodleColors.InkBlack,
+                        topLeft = Offset(0f, clipH * 0.5f),
+                        size = Size(w, (h - clipH * 0.5f).coerceAtLeast(20f)),
+                        cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx()),
+                        style = Stroke(width = 2.4.dp.toPx())
+                    )
+                    // Pinned white note sheet
+                    val pad = 6.dp.toPx()
+                    drawRoundRect(
+                        color = Color(0xFFFFFDF7),
+                        topLeft = Offset(pad, clipH + 2.dp.toPx()),
+                        size = Size(w - pad * 2f, (h - clipH - pad - 2.dp.toPx()).coerceAtLeast(16f)),
+                        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                    )
+                    drawRoundRect(
+                        color = DoodleColors.InkBlack,
+                        topLeft = Offset(pad, clipH + 2.dp.toPx()),
+                        size = Size(w - pad * 2f, (h - clipH - pad - 2.dp.toPx()).coerceAtLeast(16f)),
+                        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
+                        style = Stroke(width = 1.6.dp.toPx())
+                    )
+                    // Silver Metallic Top Clip
+                    val clipW = (w * 0.42f).coerceAtLeast(36.dp.toPx())
+                    drawRoundRect(
+                        color = Color(0xFFB0BEC5),
+                        topLeft = Offset((w - clipW) * 0.5f, 0f),
+                        size = Size(clipW, clipH + 4.dp.toPx()),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    )
+                    drawRoundRect(
+                        color = DoodleColors.InkBlack,
+                        topLeft = Offset((w - clipW) * 0.5f, 0f),
+                        size = Size(clipW, clipH + 4.dp.toPx()),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                        style = Stroke(width = 1.8.dp.toPx())
+                    )
+                    drawCircle(
+                        color = Color.White,
+                        radius = 2.5.dp.toPx(),
+                        center = Offset(w * 0.5f, clipH * 0.5f)
+                    )
+                }
+
+                4 -> {
+                    // 5. Hanging Wooden Signboard: Suspended from two sketchy ropes at top with wood-grain ink lines & corner nail heads
+                    val ropeTopY = -6.dp.toPx()
+                    val boardTopY = 6.dp.toPx()
+                    // Two hanging ropes
+                    listOf(w * 0.22f, w * 0.78f).forEach { rx ->
+                        drawLine(
+                            color = Color(0xFF5D4037),
+                            start = Offset(rx, ropeTopY),
+                            end = Offset(rx, boardTopY + 4.dp.toPx()),
+                            strokeWidth = 3.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                        drawLine(
+                            color = DoodleColors.InkBlack,
+                            start = Offset(rx, ropeTopY),
+                            end = Offset(rx, boardTopY + 4.dp.toPx()),
+                            strokeWidth = 1.4.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                    }
+                    // Warm wooden plank board
+                    drawRoundRect(
+                        color = Color(0xFFFFECB3),
+                        topLeft = Offset(0f, boardTopY),
+                        size = Size(w, (h - boardTopY).coerceAtLeast(20f)),
+                        cornerRadius = CornerRadius(9.dp.toPx(), 9.dp.toPx())
+                    )
+                    // Subtle wood-grain horizontal lines
+                    val grainColor = Color(0xFF8D6E63).copy(alpha = 0.28f)
+                    for (g in 1..3) {
+                        val gy = boardTopY + (h - boardTopY) * (g / 4f)
+                        drawLine(
+                            color = grainColor,
+                            start = Offset(8.dp.toPx(), gy),
+                            end = Offset(w - 8.dp.toPx(), gy),
+                            strokeWidth = 1.4.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                    }
+                    drawRoundRect(
+                        color = Color(0xFF4E342E),
+                        topLeft = Offset(0f, boardTopY),
+                        size = Size(w, (h - boardTopY).coerceAtLeast(20f)),
+                        cornerRadius = CornerRadius(9.dp.toPx(), 9.dp.toPx()),
+                        style = Stroke(width = 2.6.dp.toPx())
+                    )
+                    // 4 Corner Nail Heads
+                    val nails = listOf(
+                        Offset(8.dp.toPx(), boardTopY + 8.dp.toPx()),
+                        Offset(w - 8.dp.toPx(), boardTopY + 8.dp.toPx()),
+                        Offset(8.dp.toPx(), h - 8.dp.toPx()),
+                        Offset(w - 8.dp.toPx(), h - 8.dp.toPx())
+                    )
+                    nails.forEach { nPos ->
+                        drawCircle(color = Color(0xFF78909C), radius = 3.dp.toPx(), center = nPos)
+                        drawCircle(
+                            color = DoodleColors.InkBlack,
+                            radius = 3.dp.toPx(),
+                            center = nPos,
+                            style = Stroke(width = 1.2.dp.toPx())
+                        )
+                    }
+                }
+
+                5 -> {
+                    // 6. Spiral-Bound Index Flashcard: Top spiral wire loops with red/blue horizontal ruled index lines
+                    val topPad = 6.dp.toPx()
+                    drawRoundRect(
+                        color = Color.White,
+                        topLeft = Offset(0f, topPad),
+                        size = Size(w, (h - topPad).coerceAtLeast(20f)),
+                        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
+                    )
+                    // Red top margin rule & blue horizontal ruled index lines
+                    val redLineY = topPad + 22.dp.toPx()
+                    if (redLineY < h - 8.dp.toPx()) {
+                        drawLine(
+                            color = Color(0xFFEF5350).copy(alpha = 0.65f),
+                            start = Offset(4.dp.toPx(), redLineY),
+                            end = Offset(w - 4.dp.toPx(), redLineY),
+                            strokeWidth = 1.5.dp.toPx()
+                        )
+                    }
+                    var blueY = redLineY + 14.dp.toPx()
+                    while (blueY < h - 8.dp.toPx()) {
+                        drawLine(
+                            color = Color(0xFF90CAF9).copy(alpha = 0.55f),
+                            start = Offset(4.dp.toPx(), blueY),
+                            end = Offset(w - 4.dp.toPx(), blueY),
+                            strokeWidth = 1.1.dp.toPx()
+                        )
+                        blueY += 14.dp.toPx()
+                    }
+                    drawRoundRect(
+                        color = DoodleColors.InkBlack,
+                        topLeft = Offset(0f, topPad),
+                        size = Size(w, (h - topPad).coerceAtLeast(20f)),
+                        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+                        style = Stroke(width = 2.2.dp.toPx())
+                    )
+                    // Top Spiral Wire Loops
+                    val ringCount = 7
+                    for (i in 0 until ringCount) {
+                        val rx = w * ((i + 1f) / (ringCount + 1f))
+                        drawOval(
+                            color = DoodleColors.InkBlack,
+                            topLeft = Offset(rx - 3.dp.toPx(), 0f),
+                            size = Size(6.dp.toPx(), 11.dp.toPx()),
+                            style = Stroke(width = 1.8.dp.toPx())
+                        )
+                    }
+                }
+
+                6 -> {
+                    // 7. Futuristic Hologram HUD Blueprint: Glowing cyan/purple dashed tech-grid frame with corner target brackets
+                    drawRoundRect(
+                        color = Color(0xFF0D1B2A).copy(alpha = 0.92f),
+                        topLeft = Offset.Zero,
+                        size = Size(w, h),
+                        cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
+                    )
+                    // Blueprint tech grid lines
+                    val gridColor = Color(0xFF00E5FF).copy(alpha = 0.18f)
+                    val step = 16.dp.toPx()
+                    var gx = step
+                    while (gx < w) {
+                        drawLine(gridColor, Offset(gx, 0f), Offset(gx, h), 1.dp.toPx())
+                        gx += step
+                    }
+                    var gy = step
+                    while (gy < h) {
+                        drawLine(gridColor, Offset(0f, gy), Offset(w, gy), 1.dp.toPx())
+                        gy += step
+                    }
+                    // Dashed glowing cyan/purple frame
+                    drawRoundRect(
+                        color = Color(0xFF00E5FF),
+                        topLeft = Offset(2.dp.toPx(), 2.dp.toPx()),
+                        size = Size(w - 4.dp.toPx(), h - 4.dp.toPx()),
+                        cornerRadius = CornerRadius(9.dp.toPx(), 9.dp.toPx()),
+                        style = Stroke(
+                            width = 2.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                        )
+                    )
+                    // 4 Glowing Corner Target Brackets
+                    val brLen = 14.dp.toPx()
+                    val brStroke = 3.dp.toPx()
+                    val brColor = Color(0xFFE040FB)
+                    // Top-Left
+                    drawLine(brColor, Offset(0f, brLen), Offset(0f, 0f), brStroke, StrokeCap.Round)
+                    drawLine(brColor, Offset(0f, 0f), Offset(brLen, 0f), brStroke, StrokeCap.Round)
+                    // Top-Right
+                    drawLine(brColor, Offset(w - brLen, 0f), Offset(w, 0f), brStroke, StrokeCap.Round)
+                    drawLine(brColor, Offset(w, 0f), Offset(w, brLen), brStroke, StrokeCap.Round)
+                    // Bottom-Left
+                    drawLine(brColor, Offset(0f, h - brLen), Offset(0f, h), brStroke, StrokeCap.Round)
+                    drawLine(brColor, Offset(0f, h), Offset(brLen, h), brStroke, StrokeCap.Round)
+                    // Bottom-Right
+                    drawLine(brColor, Offset(w - brLen, h), Offset(w, h), brStroke, StrokeCap.Round)
+                    drawLine(brColor, Offset(w, h - brLen), Offset(w, h), brStroke, StrokeCap.Round)
+                }
+
+                else -> {
+                    // 8. Postage Stamp / Vintage Ticket Stub: Scalloped/perforated edge cutout & ink postmark watermark
+                    drawRoundRect(
+                        color = Color(0xFFFFF8E1),
+                        topLeft = Offset.Zero,
+                        size = Size(w, h),
+                        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                    )
+                    drawRoundRect(
+                        color = DoodleColors.InkBlack,
+                        topLeft = Offset.Zero,
+                        size = Size(w, h),
+                        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
+                        style = Stroke(width = 2.2.dp.toPx())
+                    )
+                    // Inner vintage ticket border
+                    val inset = 6.dp.toPx()
+                    drawRoundRect(
+                        color = Color(0xFF8D6E63),
+                        topLeft = Offset(inset, inset),
+                        size = Size(w - inset * 2f, h - inset * 2f),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                        style = Stroke(width = 1.2.dp.toPx())
+                    )
+                    // Semicircular perforated notches along edges
+                    val notchR = 4.dp.toPx()
+                    val notchSpacing = 18.dp.toPx()
+                    var nx = notchSpacing
+                    while (nx < w - notchSpacing * 0.6f) {
+                        drawCircle(DoodleColors.PaperOffWhite, notchR, Offset(nx, 0f))
+                        drawCircle(DoodleColors.InkBlack, notchR, Offset(nx, 0f), style = Stroke(width = 1.4.dp.toPx()))
+                        drawCircle(DoodleColors.PaperOffWhite, notchR, Offset(nx, h))
+                        drawCircle(DoodleColors.InkBlack, notchR, Offset(nx, h), style = Stroke(width = 1.4.dp.toPx()))
+                        nx += notchSpacing
+                    }
+                    // Circular Postmark Watermark in bottom-right corner
+                    val pmCenter = Offset(w - 22.dp.toPx(), h - 20.dp.toPx())
+                    drawCircle(
+                        color = Color(0xFFD84315).copy(alpha = 0.22f),
+                        radius = 14.dp.toPx(),
+                        center = pmCenter,
+                        style = Stroke(width = 1.6.dp.toPx())
+                    )
+                    drawCircle(
+                        color = Color(0xFFD84315).copy(alpha = 0.22f),
+                        radius = 10.dp.toPx(),
+                        center = pmCenter,
+                        style = Stroke(width = 1.1.dp.toPx())
+                    )
+                }
+            }
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 10.dp)
+        ) {
+            // Category Badge inside the Doodle Clue Card
+            SketchyContainer(
+                fillColor = categoryBgColor,
+                borderColor = if (isDarkBlueprint) Color(0xFF00E5FF) else DoodleColors.InkBlack,
+                cornerRadius = 9.dp,
+                strokeWidth = 1.4.dp,
+                shadowOffset = 1.2.dp,
+                modifier = Modifier
+                    .padding(bottom = 5.dp)
+                    .testTag("category_badge")
+            ) {
+                Text(
+                    text = "📂 $category",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 9.5.sp,
+                    color = if (isDarkBlueprint) Color(0xFF80D8FF) else DoodleColors.InkBlack,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                )
+            }
+
+            Text(
+                text = clue,
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.5.sp,
+                lineHeight = 18.sp,
+                color = if (isDarkBlueprint) Color.White else DoodleColors.InkBlack,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag("clue_text")
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawFeverModeOverdriveBorder(
+    comboCount: Int,
+    phase: Float,
+    rankTier: RankTier
+) {
+    val w = size.width
+    val h = size.height
+    val isMaxOverdrive = comboCount >= 5
+    val pulse = 0.65f + 0.35f * sin(phase * 2f)
+    val strokeW = (if (isMaxOverdrive) 7.dp else 5.dp).toPx() * (0.85f + 0.3f * pulse)
+
+    val rainbowColors = if (isMaxOverdrive) {
+        listOf(
+            Color(0xFFFFD700),
+            Color(0xFFFF1744),
+            Color(0xFFD500F9),
+            Color(0xFF00E5FF),
+            Color(0xFF00E676),
+            Color(0xFFFFD700)
+        )
+    } else {
+        listOf(
+            Color(0xFFFFD700),
+            rankTier.auraPrimary,
+            Color(0xFFFF6D00),
+            Color(0xFFFFD700)
+        )
+    }
+
+    // Outer glowing aura wash around the entire screen edges
+    val inset = 4.dp.toPx()
+    drawRoundRect(
+        brush = Brush.sweepGradient(
+            colors = rainbowColors,
+            center = Offset(w * 0.5f, h * 0.5f)
+        ),
+        topLeft = Offset(inset, inset),
+        size = Size(w - inset * 2f, h - inset * 2f),
+        cornerRadius = CornerRadius(18.dp.toPx(), 18.dp.toPx()),
+        alpha = 0.78f,
+        style = Stroke(width = strokeW)
+    )
+
+    // Crisp sketchy inner ink line
+    drawRoundRect(
+        color = DoodleColors.InkBlack.copy(alpha = 0.65f),
+        topLeft = Offset(inset + 2.dp.toPx(), inset + 2.dp.toPx()),
+        size = Size(w - (inset + 2.dp.toPx()) * 2f, h - (inset + 2.dp.toPx()) * 2f),
+        cornerRadius = CornerRadius(16.dp.toPx(), 16.dp.toPx()),
+        style = Stroke(
+            width = 1.6.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 10f), phase * 24f)
+        )
+    )
+}
+
+private fun DrawScope.drawFlyingBezierStarCoinsToCounter(
+    overallProgress: Float,
+    rankTier: RankTier
+) {
+    val w = size.width
+    val h = size.height
+    // Start near the Stickman in the left Peril scene; curve up to the top-right [ ⭐ ] Star Counter
+    val startPos = Offset(w * 0.26f, h * 0.28f)
+    val targetPos = Offset(w * 0.88f, h * 0.045f)
+
+    for (i in 0 until 5) {
+        val stagger = i * 0.09f
+        val localT = ((overallProgress - stagger) / (1f - 4 * 0.09f)).coerceIn(0f, 1f)
+        if (localT <= 0f || localT >= 1f) continue
+
+        // Quadratic Bezier control point arcing high across the notebook
+        val ctrlX = w * (0.35f + i * 0.06f)
+        val ctrlY = h * (0.04f - (i % 2) * 0.03f)
+        val oneMinusT = 1f - localT
+        val bx = oneMinusT * oneMinusT * startPos.x +
+            2f * oneMinusT * localT * ctrlX +
+            localT * localT * targetPos.x
+        val by = oneMinusT * oneMinusT * startPos.y +
+            2f * oneMinusT * localT * ctrlY +
+            localT * localT * targetPos.y
+
+        val coinRadius = 11.dp.toPx() * (0.85f + 0.25f * sin(localT * PI.toFloat()))
+        val spinScaleX = cos((localT * 4f + i * 0.4f) * PI).toFloat().let {
+            if (abs(it) < 0.25f) 0.25f else abs(it)
+        }
+
+        // Glowing trail spark
+        drawCircle(
+            color = rankTier.auraPrimary.copy(alpha = 0.45f * (1f - localT)),
+            radius = coinRadius * 1.45f,
+            center = Offset(bx, by)
+        )
+
+        withTransform({
+            scale(scaleX = spinScaleX, scaleY = 1f, pivot = Offset(bx, by))
+        }) {
+            drawCircle(
+                color = Color(0xFFFFD700),
+                radius = coinRadius,
+                center = Offset(bx, by)
+            )
+            drawCircle(
+                color = Color(0xFFFFF59D),
+                radius = coinRadius * 0.72f,
+                center = Offset(bx, by)
+            )
+            drawCircle(
+                color = DoodleColors.InkBlack,
+                radius = coinRadius,
+                center = Offset(bx, by),
+                style = Stroke(width = 2.dp.toPx())
+            )
+            // Inner 5-point star emblem on the spinning coin
+            val starPath = Path().apply {
+                for (p in 0 until 10) {
+                    val ang = (-90.0 + p * 36.0) * (PI / 180.0)
+                    val r = if (p % 2 == 0) coinRadius * 0.55f else coinRadius * 0.24f
+                    val sx = bx + cos(ang).toFloat() * r
+                    val sy = by + sin(ang).toFloat() * r
+                    if (p == 0) moveTo(sx, sy) else lineTo(sx, sy)
+                }
+                close()
+            }
+            drawPath(starPath, Color(0xFFFF8F00))
+            drawPath(starPath, DoodleColors.InkBlack, style = Stroke(width = 1.dp.toPx()))
         }
     }
 }
@@ -7442,6 +8310,7 @@ private fun TacticalStarPowerUpButton(
 
 // ============================================================================
 // REAL-TIME "KI COMBO" SPEED METER & OVERDRIVE FUSE BAR (Right Above Keyboard)
+// Twice as thick (22.dp track height) with a glowing animated flame tip & rhythmic bounce!
 // ============================================================================
 
 @Composable
@@ -7461,6 +8330,17 @@ fun KiComboSpeedMeterBar(
         label = "kiComboFuseWidth"
     )
 
+    val flameInfinite = rememberInfiniteTransition(label = "kiFuseFlameTransition")
+    val flamePhase by flameInfinite.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 420, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "flamePhase"
+    )
+
     val popupAnim = remember { Animatable(1f) }
     LaunchedEffect(comboPopupTrigger) {
         if (comboPopupTrigger > 0) {
@@ -7473,6 +8353,7 @@ fun KiComboSpeedMeterBar(
     }
 
     val isOverdrive = comboCount >= 5
+    val isFever = comboCount >= 3
     val barColor = when {
         comboCount >= 5 -> Color(0xFFFF1744) // MAX OVERDRIVE crimson-gold
         comboCount == 4 -> Color(0xFFFF6D00)
@@ -7491,6 +8372,13 @@ fun KiComboSpeedMeterBar(
         else -> "⚡ KI FUSE (Guess fast for 3-Streak Pushback!)"
     }
 
+    // Rhythmic bounce on every frame when in x3..x5 Fever Mode!
+    val comboTextBounceScale = if (isFever) {
+        1.0f + abs(sin(flamePhase)) * (if (isOverdrive) 0.16f else 0.10f)
+    } else {
+        1.0f
+    }
+
     val streakMod = consecutiveFastStreak % 3
     val secondsLeft = (fuseFraction * 4.0f)
 
@@ -7502,19 +8390,19 @@ fun KiComboSpeedMeterBar(
             .testTag("ki_combo_fuse_bar")
     ) {
         SketchyContainer(
-            fillColor = if (isOverdrive) Color(0xFFFFF8E1) else Color.White,
+            fillColor = if (isFever) Color(0xFFFFF8E1) else Color.White,
             borderColor = if (comboCount >= 2) barColor else DoodleColors.InkBlack,
-            cornerRadius = 12.dp,
-            strokeWidth = if (isOverdrive) 2.2.dp else 1.6.dp,
-            shadowOffset = 1.5.dp,
+            cornerRadius = 14.dp,
+            strokeWidth = if (isFever) 2.4.dp else 1.8.dp,
+            shadowOffset = 2.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(38.dp)
+                .height(48.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 10.dp, vertical = 3.dp),
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
@@ -7526,9 +8414,11 @@ fun KiComboSpeedMeterBar(
                         text = comboLabel,
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Black,
-                        fontSize = 11.sp,
+                        fontSize = 11.5.sp,
                         color = if (comboCount >= 3) DoodleColors.WrongRed else DoodleColors.InkBlack,
-                        modifier = Modifier.testTag("ki_combo_label")
+                        modifier = Modifier
+                            .scale(comboTextBounceScale)
+                            .testTag("ki_combo_label")
                     )
 
                     // 3-Streak Counter-Pushback Pips + Timer Countdown
@@ -7570,19 +8460,19 @@ fun KiComboSpeedMeterBar(
                     }
                 }
 
-                // Sleek Sketchy Horizontal Decaying Fuse Track
+                // Twice as thick (22.dp) Ki Speed Fuse Track with a glowing animated flame tip at the leading edge!
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(9.dp)
-                        .clip(RoundedCornerShape(5.dp))
+                        .height(22.dp)
+                        .clip(RoundedCornerShape(11.dp))
                         .background(Color(0xFFECEFF1))
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .fillMaxWidth(animatedFuse)
-                            .clip(RoundedCornerShape(5.dp))
+                            .clip(RoundedCornerShape(11.dp))
                             .background(
                                 brush = Brush.horizontalGradient(
                                     colors = listOf(
@@ -7593,20 +8483,48 @@ fun KiComboSpeedMeterBar(
                                 )
                             )
                     )
-                    // Burning fuse spark at the tip of the decaying bar
-                    if (animatedFuse > 0.03f) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val sparkX = (size.width * animatedFuse).coerceIn(4.dp.toPx(), size.width - 4.dp.toPx())
-                            val sparkY = size.height * 0.5f
+                    // Sketchy border & animated flame tip at the leading edge of the progress bar
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawRoundRect(
+                            color = DoodleColors.InkBlack,
+                            size = size,
+                            cornerRadius = CornerRadius(11.dp.toPx(), 11.dp.toPx()),
+                            style = Stroke(width = 1.5.dp.toPx())
+                        )
+                        if (animatedFuse > 0.02f) {
+                            val tipX = (size.width * animatedFuse).coerceIn(8.dp.toPx(), size.width - 8.dp.toPx())
+                            val tipY = size.height * 0.5f
+                            val flicker = sin(flamePhase * 2f) * 3.dp.toPx()
+
+                            // Outer glowing flame halo
                             drawCircle(
-                                color = Color(0xFFFFF59D),
-                                radius = 5.5.dp.toPx(),
-                                center = Offset(sparkX, sparkY)
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White,
+                                        Color(0xFFFFEA00),
+                                        Color(0xFFFF3D00),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(tipX, tipY),
+                                    radius = 12.dp.toPx() + abs(flicker)
+                                ),
+                                radius = 12.dp.toPx() + abs(flicker),
+                                center = Offset(tipX, tipY)
                             )
+                            // Multi-tongue animated flame tip
+                            val flamePath = Path().apply {
+                                moveTo(tipX - 8.dp.toPx(), tipY)
+                                quadraticTo(tipX - 2.dp.toPx(), tipY - 10.dp.toPx() - flicker, tipX + 7.dp.toPx(), tipY - 2.dp.toPx())
+                                quadraticTo(tipX + 2.dp.toPx(), tipY + 10.dp.toPx() + flicker, tipX - 8.dp.toPx(), tipY)
+                                close()
+                            }
+                            drawPath(flamePath, Color(0xFFFF6D00))
+                            drawCircle(Color(0xFFFFF59D), radius = 4.5.dp.toPx(), center = Offset(tipX, tipY))
                             drawCircle(
-                                color = DoodleColors.WrongRed,
-                                radius = 2.8.dp.toPx(),
-                                center = Offset(sparkX, sparkY)
+                                color = DoodleColors.InkBlack,
+                                radius = 5.5.dp.toPx(),
+                                center = Offset(tipX, tipY),
+                                style = Stroke(width = 1.2.dp.toPx())
                             )
                         }
                     }
@@ -7614,7 +8532,7 @@ fun KiComboSpeedMeterBar(
             }
         }
 
-        // Floating Comic Popup ("2x COMBO!", "3x SUPER!", "MAX OVERDRIVE!", "⚡ KI COUNTER-PUSHBACK! +10 ★")
+        // Floating Comic Popup ("2x COMBO!", "3x SUPER!", "MAX OVERDRIVE!", "💥 KI COUNTER-PUSHBACK! +10 ★")
         if (comboPopupText != null && comboPopupTrigger > 0 && popupAnim.value < 0.96f) {
             val p = popupAnim.value
             val popScale = when {
@@ -7633,7 +8551,7 @@ fun KiComboSpeedMeterBar(
                 strokeWidth = 2.dp,
                 shadowOffset = 2.dp,
                 modifier = Modifier
-                    .offset(y = (-24f - p * 18f).dp)
+                    .offset(y = (-26f - p * 18f).dp)
                     .scale(popScale)
                     .testTag("combo_comic_popup")
             ) {
@@ -7659,14 +8577,22 @@ fun WordLetterSlot(
     bossArmorHits: Int = 0,
     fontFamily: FontFamily
 ) {
-    val scale by animateFloatAsState(
-        targetValue = if (isRevealed) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "letterRevealScale"
-    )
+    // Slam in from 2.2f scale down to 1.0f with a bouncy spring animation when revealed!
+    val slamScale = remember(letter, slotIndex) { Animatable(if (isRevealed) 1f else 2.2f) }
+    LaunchedEffect(isRevealed) {
+        if (isRevealed) {
+            slamScale.snapTo(2.2f)
+            slamScale.animateTo(
+                targetValue = 1.0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioHighBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        } else {
+            slamScale.snapTo(2.2f)
+        }
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -7685,7 +8611,7 @@ fun WordLetterSlot(
                     fontWeight = FontWeight.Black,
                     fontSize = 25.sp,
                     color = if (slotIndex % 2 == 0) DoodleColors.CorrectGreen else DoodleColors.InkBlue,
-                    modifier = Modifier.scale(scale)
+                    modifier = Modifier.scale(slamScale.value)
                 )
             } else if (isBossArmorShielded) {
                 // Sketchy Boss Armor Plate over the second half of the word until shattered!
@@ -7741,7 +8667,7 @@ fun WordLetterSlot(
 
 // ============================================================================
 // 8. CUSTOM 4-ROW ALPHABETICAL KEYBOARD
-//    (WITH BOSS LOCKED/SLIME KEYS, CHAIN SHATTER FX, HINT SPARK GOLD, & ICE CUBES)
+//    (TACTILE 3D SKETCHY KEY CAPS + SPRING DEPRESSION + CONFETTI BURST)
 // ============================================================================
 
 @Composable
@@ -7862,14 +8788,51 @@ fun DoodleLetterKey(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val markScale by animateFloatAsState(
-        targetValue = if (status == KeyStatus.DEFAULT) 0f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "keyMarkScale"
-    )
+    // 3D Sketchy Key Cap physical depression (offsetY = +2.dp, scale 0.85f -> 1.15f -> 1.0f spring bounce)
+    // + 8 green/gold confetti particles bursting from the key when status becomes CORRECT!
+    val keyBounceScale = remember(letter) { Animatable(1f) }
+    val keyDepressY = remember(letter) { Animatable(0f) }
+    val confettiBurstProgress = remember(letter) { Animatable(1f) }
+
+    LaunchedEffect(status) {
+        if (status != KeyStatus.DEFAULT) {
+            launch {
+                keyDepressY.snapTo(2f)
+                keyDepressY.animateTo(
+                    targetValue = 0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                )
+            }
+            launch {
+                keyBounceScale.snapTo(0.85f)
+                keyBounceScale.animateTo(
+                    targetValue = 1.15f,
+                    animationSpec = tween(durationMillis = 95, easing = FastOutSlowInEasing)
+                )
+                keyBounceScale.animateTo(
+                    targetValue = 1.0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioHighBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                )
+            }
+            if (status == KeyStatus.CORRECT) {
+                confettiBurstProgress.snapTo(0f)
+                confettiBurstProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing)
+                )
+            }
+        } else {
+            keyBounceScale.snapTo(1f)
+            keyDepressY.snapTo(0f)
+            confettiBurstProgress.snapTo(1f)
+        }
+    }
 
     val sparkInfinite = rememberInfiniteTransition(label = "hintSparkTransition_$letter")
     val sparkPulse by sparkInfinite.animateFloat(
@@ -7882,11 +8845,29 @@ fun DoodleLetterKey(
         label = "sparkPulse_$letter"
     )
 
+    val tileFillColor = when {
+        status == KeyStatus.CORRECT -> Color(0xFF00C853) // Vibrant Emerald Green
+        status == KeyStatus.WRONG -> DoodleColors.WrongRed // Crimson Red
+        isChainedBossKey -> Color(0xFF37474F)
+        isHintSparked -> Color(0xFFFFF59D)
+        isFrozen -> Color(0xFFE1F5FE)
+        else -> Color.White
+    }
+    val tileBorderColor = when {
+        status == KeyStatus.CORRECT -> Color(0xFFFFD700) // Gold Border on Correct Guess!
+        status == KeyStatus.WRONG -> Color(0xFFB71C1C)
+        isHintSparked -> Color(0xFFFF6D00)
+        isFrozen -> DoodleColors.IceCubeBorder
+        else -> DoodleColors.InkBlack
+    }
+    val tileShadowOffset = if (status == KeyStatus.DEFAULT) 3.dp else 1.5.dp
+
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(keySize)
-            .clip(CircleShape)
+            .offset(y = keyDepressY.value.dp)
+            .scale(keyBounceScale.value)
             .clickable(
                 enabled = status == KeyStatus.DEFAULT,
                 onClick = onClick
@@ -7902,6 +8883,18 @@ fun DoodleLetterKey(
                 }
             }
     ) {
+        // Tactile 3D Sketchy Key Cap with 3.dp bottom ink shadow
+        SketchyContainer(
+            fillColor = tileFillColor,
+            borderColor = tileBorderColor,
+            cornerRadius = 11.dp,
+            strokeWidth = if (status == KeyStatus.CORRECT) 2.4.dp else 1.8.dp,
+            shadowOffset = tileShadowOffset,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(1.dp)
+        ) {}
+
         // Hint Spark (Cost: 20 Stars): Flashes the exact keyboard button in bright gold for 3 seconds!
         if (isHintSparked) {
             Canvas(
@@ -7920,7 +8913,6 @@ fun DoodleLetterKey(
                     radius = r,
                     style = Stroke(width = 2.4.dp.toPx())
                 )
-                // 4 golden spark rays
                 for (i in 0 until 4) {
                     val a = (i * 90.0 + sparkPulse * 35.0) * (PI / 180.0)
                     val sx = center.x + cos(a).toFloat() * (r * 0.72f)
@@ -7939,7 +8931,6 @@ fun DoodleLetterKey(
         }
 
         // Boss Locked/Slime Keys: Hides the letter label with a '?' and draws sketchy chains/ink blot
-        // until the player achieves a 2x combo!
         if (isChainedBossKey) {
             Canvas(
                 modifier = Modifier
@@ -7951,24 +8942,23 @@ fun DoodleLetterKey(
             }
         }
 
-        // Letter Text (Replaced with '?' when covered by Boss Chains/Ink Blots!)
+        // Letter Text (Crisp high-contrast white on Emerald Green / Crimson Red tiles)
         Text(
             text = if (isChainedBossKey) "?" else letter.toString(),
             fontFamily = fontFamily,
             fontWeight = FontWeight.Black,
-            fontSize = 24.sp,
+            fontSize = 21.sp,
             color = when {
                 isChainedBossKey -> Color.White
+                status == KeyStatus.CORRECT -> Color.White
+                status == KeyStatus.WRONG -> Color.White
                 isHintSparked -> DoodleColors.InkBlack
-                status == KeyStatus.CORRECT -> DoodleColors.CorrectGreen
-                status == KeyStatus.WRONG -> DoodleColors.InkBlack.copy(alpha = 0.55f)
                 isFrozen -> DoodleColors.IceCubeBorder
                 else -> DoodleColors.InkBlack
             }
         )
 
-        // Boss Level: Bomb dot is intentionally invisible on unguessed keys per user preference,
-        // while keeping the testTag for automated tests
+        // Boss Level: Bomb dot is intentionally invisible on unguessed keys while keeping testTag
         if (hasBombDot) {
             Box(
                 modifier = Modifier
@@ -7978,7 +8968,7 @@ fun DoodleLetterKey(
             )
         }
 
-        // Frozen Vowel Doodle Ice Cube Overlay (Levels 50+ until 3 consonants are guessed)
+        // Frozen Vowel Doodle Ice Cube Overlay
         if (isFrozen) {
             Canvas(
                 modifier = Modifier
@@ -7990,24 +8980,40 @@ fun DoodleLetterKey(
             }
         }
 
-        // Hand-drawn Green Circle or Red Cross (or Ki Blast Lightning Vaporize marks!)
-        if (status != KeyStatus.DEFAULT) {
+        // 8 Green/Gold Confetti Particles bursting from the key's coordinates on Correct Guess
+        // + Ki Vaporize Lightning Marks when vaporized by Ki Strike
+        if (status == KeyStatus.CORRECT && confettiBurstProgress.value < 0.98f) {
+            val p = confettiBurstProgress.value
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val cx = size.width * 0.5f
+                val cy = size.height * 0.5f
+                for (i in 0 until 8) {
+                    val angle = (i * 45.0 + 22.5) * (PI / 180.0)
+                    val dist = (6.dp.toPx() + p * 26.dp.toPx())
+                    val px = cx + cos(angle).toFloat() * dist
+                    val py = cy + sin(angle).toFloat() * dist
+                    val particleColor = if (i % 2 == 0) Color(0xFFFFD700) else Color(0xFF00E676)
+                    val particleR = (1f - p * 0.7f) * 3.8.dp.toPx()
+                    drawCircle(
+                        color = particleColor.copy(alpha = (1f - p).coerceIn(0f, 1f)),
+                        radius = particleR,
+                        center = Offset(px, py)
+                    )
+                    drawCircle(
+                        color = DoodleColors.InkBlack.copy(alpha = (1f - p).coerceIn(0f, 1f)),
+                        radius = particleR,
+                        center = Offset(px, py),
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+                }
+            }
+        } else if (status == KeyStatus.WRONG && isVaporizedByKi && kiBlastVaporizeTrigger > 0) {
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(4.dp)
-                    .scale(markScale)
             ) {
-                when (status) {
-                    KeyStatus.CORRECT -> drawHandDrawnGreenCircle()
-                    KeyStatus.WRONG -> {
-                        drawHandDrawnRedCross()
-                        if (isVaporizedByKi && kiBlastVaporizeTrigger > 0) {
-                            drawKiVaporizeLightningMarks()
-                        }
-                    }
-                    KeyStatus.DEFAULT -> Unit
-                }
+                drawKiVaporizeLightningMarks()
             }
         }
     }
@@ -8016,7 +9022,6 @@ fun DoodleLetterKey(
 private fun DrawScope.drawBossChainAndInkBlotOverlay() {
     val w = size.width
     val h = size.height
-    // Dark purple/black ink slime blot
     drawCircle(
         color = Color(0xFF263238).copy(alpha = 0.88f),
         radius = size.minDimension * 0.44f,
@@ -8027,7 +9032,6 @@ private fun DrawScope.drawBossChainAndInkBlotOverlay() {
         radius = size.minDimension * 0.34f,
         center = Offset(w * 0.44f, h * 0.45f)
     )
-    // Criss-crossing metallic doodle chains across the key
     val chainColor = Color(0xFFB0BEC5)
     drawLine(
         color = chainColor,
@@ -8070,14 +9074,12 @@ private fun DrawScope.drawDoodleIceCubeOverlay() {
     val w = size.width
     val h = size.height
     val r = 8.dp.toPx()
-    // Translucent cyan ice block
     drawRoundRect(
         color = DoodleColors.IceCubeCyan.copy(alpha = 0.52f),
         topLeft = Offset(w * 0.06f, h * 0.06f),
         size = Size(w * 0.88f, h * 0.88f),
         cornerRadius = CornerRadius(r, r)
     )
-    // Sketchy frost border
     drawRoundRect(
         color = DoodleColors.IceCubeBorder,
         topLeft = Offset(w * 0.06f, h * 0.06f),
@@ -8085,7 +9087,6 @@ private fun DrawScope.drawDoodleIceCubeOverlay() {
         cornerRadius = CornerRadius(r, r),
         style = Stroke(width = 2.dp.toPx())
     )
-    // Glossy white ice shine lines & frost crack
     drawLine(
         color = Color.White.copy(alpha = 0.85f),
         start = Offset(w * 0.20f, h * 0.26f),
@@ -8143,7 +9144,7 @@ private fun DrawScope.drawHandDrawnRedCross() {
 
 // ============================================================================
 // 10. DYNAMIC PERIL SCENE CANVAS
-//     (ALL 15 HAZARDS + ACTIVE STICKMAN KI ATTACKS + INK SHIELD + LAST-STAND)
+//     (ALL 15 HAZARDS + KI KAMEHAMEHA FIREBALL + PERIL HIT-STOP SQUASH + TIER AURA)
 // ============================================================================
 
 @Composable
@@ -8158,6 +9159,7 @@ fun DynamicPerilSceneCanvas(
     isMenuPreview: Boolean,
     fontFamily: FontFamily,
     rankTier: RankTier = RankTier.entries.first(),
+    comboCount: Int = 0,
     kiAttackTrigger: Int = 0,
     counterPushbackTrigger: Int = 0,
     inkShieldActive: Boolean = false,
@@ -8248,19 +9250,48 @@ fun DynamicPerilSceneCanvas(
         }
     }
 
-    // Active Stickman Ki Blast Projectile & 250ms Peril Hit Flash/Shake on every correct guess!
+    // High-Impact "Ki Kamehameha" Attack & Peril Hit-Stop Squash-Stretch Physics!
     val kiAttackProgress = remember { Animatable(1f) }
+    val perilSquashScaleX = remember { Animatable(1f) }
+    val perilSquashScaleY = remember { Animatable(1f) }
     LaunchedEffect(kiAttackTrigger) {
         if (kiAttackTrigger > 0) {
             kiAttackProgress.snapTo(0f)
-            kiAttackProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing)
-            )
+            launch {
+                kiAttackProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 460, easing = FastOutSlowInEasing)
+                )
+            }
+            // When the Ki Blast impacts the Peril (~110ms), scale-squash (scaleX = 1.25f, scaleY = 0.75f)
+            // and spring-bounce back to 1.0f with Spring.DampingRatioHighBouncy!
+            launch {
+                delay(105L)
+                perilSquashScaleX.snapTo(1.25f)
+                perilSquashScaleY.snapTo(0.75f)
+                launch {
+                    perilSquashScaleX.animateTo(
+                        targetValue = 1.0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioHighBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    )
+                }
+                launch {
+                    perilSquashScaleY.animateTo(
+                        targetValue = 1.0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioHighBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    )
+                }
+            }
         }
     }
 
-    // 3-Streak Ki Counter-Pushback Tier Aura Flash & Flying +10 Star Coins!
+    // 3-Streak Ki Counter-Pushback Tier Aura Flash!
     val pushbackProgress = remember { Animatable(1f) }
     LaunchedEffect(counterPushbackTrigger) {
         if (counterPushbackTrigger > 0) {
@@ -8284,167 +9315,201 @@ fun DynamicPerilSceneCanvas(
         }
     }
 
-    // Impact shake offset when taking damage OR when the Stickman's Ki Blast hits the Peril (250ms shake!)
+    // Impact shake offset when taking damage OR when the Stickman's Ki Blast hits the Peril!
     val damageShake = if (popTrigger > 0 && popProgress.value < 0.38f) {
         val intensity = (1f - popProgress.value / 0.38f) * 5f
         sin(popProgress.value * 55f) * intensity
     } else 0f
 
-    val perilKiHitShake = if (kiAttackTrigger > 0 && kiAttackProgress.value in 0.22f..0.88f) {
-        val localP = (kiAttackProgress.value - 0.22f) / 0.66f
-        val intensity = (1f - localP) * 5.5f
-        sin(localP * 68f) * intensity
+    val perilKiHitShake = if (kiAttackTrigger > 0 && kiAttackProgress.value in 0.20f..0.88f) {
+        val localP = (kiAttackProgress.value - 0.20f) / 0.68f
+        val intensity = (1f - localP) * 7.5f
+        sin(localP * 72f) * intensity
     } else 0f
+
+    val comicImpactWords = remember { listOf("*POW!*", "*ZAP!*", "*CRACK!*") }
+    val activeImpactWord = comicImpactWords[kiAttackTrigger.coerceAtLeast(0) % comicImpactWords.size]
 
     Box(modifier = modifier.offset(x = (damageShake + perilKiHitShake).dp)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            when (perilType) {
-                PerilType.SHARK_BALLOONS -> drawSharkBalloonsPeril(
-                    livesRemaining = livesRemaining,
-                    lastPoppedIndex = lastPoppedIndex,
-                    popTrigger = popTrigger,
-                    popProgress = popProgress.value,
-                    dangerProgress = effectiveDangerProgress,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    sharkPatrol = patrolPhase,
-                    isMenuPreview = isMenuPreview,
-                    isGameOver = isGameOver
-                )
+            val (stickmanPos, perilTargetPos) = resolveStickmanAndPerilPositions(
+                perilType = perilType,
+                dangerProgress = effectiveDangerProgress
+            )
 
-                PerilType.UFO_ABDUCTION -> drawUfoAbductionPeril(
-                    livesRemaining = livesRemaining,
-                    popTrigger = popTrigger,
-                    popProgress = popProgress.value,
-                    dangerProgress = effectiveDangerProgress,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    ufoSway = patrolPhase,
-                    isGameOver = isGameOver
-                )
+            // Active Stickman Tier Cosmic Aura right inside the peril scene when comboCount >= 2!
+            // Grows bigger and more intense from x2 up to x5 MAX OVERDRIVE!
+            if (!isMenuPreview && !isGameOver && comboCount >= 2) {
+                val comboIntensity = ((comboCount - 1).coerceIn(1, 4)) / 4f
+                val auraScale = 0.42f + comboIntensity * 0.36f
+                val auraPulse = 0.92f + 0.14f * sin(effectiveWavePhase * 3f)
+                withTransform({
+                    scale(scaleX = auraScale, scaleY = auraScale, pivot = stickmanPos)
+                }) {
+                    drawStickmanTierAura(
+                        currentTier = (rankTier.ordinal + 1).coerceIn(1, 20),
+                        rankTier = rankTier,
+                        center = stickmanPos,
+                        groundY = stickmanPos.y + 42.dp.toPx(),
+                        time = effectiveWavePhase,
+                        phase = (effectiveWavePhase / (2f * PI.toFloat())).coerceIn(0f, 1f),
+                        pulse = auraPulse,
+                        surgeMultiplier = 1f + comboIntensity * 0.85f
+                    )
+                }
+            }
 
-                PerilType.VOLCANO_BLOCKS -> drawVolcanoBlocksPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    popTrigger = popTrigger,
-                    popProgress = popProgress.value,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
+            // Apply spring squash-stretch physics around the Peril target position on Ki Blast impact!
+            withTransform({
+                scale(
+                    scaleX = perilSquashScaleX.value,
+                    scaleY = perilSquashScaleY.value,
+                    pivot = perilTargetPos
                 )
+            }) {
+                when (perilType) {
+                    PerilType.SHARK_BALLOONS -> drawSharkBalloonsPeril(
+                        livesRemaining = livesRemaining,
+                        lastPoppedIndex = lastPoppedIndex,
+                        popTrigger = popTrigger,
+                        popProgress = popProgress.value,
+                        dangerProgress = effectiveDangerProgress,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        sharkPatrol = patrolPhase,
+                        isMenuPreview = isMenuPreview,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.GIANT_VENUS_FLYTRAP -> drawVenusFlytrapPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    popTrigger = popTrigger,
-                    popProgress = popProgress.value,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.UFO_ABDUCTION -> drawUfoAbductionPeril(
+                        livesRemaining = livesRemaining,
+                        popTrigger = popTrigger,
+                        popProgress = popProgress.value,
+                        dangerProgress = effectiveDangerProgress,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        ufoSway = patrolPhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.DINO_STEALTH -> drawDinoStealthPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    popTrigger = popTrigger,
-                    popProgress = popProgress.value,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.VOLCANO_BLOCKS -> drawVolcanoBlocksPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        popTrigger = popTrigger,
+                        popProgress = popProgress.value,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.LEAKY_SUBMARINE -> drawLeakySubmarinePeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    popTrigger = popTrigger,
-                    popProgress = popProgress.value,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.GIANT_VENUS_FLYTRAP -> drawVenusFlytrapPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        popTrigger = popTrigger,
+                        popProgress = popProgress.value,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.TIGHTROPE_SAW -> drawTightropeSawPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.DINO_STEALTH -> drawDinoStealthPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        popTrigger = popTrigger,
+                        popProgress = popProgress.value,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.METEOR_SHOWER -> drawMeteorShowerPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.LEAKY_SUBMARINE -> drawLeakySubmarinePeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        popTrigger = popTrigger,
+                        popProgress = popProgress.value,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.MAD_SCIENTIST_POTION -> drawMadScientistPotionPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.TIGHTROPE_SAW -> drawTightropeSawPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.PIRATE_PLANK -> drawPiratePlankPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.METEOR_SHOWER -> drawMeteorShowerPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.SPIDER_WEB -> drawSpiderWebPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.MAD_SCIENTIST_POTION -> drawMadScientistPotionPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.QUICKSAND_PIT -> drawQuicksandPitPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.PIRATE_PLANK -> drawPiratePlankPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.GHOST_MANOR -> drawGhostManorPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.SPIDER_WEB -> drawSpiderWebPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.TICKING_TIME_BOMB -> drawTickingTimeBombPeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.QUICKSAND_PIT -> drawQuicksandPitPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
 
-                PerilType.DRAGON_CAVE -> drawDragonCavePeril(
-                    livesRemaining = livesRemaining,
-                    animatedLives = effectiveAnimatedLives,
-                    bobOffset = effectiveBobOffset,
-                    wavePhase = effectiveWavePhase,
-                    isGameOver = isGameOver
-                )
+                    PerilType.GHOST_MANOR -> drawGhostManorPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
+
+                    PerilType.TICKING_TIME_BOMB -> drawTickingTimeBombPeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
+
+                    PerilType.DRAGON_CAVE -> drawDragonCavePeril(
+                        livesRemaining = livesRemaining,
+                        animatedLives = effectiveAnimatedLives,
+                        bobOffset = effectiveBobOffset,
+                        wavePhase = effectiveWavePhase,
+                        isGameOver = isGameOver
+                    )
+                }
             }
 
             // =================================================================
             // ACTIVE STICKMAN VS. PERIL COMBAT OVERLAY FX (Gameplay Mode Only)
             // =================================================================
             if (!isMenuPreview && !isGameOver) {
-                val (stickmanPos, perilTargetPos) = resolveStickmanAndPerilPositions(
-                    perilType = perilType,
-                    dangerProgress = effectiveDangerProgress
-                )
-
                 // A. Last-Stand Danger Mode (1 mistake left): Desperate flickering aura & sweat drops!
                 if (isLastStand) {
                     drawStickmanLastStandSweatAndAura(
@@ -8474,7 +9539,8 @@ fun DynamicPerilSceneCanvas(
                     )
                 }
 
-                // D. Stickman Ki Blast Projectile + Energy Shockwave + 250ms Peril White Flash on Correct Guess!
+                // D. High-Impact "Ki Kamehameha" Laser Beam + Giant Fireball (18.dp core + 32.dp outer halo)
+                //    + 150ms Bright White/Red Peril Hit-Flash + 20 Radial Comic Impact Sparks!
                 if (kiAttackTrigger > 0 && kiAttackProgress.value < 0.98f) {
                     drawStickmanKiBlastAttack(
                         stickmanPos = stickmanPos,
@@ -8484,7 +9550,7 @@ fun DynamicPerilSceneCanvas(
                     )
                 }
 
-                // E. 3-Streak "KI COUNTER-PUSHBACK!" Tier Aura Burst + Flying Star Coins!
+                // E. 3-Streak "KI COUNTER-PUSHBACK!" Tier Aura Burst!
                 if (counterPushbackTrigger > 0 && pushbackProgress.value < 0.98f) {
                     drawKiCounterPushbackBurst(
                         stickmanPos = stickmanPos,
@@ -8492,6 +9558,55 @@ fun DynamicPerilSceneCanvas(
                         progress = pushbackProgress.value,
                         rankTier = rankTier
                     )
+                }
+            }
+        }
+
+        // Bold Black-Outlined Comic Impact Badge (*POW!*, *ZAP!*, *CRACK!*) when Ki Kamehameha hits the Peril!
+        if (!isMenuPreview && !isGameOver && kiAttackTrigger > 0 && kiAttackProgress.value in 0.22f..0.90f) {
+            val impactLocal = ((kiAttackProgress.value - 0.22f) / 0.68f).coerceIn(0f, 1f)
+            val badgeScale = when {
+                impactLocal < 0.25f -> 0.6f + (impactLocal / 0.25f) * 0.65f
+                else -> 1.25f - ((impactLocal - 0.25f) / 0.75f) * 0.35f
+            }
+            val badgeAlpha = (1f - ((impactLocal - 0.55f).coerceAtLeast(0f) / 0.45f)).coerceIn(0f, 1f)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(y = (-12f - impactLocal * 22f).dp)
+                    .scale(badgeScale)
+            ) {
+                SketchyContainer(
+                    fillColor = Color(0xFFFFD600).copy(alpha = badgeAlpha),
+                    borderColor = DoodleColors.InkBlack.copy(alpha = badgeAlpha),
+                    cornerRadius = 12.dp,
+                    strokeWidth = 2.6.dp,
+                    shadowOffset = 2.5.dp
+                ) {
+                    // Bold black-outlined comic impact text (NEVER pale yellow text without black outline!)
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = activeImpactWord,
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                            style = TextStyle(
+                                color = DoodleColors.InkBlack.copy(alpha = badgeAlpha),
+                                drawStyle = Stroke(width = 5f, join = StrokeJoin.Round)
+                            )
+                        )
+                        Text(
+                            text = activeImpactWord,
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                            color = Color(0xFFD50000).copy(alpha = badgeAlpha)
+                        )
+                    }
                 }
             }
         }
@@ -8523,31 +9638,45 @@ fun DynamicPerilSceneCanvas(
             }
         }
 
-        // Floating "+1 ❤️ REVERSED! +10 ★" during Ki Counter-Pushback!
+        // Bold Black-Outlined Comic Badge during Ki Counter-Pushback inside the Peril Scene!
         if (counterPushbackTrigger > 0 && pushbackProgress.value < 0.92f) {
             val p = pushbackProgress.value
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+            val alpha = (1f - p).coerceIn(0f, 1f)
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .offset(y = (-18 - (p * 38)).dp)
-                    .scale(1f + (1f - p) * 0.28f)
+                    .offset(y = (-18 - (p * 34)).dp)
+                    .scale(1f + (1f - p) * 0.24f)
                     .testTag("counter_pushback_floating_label")
             ) {
-                Text(
-                    text = "⚡ KI COUNTER-PUSHBACK!",
-                    fontFamily = fontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 13.sp,
-                    color = rankTier.auraPrimary.copy(alpha = (1f - p).coerceIn(0f, 1f))
-                )
-                Text(
-                    text = "+1 ❤️ HEALED  •  +10 ★",
-                    fontFamily = fontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 12.sp,
-                    color = DoodleColors.CorrectGreen.copy(alpha = (1f - p).coerceIn(0f, 1f))
-                )
+                SketchyContainer(
+                    fillColor = Color(0xFFFFF176).copy(alpha = alpha),
+                    borderColor = DoodleColors.InkBlack.copy(alpha = alpha),
+                    cornerRadius = 12.dp,
+                    strokeWidth = 2.2.dp,
+                    shadowOffset = 2.dp
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "💥 KI COUNTER-PUSHBACK!",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.5.sp,
+                            color = DoodleColors.InkBlack.copy(alpha = alpha)
+                        )
+                        Text(
+                            text = "+1 ❤️ HEALED  •  +10 ★",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 10.5.sp,
+                            color = Color(0xFF1B5E20).copy(alpha = alpha)
+                        )
+                    }
+                }
             }
         }
 
@@ -8649,7 +9778,6 @@ private fun DrawScope.drawStickmanLastStandSweatAndAura(
     wavePhase: Float,
     rankTier: RankTier
 ) {
-    // Desperate flickering crimson + tier aura around the stickman
     val flicker = 0.55f + 0.45f * abs(sin(wavePhase * 3.2f))
     val auraR = 26.dp.toPx() * (0.9f + 0.25f * flicker)
     drawCircle(
@@ -8666,7 +9794,6 @@ private fun DrawScope.drawStickmanLastStandSweatAndAura(
         center = stickmanPos
     )
 
-    // Jagged desperate aura spikes
     val spikePath = Path()
     val spikes = 12
     for (i in 0 until spikes) {
@@ -8683,7 +9810,6 @@ private fun DrawScope.drawStickmanLastStandSweatAndAura(
         style = Stroke(width = 1.8.dp.toPx(), join = StrokeJoin.Round)
     )
 
-    // Flying panic sweat drops from the stickman's head!
     for (i in 0..2) {
         val side = if (i % 2 == 0) -1f else 1f
         val dropPhase = ((wavePhase * 1.4f + i * 1.1f) % (2f * PI.toFloat())) / (2f * PI.toFloat())
@@ -8727,7 +9853,6 @@ private fun DrawScope.drawStickmanInkShieldBubble(
         center = stickmanPos,
         style = Stroke(width = 2.2.dp.toPx())
     )
-    // Sketchy rotating shield arcs
     for (i in 0 until 3) {
         val startAngle = (wavePhase * 57.3f + i * 120f) % 360f
         drawArc(
@@ -8742,99 +9867,170 @@ private fun DrawScope.drawStickmanInkShieldBubble(
     }
 }
 
+/**
+ * High-Impact "Ki Kamehameha" Attack:
+ * - Momentary sketchy Kamehameha laser beam + Multi-layered Giant Ki Fireball
+ *   (18.dp core + 32.dp glowing outer halo + trailing spark particles)
+ * - 150ms bright white/red Peril Hit-Flash + 20 radial comic impact sparks!
+ */
 private fun DrawScope.drawStickmanKiBlastAttack(
     stickmanPos: Offset,
     perilPos: Offset,
     progress: Float,
     rankTier: RankTier
 ) {
-    val travelT = (progress / 0.55f).coerceIn(0f, 1f)
+    val travelT = (progress / 0.48f).coerceIn(0f, 1f)
     val currX = stickmanPos.x + (perilPos.x - stickmanPos.x) * travelT
     val currY = stickmanPos.y + (perilPos.y - stickmanPos.y) * travelT
     val blastPos = Offset(currX, currY)
 
-    // 1. Stickman launch shockwave ring
-    if (progress < 0.5f) {
-        val ringP = progress / 0.5f
+    // 1. Stickman launch shockwave ring & muzzle flash
+    if (progress < 0.55f) {
+        val ringP = (progress / 0.55f).coerceIn(0f, 1f)
         drawCircle(
-            color = rankTier.auraPrimary.copy(alpha = (1f - ringP) * 0.8f),
-            radius = (10.dp.toPx() + ringP * 28.dp.toPx()),
+            color = rankTier.auraPrimary.copy(alpha = (1f - ringP) * 0.88f),
+            radius = (12.dp.toPx() + ringP * 32.dp.toPx()),
             center = stickmanPos,
-            style = Stroke(width = 2.6.dp.toPx())
+            style = Stroke(width = 3.2.dp.toPx())
         )
     }
 
-    // 2. Sketchy Ki Energy Beam trail + Projectile Orb flying from Stickman to Peril
-    if (progress < 0.65f) {
+    // 2. Thick Glowing Sketchy Kamehameha Laser Beam + Giant Multi-Layered Ki Fireball (18.dp core + 32.dp outer halo + trailing sparks)
+    if (progress < 0.72f) {
+        val beamAlpha = if (progress < 0.45f) 1f else ((0.72f - progress) / 0.27f).coerceIn(0f, 1f)
+        // Outer Kamehameha energy beam glow
         drawLine(
             brush = Brush.linearGradient(
                 colors = listOf(
-                    Color.Transparent,
-                    rankTier.auraSecondary.copy(alpha = 0.65f),
-                    rankTier.auraPrimary
+                    rankTier.auraSecondary.copy(alpha = 0.45f * beamAlpha),
+                    rankTier.auraPrimary.copy(alpha = 0.85f * beamAlpha),
+                    Color(0xFFFFD600).copy(alpha = 0.95f * beamAlpha)
                 ),
                 start = stickmanPos,
                 end = blastPos
             ),
             start = stickmanPos,
             end = blastPos,
-            strokeWidth = 6.dp.toPx(),
+            strokeWidth = 18.dp.toPx(),
             cap = StrokeCap.Round
         )
-        drawCircle(
-            color = rankTier.auraPrimary,
-            radius = 9.dp.toPx(),
-            center = blastPos
+        // Inner white-hot Kamehameha laser core
+        drawLine(
+            color = Color.White.copy(alpha = 0.95f * beamAlpha),
+            start = stickmanPos,
+            end = blastPos,
+            strokeWidth = 8.dp.toPx(),
+            cap = StrokeCap.Round
         )
-        drawCircle(
-            color = Color.White,
-            radius = 5.dp.toPx(),
-            center = blastPos
-        )
-        drawCircle(
-            color = DoodleColors.InkBlack,
-            radius = 9.dp.toPx(),
-            center = blastPos,
-            style = Stroke(width = 1.8.dp.toPx())
-        )
-    }
 
-    // 3. Peril White Flash & Energy Shockwave Impact (250ms impact window!)
-    if (progress >= 0.25f) {
-        val impactP = ((progress - 0.25f) / 0.75f).coerceIn(0f, 1f)
-        val flashAlpha = (1f - impactP).coerceIn(0f, 1f)
-        val flashR = (22.dp.toPx() + impactP * 44.dp.toPx())
+        // Trailing spark particles along the Kamehameha beam
+        for (s in 0 until 7) {
+            val frac = ((s + 1f) / 8f) * travelT
+            val sx = stickmanPos.x + (perilPos.x - stickmanPos.x) * frac + sin(progress * 25f + s * 2f) * 9.dp.toPx()
+            val sy = stickmanPos.y + (perilPos.y - stickmanPos.y) * frac + cos(progress * 25f + s * 2f) * 9.dp.toPx()
+            val sparkR = (3.8f - (s % 2) * 1.1f).dp.toPx()
+            drawCircle(
+                color = if (s % 2 == 0) Color(0xFFFFEA00).copy(alpha = beamAlpha)
+                else rankTier.auraPrimary.copy(alpha = beamAlpha),
+                radius = sparkR,
+                center = Offset(sx, sy)
+            )
+            drawCircle(
+                color = DoodleColors.InkBlack.copy(alpha = beamAlpha),
+                radius = sparkR,
+                center = Offset(sx, sy),
+                style = Stroke(width = 1.dp.toPx())
+            )
+        }
 
-        // Bright white hit flash over the Peril drawing
+        // Giant Fireball: 32.dp glowing outer halo
+        val outerHaloRadius = 16.dp.toPx() // 32.dp diameter outer halo
+        val innerCoreRadius = 9.dp.toPx()  // 18.dp diameter fireball core
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    Color.White.copy(alpha = 0.92f * flashAlpha),
-                    rankTier.auraPrimary.copy(alpha = 0.65f * flashAlpha),
+                    Color.White.copy(alpha = beamAlpha),
+                    Color(0xFFFFEA00).copy(alpha = 0.92f * beamAlpha),
+                    rankTier.auraPrimary.copy(alpha = 0.78f * beamAlpha),
+                    Color(0xFFFF3D00).copy(alpha = 0.45f * beamAlpha),
                     Color.Transparent
                 ),
-                center = perilPos,
-                radius = flashR
+                center = blastPos,
+                radius = outerHaloRadius * 1.25f
             ),
-            radius = flashR,
-            center = perilPos
+            radius = outerHaloRadius * 1.25f,
+            center = blastPos
         )
+        // 18.dp vibrant fireball core + crisp ink outline
+        drawCircle(
+            color = Color(0xFFFFD600).copy(alpha = beamAlpha),
+            radius = innerCoreRadius,
+            center = blastPos
+        )
+        drawCircle(
+            color = Color.White.copy(alpha = beamAlpha),
+            radius = innerCoreRadius * 0.62f,
+            center = blastPos
+        )
+        drawCircle(
+            color = DoodleColors.InkBlack.copy(alpha = beamAlpha),
+            radius = innerCoreRadius,
+            center = blastPos,
+            style = Stroke(width = 2.2.dp.toPx())
+        )
+    }
 
-        // Sketchy comic impact starburst lines on the Peril
-        for (i in 0 until 8) {
-            val angle = (i * 45.0 + 15.0) * (PI / 180.0)
-            val inner = 8.dp.toPx() + impactP * 14.dp.toPx()
-            val outer = 20.dp.toPx() + impactP * 34.dp.toPx()
+    // 3. Peril Hit-Flash (150ms bright white/red silhouette flash) + 20 Radial Comic Impact Sparks!
+    if (progress >= 0.22f) {
+        val impactP = ((progress - 0.22f) / 0.78f).coerceIn(0f, 1f)
+        // Intense 150ms white/red flash right on impact (first ~35% of impact window)
+        val hitFlashIntensity = if (impactP < 0.42f) (1f - impactP / 0.42f) else 0f
+        if (hitFlashIntensity > 0.01f) {
+            val flashRadius = 34.dp.toPx() + (1f - hitFlashIntensity) * 24.dp.toPx()
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.96f * hitFlashIntensity),
+                        Color(0xFFFF1744).copy(alpha = 0.82f * hitFlashIntensity),
+                        Color(0xFFFFD600).copy(alpha = 0.55f * hitFlashIntensity),
+                        Color.Transparent
+                    ),
+                    center = perilPos,
+                    radius = flashRadius
+                ),
+                radius = flashRadius,
+                center = perilPos
+            )
+        }
+
+        // 20 Radial Comic Impact Sparks bursting outward from the Peril!
+        val sparkAlpha = (1f - impactP).coerceIn(0f, 1f)
+        for (i in 0 until 20) {
+            val angle = (i * 18.0 + (i % 2) * 5.0) * (PI / 180.0)
+            val inner = 10.dp.toPx() + impactP * 20.dp.toPx()
+            val outer = (if (i % 2 == 0) 28.dp else 21.dp).toPx() + impactP * 42.dp.toPx()
             val sx = perilPos.x + cos(angle).toFloat() * inner
             val sy = perilPos.y + sin(angle).toFloat() * inner
             val ex = perilPos.x + cos(angle).toFloat() * outer
             val ey = perilPos.y + sin(angle).toFloat() * outer
+            val sparkColor = when (i % 3) {
+                0 -> Color(0xFFFF1744)
+                1 -> Color(0xFFFFD600)
+                else -> Color.White
+            }
+            // Black outline under each comic impact ray so it never looks washed-out
             drawLine(
-                color = if (i % 2 == 0) Color.White.copy(alpha = flashAlpha)
-                else DoodleColors.InkBlack.copy(alpha = flashAlpha),
+                color = DoodleColors.InkBlack.copy(alpha = sparkAlpha),
                 start = Offset(sx, sy),
                 end = Offset(ex, ey),
-                strokeWidth = 2.4.dp.toPx(),
+                strokeWidth = 4.2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = sparkColor.copy(alpha = sparkAlpha),
+                start = Offset(sx, sy),
+                end = Offset(ex, ey),
+                strokeWidth = 2.2.dp.toPx(),
                 cap = StrokeCap.Round
             )
         }

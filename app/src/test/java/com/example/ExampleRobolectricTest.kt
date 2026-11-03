@@ -21,27 +21,25 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `perilType rotates every 20 levels across all 15 perils and 20 rank tiers span 1000 levels`() {
-        // 15 Peril Scenarios rotating every 20 levels
+    fun `perilType rotates every level across all 15 perils and 20 rank tiers span 1000 levels`() {
+        // 15 Peril Scenarios rotating cleanly every single level using (currentLevel - 1) % 15
         assertEquals(PerilType.SHARK_BALLOONS, PerilType.forLevel(1))
-        assertEquals(PerilType.SHARK_BALLOONS, PerilType.forLevel(20))
-        assertEquals(PerilType.UFO_ABDUCTION, PerilType.forLevel(21))
-        assertEquals(PerilType.VOLCANO_BLOCKS, PerilType.forLevel(41))
-        assertEquals(PerilType.GIANT_VENUS_FLYTRAP, PerilType.forLevel(61))
-        assertEquals(PerilType.DINO_STEALTH, PerilType.forLevel(81))
-        assertEquals(PerilType.LEAKY_SUBMARINE, PerilType.forLevel(101))
-        assertEquals(PerilType.TIGHTROPE_SAW, PerilType.forLevel(121))
-        assertEquals(PerilType.METEOR_SHOWER, PerilType.forLevel(141))
-        assertEquals(PerilType.MAD_SCIENTIST_POTION, PerilType.forLevel(161))
-        assertEquals(PerilType.PIRATE_PLANK, PerilType.forLevel(181))
-        assertEquals(PerilType.SPIDER_WEB, PerilType.forLevel(201))
-        assertEquals(PerilType.QUICKSAND_PIT, PerilType.forLevel(221))
-        assertEquals(PerilType.GHOST_MANOR, PerilType.forLevel(241))
-        assertEquals(PerilType.TICKING_TIME_BOMB, PerilType.forLevel(261))
-        assertEquals(PerilType.DRAGON_CAVE, PerilType.forLevel(281))
-        assertEquals(PerilType.DRAGON_CAVE, PerilType.forLevel(300))
-        // Cycles cleanly through 1,000 levels
-        assertEquals(PerilType.SHARK_BALLOONS, PerilType.forLevel(301))
+        assertEquals(PerilType.UFO_ABDUCTION, PerilType.forLevel(2))
+        assertEquals(PerilType.VOLCANO_BLOCKS, PerilType.forLevel(3))
+        assertEquals(PerilType.GIANT_VENUS_FLYTRAP, PerilType.forLevel(4))
+        assertEquals(PerilType.DINO_STEALTH, PerilType.forLevel(5))
+        assertEquals(PerilType.LEAKY_SUBMARINE, PerilType.forLevel(6))
+        assertEquals(PerilType.TIGHTROPE_SAW, PerilType.forLevel(7))
+        assertEquals(PerilType.METEOR_SHOWER, PerilType.forLevel(8))
+        assertEquals(PerilType.MAD_SCIENTIST_POTION, PerilType.forLevel(9))
+        assertEquals(PerilType.PIRATE_PLANK, PerilType.forLevel(10))
+        assertEquals(PerilType.SPIDER_WEB, PerilType.forLevel(11))
+        assertEquals(PerilType.QUICKSAND_PIT, PerilType.forLevel(12))
+        assertEquals(PerilType.GHOST_MANOR, PerilType.forLevel(13))
+        assertEquals(PerilType.TICKING_TIME_BOMB, PerilType.forLevel(14))
+        assertEquals(PerilType.DRAGON_CAVE, PerilType.forLevel(15))
+        // Cycles cleanly on Level 16 and across all 1,000 levels
+        assertEquals(PerilType.SHARK_BALLOONS, PerilType.forLevel(16))
 
         // 20-Tier Rank Titles & Tier Progression Card Helpers across 1..1000
         assertEquals(20, RankTier.entries.size)
@@ -88,8 +86,8 @@ class ExampleRobolectricTest {
         assertEquals(RoundOutcome.GAME_OVER, vm.roundOutcome)
         assertEquals(DoodleSoundEffect.SPLASH, ProceduralSoundEngine.lastPlayedEffect)
 
-        // Level 41: VOLCANO_BLOCKS -> Wrong guess plays CRUNCH
-        vm.selectCampaignLevelNumber(41)
+        // Level 3: VOLCANO_BLOCKS -> Wrong guess plays CRUNCH
+        vm.selectCampaignLevelNumber(3)
         vm.onLetterTapped('Z')
         assertEquals(DoodleSoundEffect.CRUNCH, ProceduralSoundEngine.lastPlayedEffect)
     }

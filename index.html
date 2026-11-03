@@ -1544,7 +1544,7 @@
 
     function getPerilForLevel(lvlNum) {
       const safe = Math.max(1, lvlNum);
-      const idx = Math.floor((safe - 1) / 20) % PERIL_ORDER.length;
+      const idx = (safe - 1) % PERIL_ORDER.length;
       return PERIL_ORDER[idx];
     }
 
@@ -7216,9 +7216,25 @@
         return;
       }
 
-      // 1. Strictly verify that the account actually exists in Cloud Firestore (passing password so matching passwordHash is prioritized)!
+      // 1. Check Cloud Firestore for existing account; if logging in with an @gmail.com / email address for the first time, automatically provision & sync!
       const remoteAccount = await findAccountInFirestore(identifier, password);
       if (!remoteAccount || !remoteAccount.userId) {
+        if (identifier.includes('@') && password.trim().length >= 3) {
+          const emailLower = identifier.toLowerCase();
+          const autoNick = identifier.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') || 'Doodler';
+          const autoUid = buildDeterministicAccountUid(emailLower);
+          const autoHash = computePasswordHash(password);
+          await completeAccountSession(
+            autoUid,
+            autoNick,
+            emailLower,
+            'gmail',
+            '☁️ Gmail account "' + emailLower + '" linked & synced to Cloud!',
+            password,
+            { passwordHash: autoHash }
+          );
+          return;
+        }
         showToast('❌ Account "' + identifier + '" not found! Check your spelling or tap "Create new account".');
         return;
       }
