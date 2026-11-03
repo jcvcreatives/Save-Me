@@ -1428,6 +1428,7 @@ class WordGameViewModel : ViewModel() {
         private set
     var showGmLoginDialog by mutableStateOf(false)
     var showGmConsoleDrawer by mutableStateOf(false)
+    var isGmConsoleMinimized by mutableStateOf(false)
     var gmLoginErrorMessage by mutableStateOf<String?>(null)
     var gmTierOverride by mutableStateOf<Int?>(null)
         private set
@@ -3483,7 +3484,9 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
                         onOpenCoinShop = { viewModel.showCoinShopDialog = true },
                         onOpenRegistration = { viewModel.openRegistrationScreen() },
                         onOpenGmLogin = { viewModel.openGmLoginDialog() },
-                        onToggleGmConsole = { viewModel.showGmConsoleDrawer = !viewModel.showGmConsoleDrawer }
+                        onToggleGmConsole = { viewModel.showGmConsoleDrawer = !viewModel.showGmConsoleDrawer },
+                        onGmStepTier = { delta -> viewModel.gmStepTier(delta) },
+                        onGmResetTierToReal = { viewModel.gmResetTierToReal() }
                     )
                 }
 
@@ -3629,12 +3632,15 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
             )
         }
 
-        // 8. Live GM Sandbox Command Console Drawer ( Strictly visible only when isGmLoggedIn && showGmConsoleDrawer )
+        // 8. Live GM Sandbox Command Console Bottom Panel (Zero scrim, anchored to BottomCenter so upper 60% Stickman & Aura stay 100% unobstructed)
         if (viewModel.isGmLoggedIn && viewModel.showGmConsoleDrawer) {
-            GmCommandConsoleDrawer(
+            GmConsoleOverlay(
                 viewModel = viewModel,
                 fontFamily = activeFontFamily,
-                onDismiss = { viewModel.showGmConsoleDrawer = false }
+                onDismiss = { viewModel.showGmConsoleDrawer = false },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
             )
         }
     }
@@ -3847,7 +3853,9 @@ fun HomeScreen(
     onOpenCoinShop: () -> Unit,
     onOpenRegistration: () -> Unit = {},
     onOpenGmLogin: () -> Unit = {},
-    onToggleGmConsole: () -> Unit = {}
+    onToggleGmConsole: () -> Unit = {},
+    onGmStepTier: (Int) -> Unit = {},
+    onGmResetTierToReal: () -> Unit = {}
 ) {
     val activePeril = PerilType.forLevel(levelNumber)
     val effectiveCardLevel = if (isTierPreviewOverride) {
@@ -3962,11 +3970,23 @@ fun HomeScreen(
 
                 // Strictly invisible unless isGmLoggedIn == true!
                 if (isGmLoggedIn) {
-                    FloatingGmBadge(
-                        fontFamily = fontFamily,
-                        onClick = onToggleGmConsole,
-                        testTag = "gm_floating_badge"
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        GmQuickTierSwitcherPill(
+                            activeTier = activeTier,
+                            isTierPreviewOverride = isTierPreviewOverride,
+                            fontFamily = fontFamily,
+                            onStepTier = onGmStepTier,
+                            onResetTierToReal = onGmResetTierToReal
+                        )
+                        FloatingGmBadge(
+                            fontFamily = fontFamily,
+                            onClick = onToggleGmConsole,
+                            testTag = "gm_floating_badge"
+                        )
+                    }
                 }
             }
         }
@@ -13920,84 +13940,422 @@ fun GmAccessLoginDialog(
     }
 }
 
+@Composable
+fun GmQuickTierSwitcherPill(
+    activeTier: Int,
+    isTierPreviewOverride: Boolean,
+    fontFamily: FontFamily,
+    onStepTier: (Int) -> Unit,
+    onResetTierToReal: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    SketchyContainer(
+        fillColor = Color(0xFFFFFDE7),
+        borderColor = DoodleColors.InkBlack,
+        cornerRadius = 14.dp,
+        strokeWidth = 1.6.dp,
+        shadowOffset = 2.dp,
+        modifier = modifier
+            .height(30.dp)
+            .testTag("gm_quick_tier_switcher_pill")
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+        ) {
+            SketchyContainer(
+                fillColor = Color.White,
+                cornerRadius = 8.dp,
+                strokeWidth = 1.2.dp,
+                shadowOffset = 1.dp,
+                onClick = { onStepTier(-1) },
+                modifier = Modifier
+                    .size(width = 24.dp, height = 22.dp)
+                    .testTag("gm_quick_tier_prev")
+            ) {
+                Text(
+                    text = "◀",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 10.sp,
+                    color = DoodleColors.InkBlack
+                )
+            }
+
+            Text(
+                text = "Tier $activeTier/20",
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 11.sp,
+                color = if (isTierPreviewOverride) Color(0xFFE65100) else DoodleColors.InkBlack,
+                modifier = Modifier
+                    .padding(horizontal = 3.dp)
+                    .testTag("gm_quick_tier_label")
+            )
+
+            SketchyContainer(
+                fillColor = Color.White,
+                cornerRadius = 8.dp,
+                strokeWidth = 1.2.dp,
+                shadowOffset = 1.dp,
+                onClick = { onStepTier(1) },
+                modifier = Modifier
+                    .size(width = 24.dp, height = 22.dp)
+                    .testTag("gm_quick_tier_next")
+            ) {
+                Text(
+                    text = "▶",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 10.sp,
+                    color = DoodleColors.InkBlack
+                )
+            }
+
+            SketchyContainer(
+                fillColor = if (isTierPreviewOverride) DoodleColors.DoodleYellow else Color(0xFFE3F2FD),
+                cornerRadius = 8.dp,
+                strokeWidth = 1.2.dp,
+                shadowOffset = 1.dp,
+                onClick = onResetTierToReal,
+                modifier = Modifier
+                    .size(width = 24.dp, height = 22.dp)
+                    .testTag("gm_quick_tier_reset")
+            ) {
+                Text(
+                    text = "↺",
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp,
+                    color = DoodleColors.InkBlack
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun GmConsoleOverlay(
+    viewModel: WordGameViewModel,
+    fontFamily: FontFamily,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    GmCommandConsoleDrawer(
+        viewModel = viewModel,
+        fontFamily = fontFamily,
+        onDismiss = onDismiss,
+        modifier = modifier
+    )
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GmCommandConsoleDrawer(
     viewModel: WordGameViewModel,
     fontFamily: FontFamily,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val activeTier = viewModel.activeDisplayTier
     val realTier = viewModel.realTierIndex
     val activeRank = viewModel.currentRankTier
     val isTierOverridden = viewModel.gmTierOverride != null
     val currentLevelNumber = (viewModel.campaignLevelIndex + 1).coerceIn(1, 1000)
+    val isMinimized = viewModel.isGmConsoleMinimized
 
-    Dialog(onDismissRequest = onDismiss) {
-        SketchyContainer(
-            fillColor = DoodleColors.PaperOffWhite,
-            borderColor = DoodleColors.InkBlack,
-            cornerRadius = 24.dp,
-            strokeWidth = 2.4.dp,
-            shadowOffset = 4.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 640.dp)
-                .testTag("gm_command_console_drawer")
-        ) {
-            Column(
+    // Compact, zero-scrim Bottom Panel anchored to Alignment.BottomCenter so upper 60% Stickman & Cosmic Aura remain 100% unobstructed
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .widthIn(max = 600.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        if (isMinimized) {
+            // Single tiny 56.dp tall Minimized / Peek Bottom Bar showing Tier [ ◀ ] Tier X/20 [ ▶ ] and Level [-1] [ Lv X ] [+1] steppers
+            SketchyContainer(
+                fillColor = DoodleColors.PaperOffWhite,
+                borderColor = DoodleColors.InkBlack,
+                cornerRadius = 18.dp,
+                strokeWidth = 2.2.dp,
+                shadowOffset = 3.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .height(56.dp)
+                    .testTag("gm_command_console_minimized_bar")
             ) {
-                // Header Row
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Tier Stepper: [ ◀ ] Tier X/20 [ ▶ ]
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
                         SketchyContainer(
-                            fillColor = DoodleColors.DoodleYellow,
-                            cornerRadius = 12.dp,
-                            strokeWidth = 1.6.dp,
-                            shadowOffset = 1.5.dp
+                            fillColor = Color.White,
+                            cornerRadius = 8.dp,
+                            strokeWidth = 1.4.dp,
+                            shadowOffset = 1.dp,
+                            onClick = { viewModel.gmStepTier(-1) },
+                            modifier = Modifier
+                                .size(width = 26.dp, height = 32.dp)
+                                .testTag("gm_peek_tier_prev")
                         ) {
                             Text(
-                                text = "👑 GM COMMAND CONSOLE",
+                                text = "◀",
                                 fontFamily = fontFamily,
                                 fontWeight = FontWeight.Black,
-                                fontSize = 15.sp,
+                                fontSize = 11.sp,
+                                color = DoodleColors.InkBlack
+                            )
+                        }
+
+                        SketchyContainer(
+                            fillColor = activeRank.primaryColor.copy(alpha = 0.32f),
+                            borderColor = activeRank.accentColor,
+                            cornerRadius = 8.dp,
+                            strokeWidth = 1.4.dp,
+                            shadowOffset = 1.dp,
+                            onClick = { viewModel.gmResetTierToReal() },
+                            modifier = Modifier
+                                .height(32.dp)
+                                .testTag("gm_peek_tier_label")
+                        ) {
+                            Text(
+                                text = "Tier $activeTier/20",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp,
                                 color = DoodleColors.InkBlack,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(horizontal = 6.dp)
+                            )
+                        }
+
+                        SketchyContainer(
+                            fillColor = Color.White,
+                            cornerRadius = 8.dp,
+                            strokeWidth = 1.4.dp,
+                            shadowOffset = 1.dp,
+                            onClick = { viewModel.gmStepTier(1) },
+                            modifier = Modifier
+                                .size(width = 26.dp, height = 32.dp)
+                                .testTag("gm_peek_tier_next")
+                        ) {
+                            Text(
+                                text = "▶",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp,
+                                color = DoodleColors.InkBlack
                             )
                         }
                     }
 
-                    SketchyContainer(
-                        fillColor = Color.White,
-                        cornerRadius = 12.dp,
-                        strokeWidth = 1.5.dp,
-                        shadowOffset = 1.dp,
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .height(32.dp)
-                            .testTag("gm_console_close_button")
+                    // Level Stepper: [-1] [ Lv X ] [+1]
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        Text(
-                            text = "✕ Collapse",
-                            fontFamily = fontFamily,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 11.sp,
-                            color = DoodleColors.InkBlack,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
+                        SketchyContainer(
+                            fillColor = Color.White,
+                            cornerRadius = 8.dp,
+                            strokeWidth = 1.4.dp,
+                            shadowOffset = 1.dp,
+                            onClick = { viewModel.gmStepLevel(-1) },
+                            modifier = Modifier
+                                .size(width = 28.dp, height = 32.dp)
+                                .testTag("gm_peek_level_prev")
+                        ) {
+                            Text(
+                                text = "-1",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 10.sp,
+                                color = DoodleColors.InkBlack
+                            )
+                        }
+
+                        SketchyContainer(
+                            fillColor = DoodleColors.DoodleYellow,
+                            cornerRadius = 8.dp,
+                            strokeWidth = 1.4.dp,
+                            shadowOffset = 1.dp,
+                            modifier = Modifier
+                                .height(32.dp)
+                                .testTag("gm_peek_level_label")
+                        ) {
+                            Text(
+                                text = "Lv $currentLevelNumber",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp,
+                                color = DoodleColors.InkBlack,
+                                modifier = Modifier.padding(horizontal = 6.dp)
+                            )
+                        }
+
+                        SketchyContainer(
+                            fillColor = Color.White,
+                            cornerRadius = 8.dp,
+                            strokeWidth = 1.4.dp,
+                            shadowOffset = 1.dp,
+                            onClick = { viewModel.gmStepLevel(1) },
+                            modifier = Modifier
+                                .size(width = 28.dp, height = 32.dp)
+                                .testTag("gm_peek_level_next")
+                        ) {
+                            Text(
+                                text = "+1",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 10.sp,
+                                color = DoodleColors.InkBlack
+                            )
+                        }
+                    }
+
+                    // Expand [ — ] and Close [ X ] buttons
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        SketchyContainer(
+                            fillColor = DoodleColors.DoodleYellow,
+                            cornerRadius = 8.dp,
+                            strokeWidth = 1.4.dp,
+                            shadowOffset = 1.dp,
+                            onClick = { viewModel.isGmConsoleMinimized = false },
+                            modifier = Modifier
+                                .size(width = 30.dp, height = 32.dp)
+                                .testTag("gm_console_minimize_button")
+                        ) {
+                            Text(
+                                text = "—",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 13.sp,
+                                color = DoodleColors.InkBlack
+                            )
+                        }
+
+                        SketchyContainer(
+                            fillColor = Color.White,
+                            cornerRadius = 8.dp,
+                            strokeWidth = 1.4.dp,
+                            shadowOffset = 1.dp,
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .size(width = 30.dp, height = 32.dp)
+                                .testTag("gm_console_close_button")
+                        ) {
+                            Text(
+                                text = "✕",
+                                fontFamily = fontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 12.sp,
+                                color = DoodleColors.InkBlack
+                            )
+                        }
                     }
                 }
+            }
+        } else {
+            SketchyContainer(
+                fillColor = DoodleColors.PaperOffWhite,
+                borderColor = DoodleColors.InkBlack,
+                cornerRadius = 22.dp,
+                strokeWidth = 2.4.dp,
+                shadowOffset = 4.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 310.dp)
+                    .testTag("gm_command_console_drawer")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Header Row with [ — ] (Minimize/Peek) and [ X ] buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SketchyContainer(
+                                fillColor = DoodleColors.DoodleYellow,
+                                cornerRadius = 12.dp,
+                                strokeWidth = 1.6.dp,
+                                shadowOffset = 1.5.dp
+                            ) {
+                                Text(
+                                    text = "👑 GM COMMAND CONSOLE",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 14.sp,
+                                    color = DoodleColors.InkBlack,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            SketchyContainer(
+                                fillColor = Color(0xFFFFFDE7),
+                                cornerRadius = 10.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.dp,
+                                onClick = { viewModel.isGmConsoleMinimized = true },
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .testTag("gm_console_minimize_button")
+                            ) {
+                                Text(
+                                    text = "[ — ]",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 11.sp,
+                                    color = DoodleColors.InkBlack,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+                            }
+
+                            SketchyContainer(
+                                fillColor = Color.White,
+                                cornerRadius = 10.dp,
+                                strokeWidth = 1.5.dp,
+                                shadowOffset = 1.dp,
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .testTag("gm_console_close_button")
+                            ) {
+                                Text(
+                                    text = "[ X ]",
+                                    fontFamily = fontFamily,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 11.sp,
+                                    color = DoodleColors.InkBlack,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                 // ================================================================
                 // SECTION A: HOME SCREEN & ACCOUNT MANIPULATORS
@@ -14461,6 +14819,7 @@ fun GmCommandConsoleDrawer(
             }
         }
     }
+}
 }
 
 @Composable

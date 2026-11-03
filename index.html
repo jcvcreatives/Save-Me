@@ -832,7 +832,15 @@
             <span id="menuCoinText">1231</span>
             <span class="coin-plus">+</span>
           </div>
-          <button id="menuGmBadgeBtn" class="sketch-box sketch-btn" style="display:none;height:28px;padding:0 10px;border-radius:10px;background:#FFD54F;font-size:12px;font-weight:800;color:#1E1E1E;" onclick="openGmConsoleModal()">👑 GM</button>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div id="menuQuickTierPill" class="sketch-box" style="display:none;height:28px;padding:0 5px;border-radius:12px;background:#FFFDE7;align-items:center;gap:3px;font-size:11px;font-weight:800;">
+              <button class="sketch-box sketch-btn" style="width:22px;height:20px;border-radius:6px;padding:0;font-size:10px;background:#FFF;" onclick="gmStepTier(-1)" title="Previous Tier">◀</button>
+              <span id="menuQuickTierLabel" style="padding:0 3px;white-space:nowrap;">Tier 1/20</span>
+              <button class="sketch-box sketch-btn" style="width:22px;height:20px;border-radius:6px;padding:0;font-size:10px;background:#FFF;" onclick="gmStepTier(1)" title="Next Tier">▶</button>
+              <button class="sketch-box sketch-btn" style="width:22px;height:20px;border-radius:6px;padding:0;font-size:11px;background:#E3F2FD;" onclick="gmResetTierToReal()" title="Reset to Real Tier">↺</button>
+            </div>
+            <button id="menuGmBadgeBtn" class="sketch-box sketch-btn" style="display:none;height:28px;padding:0 10px;border-radius:10px;background:#FFD54F;font-size:12px;font-weight:800;color:#1E1E1E;" onclick="openGmConsoleModal()">👑 GM</button>
+          </div>
         </div>
       </div>
 
@@ -1059,15 +1067,36 @@
     </div>
   </div>
 
-  <!-- ================= GM COMMAND CONSOLE DRAWER MODAL ================= -->
-  <div id="gmConsoleModal" class="modal-backdrop">
-    <div class="sketch-box dialog-card" style="width:min(440px,96vw);max-height:90vh;overflow-y:auto;text-align:left;padding:16px;background:#FFFDE7;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+  <!-- ================= GM COMMAND CONSOLE BOTTOM PANEL (ZERO SCRIM) ================= -->
+  <div id="gmConsoleModal" class="modal-backdrop" style="background:transparent;backdrop-filter:none;pointer-events:none;align-items:flex-end;justify-content:center;padding:6px 10px;">
+    <!-- 56px Minimized / Peek Bottom Bar -->
+    <div id="gmConsoleMinimizedBar" class="sketch-box" style="display:none;pointer-events:auto;width:min(560px,96vw);height:56px;padding:0 10px;border-radius:18px;background:#FAF9F6;align-items:center;justify-content:space-between;gap:6px;">
+      <div style="display:flex;align-items:center;gap:4px;">
+        <button class="sketch-box sketch-btn" style="width:26px;height:32px;border-radius:8px;padding:0;font-size:11px;background:#FFF;" onclick="gmStepTier(-1)">◀</button>
+        <button id="gmPeekTierLabel" class="sketch-box sketch-btn" style="height:32px;padding:0 8px;border-radius:8px;font-size:11px;font-weight:800;background:#FFFDE7;" onclick="gmResetTierToReal()">Tier 1/20</button>
+        <button class="sketch-box sketch-btn" style="width:26px;height:32px;border-radius:8px;padding:0;font-size:11px;background:#FFF;" onclick="gmStepTier(1)">▶</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <button class="sketch-box sketch-btn" style="width:28px;height:32px;border-radius:8px;padding:0;font-size:10px;background:#FFF;" onclick="gmStepLevel(-1)">-1</button>
+        <div id="gmPeekLevelLabel" class="sketch-box" style="height:32px;padding:0 8px;border-radius:8px;font-size:11px;font-weight:800;background:#FFD54F;display:inline-flex;align-items:center;">Lv 1</div>
+        <button class="sketch-box sketch-btn" style="width:28px;height:32px;border-radius:8px;padding:0;font-size:10px;background:#FFF;" onclick="gmStepLevel(1)">+1</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <button class="sketch-box sketch-btn sketch-yellow" style="width:32px;height:32px;border-radius:8px;padding:0;font-size:13px;font-weight:900;" onclick="toggleGmConsoleMinimized(false)" title="Expand Console">—</button>
+        <button class="sketch-box sketch-btn" style="width:32px;height:32px;border-radius:8px;padding:0;font-size:12px;font-weight:900;background:#FFF;" onclick="closeAllModals()" title="Close Console">✕</button>
+      </div>
+    </div>
+
+    <!-- Expanded Bottom Panel (max-height: 310px, zero scrim) -->
+    <div id="gmConsoleExpandedCard" class="sketch-box dialog-card" style="pointer-events:auto;width:min(560px,96vw);max-height:310px;overflow-y:auto;text-align:left;padding:12px 14px;border-radius:22px;background:#FAF9F6;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <div>
-          <div style="font-size:19px;font-weight:800;">👑 GM Command Console</div>
-          <div style="font-size:11px;color:var(--ink-blue);font-weight:700;">Authenticated as JCV • Live Sandbox &amp; Toggles</div>
+          <div style="font-size:15px;font-weight:800;background:#FFD54F;display:inline-block;padding:3px 10px;border-radius:10px;border:1.6px solid var(--ink-black);">👑 GM COMMAND CONSOLE</div>
         </div>
-        <button class="sketch-box sketch-btn icon-btn" style="width:36px;height:36px;font-size:15px;" onclick="closeAllModals()">✕</button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="sketch-box sketch-btn" style="height:30px;padding:0 8px;border-radius:10px;font-size:11px;font-weight:800;background:#FFFDE7;" onclick="toggleGmConsoleMinimized(true)" title="Minimize / Peek">[ — ]</button>
+          <button class="sketch-box sketch-btn" style="height:30px;padding:0 8px;border-radius:10px;font-size:11px;font-weight:800;background:#FFF;" onclick="closeAllModals()" title="Close Console">[ X ]</button>
+        </div>
       </div>
 
       <!-- A. HOME SCREEN & ACCOUNT MANIPULATORS -->
@@ -7679,11 +7708,20 @@
       return false;
     }
 
+    let isGmConsoleMinimized = false;
+
+    function toggleGmConsoleMinimized(minimize) {
+      isGmConsoleMinimized = (typeof minimize === 'boolean') ? minimize : !isGmConsoleMinimized;
+      updateGmUIElements();
+    }
+
     function updateGmUIElements() {
       const menuBadge = document.getElementById('menuGmBadgeBtn');
+      const quickTierPill = document.getElementById('menuQuickTierPill');
       const gameBadge = document.getElementById('gameGmBadgeBtn');
       const settingsBtn = document.getElementById('settingsGmLoginBtn');
       if (menuBadge) menuBadge.style.display = isGmLoggedIn ? 'inline-flex' : 'none';
+      if (quickTierPill) quickTierPill.style.display = isGmLoggedIn ? 'inline-flex' : 'none';
       if (gameBadge) gameBadge.style.display = isGmLoggedIn ? 'inline-flex' : 'none';
       if (settingsBtn) {
         settingsBtn.textContent = isGmLoggedIn ? '👑 GM Console (Active)' : '👑 GM Login';
@@ -7692,18 +7730,37 @@
       const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
       const activeRank = getActiveMenuRank(lvlNum);
       const tierLabel = document.getElementById('gmTierStatusLabel');
-      if (tierLabel && activeRank) {
-        tierLabel.textContent = `Tier ${activeRank.tier} / 20: ${activeRank.title}${gmTierOverride ? ' (Override)' : ' (Real)'}`;
+      const consoleTierLabel = document.getElementById('gmConsoleTierLabel');
+      const quickTierLabel = document.getElementById('menuQuickTierLabel');
+      const peekTierLabel = document.getElementById('gmPeekTierLabel');
+      const peekLevelLabel = document.getElementById('gmPeekLevelLabel');
+      if (activeRank) {
+        if (tierLabel) tierLabel.textContent = `Tier ${activeRank.tier} / 20: ${activeRank.title}${gmTierOverride ? ' (Override)' : ' (Real)'}`;
+        if (consoleTierLabel) consoleTierLabel.textContent = `Tier ${activeRank.tier} / 20${gmTierOverride ? ' (Preview)' : ' (Real)'}`;
+        if (quickTierLabel) {
+          quickTierLabel.textContent = `Tier ${activeRank.tier}/20`;
+          quickTierLabel.style.color = gmTierOverride ? '#E65100' : '#1E1E1E';
+        }
+        if (peekTierLabel) peekTierLabel.textContent = `Tier ${activeRank.tier}/20`;
       }
-      const lvlInput = document.getElementById('gmLevelInput');
+      if (peekLevelLabel) peekLevelLabel.textContent = `Lv ${lvlNum}`;
+
+      const minBar = document.getElementById('gmConsoleMinimizedBar');
+      const expCard = document.getElementById('gmConsoleExpandedCard');
+      if (minBar && expCard) {
+        minBar.style.display = isGmConsoleMinimized ? 'flex' : 'none';
+        expCard.style.display = isGmConsoleMinimized ? 'none' : 'block';
+      }
+
+      const lvlInput = document.getElementById('gmTeleportLevelInput') || document.getElementById('gmLevelInput');
       if (lvlInput && document.activeElement !== lvlInput) {
         lvlInput.value = String(lvlNum);
       }
-      const tKiCombo = document.getElementById('gmToggleKiComboFuse');
-      const tKiBlasts = document.getElementById('gmToggleStickmanKiBlasts');
-      const tChains = document.getElementById('gmToggleBossChainedKeys');
-      const tDock = document.getElementById('gmToggleTacticalStarDock');
-      const tDouble = document.getElementById('gmToggleDoubleOrNothingBet');
+      const tKiCombo = document.getElementById('gmChkKiCombo') || document.getElementById('gmToggleKiComboFuse');
+      const tKiBlasts = document.getElementById('gmChkKiBlasts') || document.getElementById('gmToggleStickmanKiBlasts');
+      const tChains = document.getElementById('gmChkBossChains') || document.getElementById('gmToggleBossChainedKeys');
+      const tDock = document.getElementById('gmChkStarDock') || document.getElementById('gmToggleTacticalStarDock');
+      const tDouble = document.getElementById('gmChkDoubleBet') || document.getElementById('gmToggleDoubleOrNothingBet');
       if (tKiCombo) tKiCombo.checked = enableKiComboFuse;
       if (tKiBlasts) tKiBlasts.checked = enableStickmanKiBlasts;
       if (tChains) tChains.checked = enableBossChainedKeys;
