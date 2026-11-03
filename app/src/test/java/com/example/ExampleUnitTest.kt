@@ -49,13 +49,21 @@ class ExampleUnitTest {
 
     assertTrue(vm.isNextFreeBonusTestAd)
 
-    // 5th claim opens the Test Ad flow and waits for completion before granting coins
+    // 5th claim opens the Rewarded Interstitial Ad flow and waits for completion before granting coins
     vm.claimFreeCoinBonus(150, activity = null)
     assertTrue(vm.showAdMobTestOverlay)
     assertEquals(4, vm.freeBonusClaimCount)
     assertEquals(startCoins + 4 * 150, vm.coins)
 
-    // Completing the Test Ad grants the 5th bonus (+150 coins) and increments count to 5
+    // Skipping/dismissing the Rewarded Interstitial Ad early does NOT grant the reward
+    vm.dismissAdMobTestOverlayWithoutReward()
+    assertFalse(vm.showAdMobTestOverlay)
+    assertEquals(4, vm.freeBonusClaimCount)
+    assertEquals(startCoins + 4 * 150, vm.coins)
+
+    // Re-triggering the 5th bonus and watching the Rewarded Interstitial Ad to completion grants +150 coins
+    vm.claimFreeCoinBonus(150, activity = null)
+    assertTrue(vm.showAdMobTestOverlay)
     vm.completeFifthBonusTestAdReward()
     assertFalse(vm.showAdMobTestOverlay)
     assertEquals(5, vm.freeBonusClaimCount)

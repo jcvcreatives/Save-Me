@@ -145,10 +145,13 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.OnUserEarnedRewardListener
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAd
+import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAdLoadCallback
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -3169,7 +3172,7 @@ class WordGameViewModel : ViewModel() {
     fun claimFreeCoinBonus(amount: Int = 150, activity: Activity? = null) {
         val nextClaimNumber = freeBonusClaimCount + 1
         if (nextClaimNumber % 5 == 0) {
-            // Every 5th Free Bonus triggers a Google AdMob Test Ad!
+            // Every 5th Free Bonus triggers a Google AdMob Rewarded Interstitial Ad!
             pendingAdBonusAmount = amount
             showCoinShopDialog = false
             AdMobTestAdManager.showFifthBonusTestAd(
@@ -3177,6 +3180,9 @@ class WordGameViewModel : ViewModel() {
                 context = appContext,
                 onAdCompletedAndRewardEarned = {
                     completeFifthBonusTestAdReward()
+                },
+                onAdDismissedWithoutReward = {
+                    dismissAdMobTestOverlayWithoutReward()
                 },
                 onFallbackOverlayRequired = {
                     showAdMobTestOverlay = true
@@ -3196,20 +3202,20 @@ class WordGameViewModel : ViewModel() {
         freeBonusClaimCount += 1
         coins += pendingAdBonusAmount
         ProceduralSoundEngine.play(DoodleSoundEffect.VICTORY)
-        statusBannerMessage = "🎬 AdMob Test Ad Complete! +$pendingAdBonusAmount Coins (5th Bonus #${freeBonusClaimCount})!"
+        statusBannerMessage = "🎬 Rewarded Interstitial Watched! +$pendingAdBonusAmount Coins (5th Bonus #${freeBonusClaimCount})!"
         saveStateToPrefs()
     }
 
     fun dismissAdMobTestOverlayWithoutReward() {
         showAdMobTestOverlay = false
-        statusBannerMessage = "Test Ad closed early. Watch to completion for +$pendingAdBonusAmount Coins!"
+        statusBannerMessage = "⚠️ Ad skipped early — watch the full Rewarded Interstitial Ad to earn +$pendingAdBonusAmount Coins!"
     }
 
     fun gmPrimeFifthBonusAd() {
         if (!isGmLoggedIn) return
         freeBonusClaimCount = 4
         writeLocalStorageOnly()
-        statusBannerMessage = "👑 Free Bonus counter set to 4/5 (Next Free Bonus triggers AdMob Test Ad!)"
+        statusBannerMessage = "👑 Free Bonus counter set to 4/5 (Next Free Bonus triggers Rewarded Interstitial Ad!)"
     }
 
     fun gmTriggerTestAdNow(activity: Activity? = null) {
@@ -3220,6 +3226,9 @@ class WordGameViewModel : ViewModel() {
             context = appContext,
             onAdCompletedAndRewardEarned = {
                 completeFifthBonusTestAdReward()
+            },
+            onAdDismissedWithoutReward = {
+                dismissAdMobTestOverlayWithoutReward()
             },
             onFallbackOverlayRequired = {
                 showAdMobTestOverlay = true
@@ -3468,13 +3477,14 @@ private fun Context.findActivity(): Activity? {
 object AdMobTestAdManager {
     // Official Google-provided Android Test Ad Unit IDs
     const val TEST_APPLICATION_ID = "ca-app-pub-3940256099942544~3347511713"
-    const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
+    const val TEST_REWARDED_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/5354046379"
     const val TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
+    const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
 
     private var isInitialized = false
-    private var interstitialAd: InterstitialAd? = null
+    private var rewardedInterstitialAd: RewardedInterstitialAd? = null
     private var rewardedAd: RewardedAd? = null
-    private var isLoadingInterstitial = false
+    private var isLoadingRewardedInterstitial = false
     private var isLoadingRewarded = false
 
     fun initAndPreload(context: Context) {
@@ -3493,21 +3503,21 @@ object AdMobTestAdManager {
     fun preloadAds(context: Context) {
         val appCtx = context.applicationContext
         runCatching {
-            if (interstitialAd == null && !isLoadingInterstitial) {
-                isLoadingInterstitial = true
-                InterstitialAd.load(
+            if (rewardedInterstitialAd == null && !isLoadingRewardedInterstitial) {
+                isLoadingRewardedInterstitial = true
+                RewardedInterstitialAd.load(
                     appCtx,
-                    TEST_INTERSTITIAL_AD_UNIT_ID,
+                    TEST_REWARDED_INTERSTITIAL_AD_UNIT_ID,
                     AdRequest.Builder().build(),
-                    object : InterstitialAdLoadCallback() {
-                        override fun onAdLoaded(ad: InterstitialAd) {
-                            interstitialAd = ad
-                            isLoadingInterstitial = false
+                    object : RewardedInterstitialAdLoadCallback() {
+                        override fun onAdLoaded(ad: RewardedInterstitialAd) {
+                            rewardedInterstitialAd = ad
+                            isLoadingRewardedInterstitial = false
                         }
 
                         override fun onAdFailedToLoad(error: LoadAdError) {
-                            interstitialAd = null
-                            isLoadingInterstitial = false
+                            rewardedInterstitialAd = null
+                            isLoadingRewardedInterstitial = false
                         }
                     }
                 )
@@ -3538,17 +3548,21 @@ object AdMobTestAdManager {
         activity: Activity?,
         context: Context?,
         onAdCompletedAndRewardEarned: () -> Unit,
+        onAdDismissedWithoutReward: () -> Unit = {},
         onFallbackOverlayRequired: () -> Unit
     ) {
-        val currentRewarded = rewardedAd
-        val currentInterstitial = interstitialAd
-        if (activity != null && currentRewarded != null) {
-            rewardedAd = null
-            var rewardGranted = false
-            currentRewarded.fullScreenContentCallback = object : FullScreenContentCallback() {
+        val currentRewardedInterstitial = rewardedInterstitialAd
+        if (activity != null && currentRewardedInterstitial != null) {
+            rewardedInterstitialAd = null
+            var userEarnedReward = false
+            currentRewardedInterstitial.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     if (context != null) preloadAds(context)
-                    onAdCompletedAndRewardEarned()
+                    if (userEarnedReward) {
+                        onAdCompletedAndRewardEarned()
+                    } else {
+                        onAdDismissedWithoutReward()
+                    }
                 }
 
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
@@ -3557,21 +3571,30 @@ object AdMobTestAdManager {
                 }
             }
             runCatching {
-                currentRewarded.show(activity) {
-                    rewardGranted = true
-                }
+                currentRewardedInterstitial.show(
+                    activity,
+                    OnUserEarnedRewardListener {
+                        userEarnedReward = true
+                    }
+                )
             }.onFailure {
                 onFallbackOverlayRequired()
             }
             return
         }
 
-        if (activity != null && currentInterstitial != null) {
-            interstitialAd = null
-            currentInterstitial.fullScreenContentCallback = object : FullScreenContentCallback() {
+        val currentRewarded = rewardedAd
+        if (activity != null && currentRewarded != null) {
+            rewardedAd = null
+            var userEarnedReward = false
+            currentRewarded.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     if (context != null) preloadAds(context)
-                    onAdCompletedAndRewardEarned()
+                    if (userEarnedReward) {
+                        onAdCompletedAndRewardEarned()
+                    } else {
+                        onAdDismissedWithoutReward()
+                    }
                 }
 
                 override fun onAdFailedToShowFullScreenContent(adError: AdError) {
@@ -3580,7 +3603,12 @@ object AdMobTestAdManager {
                 }
             }
             runCatching {
-                currentInterstitial.show(activity)
+                currentRewarded.show(
+                    activity,
+                    OnUserEarnedRewardListener {
+                        userEarnedReward = true
+                    }
+                )
             }.onFailure {
                 onFallbackOverlayRequired()
             }
@@ -14081,10 +14109,10 @@ fun DoodleAdMobTestAdDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "🎬 Google Mobile Ads SDK",
+                            text = "🎬 Google AdMob Rewarded Interstitial",
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Black,
-                            fontSize = 19.sp,
+                            fontSize = 18.sp,
                             color = DoodleColors.InkBlack,
                             textAlign = TextAlign.Center
                         )
@@ -14092,7 +14120,7 @@ fun DoodleAdMobTestAdDialog(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         Text(
-                            text = "Every 5th Free Bonus Test Ad (Claim #$claimNumber)",
+                            text = "Every 5th Free Bonus Cycle (Claim #$claimNumber)",
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp,
@@ -14103,7 +14131,7 @@ fun DoodleAdMobTestAdDialog(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         Text(
-                            text = "Unit: ${AdMobTestAdManager.TEST_INTERSTITIAL_AD_UNIT_ID}",
+                            text = "Unit: ${AdMobTestAdManager.TEST_REWARDED_INTERSTITIAL_AD_UNIT_ID}",
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp,
@@ -14132,13 +14160,35 @@ fun DoodleAdMobTestAdDialog(
                         text = if (secondsLeft <= 0) {
                             "✨ Claim +$rewardAmount Coins & Close Ad"
                         } else {
-                            "⏳ Watching Test Ad ($secondsLeft)..."
+                            "⏳ Watching Rewarded Interstitial ($secondsLeft)..."
                         },
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Black,
                         fontSize = 15.sp,
                         color = if (secondsLeft <= 0) Color.White else DoodleColors.InkBlack
                     )
+                }
+
+                if (secondsLeft > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    SketchyContainer(
+                        fillColor = Color.White,
+                        cornerRadius = 14.dp,
+                        onClick = onDismissEarly,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(38.dp)
+                            .testTag("admob_skip_early_button")
+                    ) {
+                        Text(
+                            text = "✕ Skip Ad (No Reward)",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = DoodleColors.WrongRed
+                        )
+                    }
                 }
             }
         }

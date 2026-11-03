@@ -1330,20 +1330,23 @@
     </div>
   </div>
 
-  <!-- ================= ADMOB 5TH BONUS TEST AD MODAL ================= -->
+  <!-- ================= ADMOB 5TH BONUS REWARDED INTERSTITIAL AD MODAL ================= -->
   <div id="admobTestAdModal" class="modal-backdrop">
-    <div class="sketch-box dialog-card" style="max-width:390px;">
+    <div class="sketch-box dialog-card" style="max-width:395px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <span class="sketch-box" style="background:var(--doodle-yellow);padding:4px 8px;border-radius:10px;font-size:11px;font-weight:800;">AdMob • TEST AD</span>
+        <span class="sketch-box" style="background:var(--doodle-yellow);padding:4px 8px;border-radius:10px;font-size:11px;font-weight:800;">AdMob • REWARDED INTERSTITIAL</span>
         <span id="admobCountdownText" style="font-size:12px;font-weight:800;color:var(--ink-blue);">Reward in 3s...</span>
       </div>
       <div class="sketch-box" style="background:#FFFDE7;padding:14px;border-radius:16px;margin-bottom:14px;">
-        <div style="font-size:18px;font-weight:800;margin-bottom:6px;">🎬 Google Mobile Ads SDK</div>
-        <div id="admobClaimTitle" style="font-size:13px;font-weight:700;color:var(--ink-blue);margin-bottom:6px;">Every 5th Free Bonus Test Ad</div>
-        <div style="font-size:10px;opacity:0.65;">Unit: ca-app-pub-3940256099942544/1033173712</div>
+        <div style="font-size:18px;font-weight:800;margin-bottom:6px;">🎬 Google AdMob Rewarded Interstitial</div>
+        <div id="admobClaimTitle" style="font-size:13px;font-weight:700;color:var(--ink-blue);margin-bottom:6px;">Every 5th Free Bonus Cycle</div>
+        <div style="font-size:10px;opacity:0.68;">Unit: ca-app-pub-3940256099942544/5354046379</div>
       </div>
-      <button id="admobRewardClaimBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:48px;" onclick="completeAdMobTestAdReward()">
-        ⏳ Watching Test Ad (3)...
+      <button id="admobRewardClaimBtn" class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:48px;margin-bottom:8px;" onclick="completeAdMobTestAdReward()">
+        ⏳ Watching Rewarded Interstitial (3)...
+      </button>
+      <button id="admobSkipAdBtn" class="sketch-box sketch-btn menu-btn" style="height:38px;font-size:13px;color:var(--wrong-red);" onclick="skipAdMobRewardedInterstitialEarly()">
+        ✕ Skip Ad (No Reward)
       </button>
     </div>
   </div>
@@ -4304,9 +4307,11 @@
 
     function openTwoPlayerModal() { document.getElementById('twoPlayerModal').classList.add('active'); }
     function openSettings() { document.getElementById('settingsModal').classList.add('active'); }
+    const ADMOB_REWARDED_INTERSTITIAL_AD_UNIT_ID = 'ca-app-pub-3940256099942544/5354046379';
     let freeBonusClaimCount = Number(localStorage.getItem('doodle_free_bonus_count') || 0);
     let _admobTimer = null;
     let _admobSecondsLeft = 3;
+    let _admobRewardEarned = false;
 
     function updateCoinModalAdBadge() {
       const badge = document.getElementById('coinModalAdCycleBadge');
@@ -4316,11 +4321,13 @@
       if (badge) {
         badge.style.background = isFifth ? '#FFF3E0' : '#E3F2FD';
         badge.textContent = isFifth
-          ? '🎬 5th Free Bonus Ready! (Short Test Ad)'
-          : `Free Bonus Cycle: ${cycle} / 4 Instant (Every 5th = Test Ad)`;
+          ? '🎬 5th Free Bonus Ready! (Rewarded Interstitial Ad)'
+          : `Free Bonus Cycle: ${cycle} / 4 Instant (Every 5th = Rewarded Interstitial)`;
       }
       if (btn) {
-        btn.textContent = isFifth ? '🎬 Watch Test Ad (+150 Coins)' : 'Claim Free Bonus (+150 Coins)';
+        btn.textContent = isFifth
+          ? '🎬 Watch Rewarded Interstitial (+150 Coins)'
+          : 'Claim Free Bonus (+150 Coins)';
       }
     }
 
@@ -4341,6 +4348,7 @@
     function claimFreeCoins() {
       const nextClaim = freeBonusClaimCount + 1;
       if (nextClaim % 5 === 0) {
+        // 5th bonus cycle: display Google AdMob Rewarded Interstitial and only grant reward after ad is watched
         closeAllModals();
         openAdMobTestAdModal(nextClaim);
       } else {
@@ -4351,24 +4359,37 @@
         playProceduralSound('chime');
         closeAllModals();
         updateMenuUI();
-        showToast(`+150 Doodle Coins added! (Bonus ${nextClaim % 5}/5 until Test Ad)`);
+        showToast(`+150 Doodle Coins added! (Bonus ${nextClaim % 5}/5 until Rewarded Interstitial)`);
       }
     }
 
     function openAdMobTestAdModal(claimNum) {
       _admobSecondsLeft = 3;
+      _admobRewardEarned = false;
       const modal = document.getElementById('admobTestAdModal');
       const countEl = document.getElementById('admobCountdownText');
       const titleEl = document.getElementById('admobClaimTitle');
       const btnEl = document.getElementById('admobRewardClaimBtn');
-      if (titleEl) titleEl.textContent = `Every 5th Free Bonus Test Ad (Claim #${claimNum})`;
+      const skipBtn = document.getElementById('admobSkipAdBtn');
+      if (titleEl) {
+        titleEl.textContent = `5th Bonus Cycle (#${claimNum}) • Unit ${ADMOB_REWARDED_INTERSTITIAL_AD_UNIT_ID.slice(-10)}`;
+      }
       const refreshBtn = () => {
         if (_admobSecondsLeft > 0) {
           if (countEl) countEl.textContent = `Reward in ${_admobSecondsLeft}s...`;
-          if (btnEl) btnEl.textContent = `⏳ Watching Test Ad (${_admobSecondsLeft})...`;
+          if (btnEl) {
+            btnEl.textContent = `⏳ Watching Rewarded Interstitial (${_admobSecondsLeft})...`;
+            btnEl.style.opacity = '0.72';
+          }
+          if (skipBtn) skipBtn.style.display = 'flex';
         } else {
-          if (countEl) countEl.textContent = '✓ Reward Ready!';
-          if (btnEl) btnEl.textContent = '✨ Claim +150 Coins & Close Ad';
+          _admobRewardEarned = true;
+          if (countEl) countEl.textContent = '✓ Ad Watched — Reward Earned!';
+          if (btnEl) {
+            btnEl.textContent = '✨ Claim +150 Coins & Close Ad';
+            btnEl.style.opacity = '1';
+          }
+          if (skipBtn) skipBtn.style.display = 'none';
         }
       };
       refreshBtn();
@@ -4379,14 +4400,26 @@
           _admobSecondsLeft--;
           refreshBtn();
         } else {
+          _admobRewardEarned = true;
           clearInterval(_admobTimer);
         }
       }, 1000);
     }
 
-    function completeAdMobTestAdReward() {
-      if (_admobSecondsLeft > 0) return;
+    function skipAdMobRewardedInterstitialEarly() {
       clearInterval(_admobTimer);
+      _admobRewardEarned = false;
+      closeAllModals();
+      showToast('⚠️ Ad skipped early — watch the full Rewarded Interstitial Ad to earn +150 Coins!');
+    }
+
+    function completeAdMobTestAdReward() {
+      if (!_admobRewardEarned || _admobSecondsLeft > 0) {
+        showToast('⏳ Please finish watching the Rewarded Interstitial Ad to earn +150 Coins!');
+        return;
+      }
+      clearInterval(_admobTimer);
+      _admobRewardEarned = false;
       freeBonusClaimCount += 1;
       localStorage.setItem('doodle_free_bonus_count', String(freeBonusClaimCount));
       coins += 150;
@@ -4394,7 +4427,7 @@
       playProceduralSound('victory');
       closeAllModals();
       updateMenuUI();
-      showToast(`🎬 AdMob Test Ad Complete! +150 Coins (5th Bonus #${freeBonusClaimCount})!`);
+      showToast(`🎬 Rewarded Interstitial Watched! +150 Coins (5th Bonus #${freeBonusClaimCount})!`);
     }
 
     function toggleSound() {
