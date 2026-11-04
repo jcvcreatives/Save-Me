@@ -9619,12 +9619,12 @@ fun DynamicPerilSceneCanvas(
                 dangerProgress = effectiveDangerProgress
             )
 
-            // Active Stickman Tier Cosmic Aura right inside the peril scene when comboCount >= 2!
-            // Grows bigger and more intense from x2 up to x5 MAX OVERDRIVE!
-            if (!isMenuPreview && !isGameOver && comboCount >= 2) {
-                val comboIntensity = ((comboCount - 1).coerceIn(1, 4)) / 4f
-                val auraScale = 0.42f + comboIntensity * 0.36f
-                val auraPulse = 0.92f + 0.14f * sin(effectiveWavePhase * 3f)
+            // Active Stickman Tier Cosmic Aura right inside the peril scene at ALL times during gameplay!
+            // Starts vivid and scales up even further from x1 up to x5 MAX OVERDRIVE!
+            if (!isMenuPreview && !isGameOver) {
+                val comboIntensity = (comboCount.coerceIn(0, 5)) / 5f
+                val auraScale = 0.54f + comboIntensity * 0.34f
+                val auraPulse = 0.94f + 0.14f * sin(effectiveWavePhase * 3f)
                 withTransform({
                     scale(scaleX = auraScale, scaleY = auraScale, pivot = stickmanPos)
                 }) {
@@ -9636,7 +9636,7 @@ fun DynamicPerilSceneCanvas(
                         time = effectiveWavePhase,
                         phase = (effectiveWavePhase / (2f * PI.toFloat())).coerceIn(0f, 1f),
                         pulse = auraPulse,
-                        surgeMultiplier = 1f + comboIntensity * 0.85f
+                        surgeMultiplier = 1.22f + comboIntensity * 0.85f
                     )
                 }
             }
@@ -12756,6 +12756,135 @@ private fun DrawScope.drawDoodleStickman(
     val shoulderY = handAnchor.y + 22.dp.toPx() * scale
     val headCenter = Offset(handAnchor.x, shoulderY - headRadius - 4.dp.toPx() * scale)
     val hipY = shoulderY + 28.dp.toPx() * scale
+    val footBaseY = hipY + 24.dp.toPx() * scale
+    val centerBodyY = (headCenter.y + hipY) * 0.5f
+
+    // =========================================================================
+    // POP-OUT JAGGED DRAGON BALL KI FLAME SHELL & Z-LIGHTNING AROUND STICKMAN
+    // =========================================================================
+    if (!isSplashed) {
+        val auraPulse = 0.95f + 0.10f * sin(wavePhase * 4f)
+        val shellW = 34.dp.toPx() * scale * auraPulse
+        val shellBottomY = footBaseY + 2.dp.toPx() * scale
+        val shellTopY = headCenter.y - 26.dp.toPx() * scale
+        val shellTotalH = shellBottomY - shellTopY
+
+        // 1. Vivid Radial Energy Bloom Halo
+        val bloomR = 46.dp.toPx() * scale * auraPulse
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.85f),
+                    Color(0xFFFFD54F).copy(alpha = 0.65f),
+                    Color(0xFF29B6F6).copy(alpha = 0.38f),
+                    Color.Transparent
+                ),
+                center = Offset(handAnchor.x, centerBodyY),
+                radius = bloomR
+            ),
+            radius = bloomR,
+            center = Offset(handAnchor.x, centerBodyY)
+        )
+
+        // 2. Pulsing Ground Ki Shockwave Rings Under Feet
+        for (r in 0..1) {
+            val ripProg = ((wavePhase * 0.7f + r * 0.5f) % 1f).let { if (it < 0f) it + 1f else it }
+            val rw = (16f + ripProg * 36f).dp.toPx() * scale
+            val rh = (3.5f + ripProg * 5.5f).dp.toPx() * scale
+            drawOval(
+                color = (if (r == 0) Color(0xFF0288D1) else Color(0xFFFFB300)).copy(alpha = (1f - ripProg) * 0.82f),
+                topLeft = Offset(handAnchor.x - rw, footBaseY - rh),
+                size = Size(rw * 2f, rh * 2f),
+                style = Stroke(width = 2.2.dp.toPx() * scale)
+            )
+        }
+
+        // 3. Double-Layered Jagged Dragon Ball Ki Flame Shell
+        fun buildKiFlameShell(scaleX: Float, scaleY: Float, phaseShift: Float, spikes: Int): Path {
+            val halfW = shellW * scaleX
+            val totH = shellTotalH * scaleY
+            val topY = shellBottomY - totH
+            return Path().apply {
+                moveTo(handAnchor.x - halfW * 0.58f, shellBottomY)
+                for (i in 1..spikes) {
+                    val frac = i.toFloat() / spikes
+                    val py = shellBottomY - totH * frac
+                    val profile = sin(frac * PI).toFloat()
+                    val jag = sin(wavePhase * 8f + i * 1.7f + phaseShift) * (4.2.dp.toPx() * scale)
+                    val px = handAnchor.x - halfW * (0.45f + 0.65f * profile) + jag
+                    val ctrlY = py + (totH / spikes) * 0.45f
+                    quadraticTo(px - 5.dp.toPx() * scale, ctrlY, px, py)
+                }
+                val apexX = handAnchor.x + sin(wavePhase * 10f + phaseShift) * 3.5.dp.toPx() * scale
+                val apexY = topY - 7.dp.toPx() * scale
+                lineTo(apexX, apexY)
+                for (i in spikes downTo 1) {
+                    val frac = i.toFloat() / spikes
+                    val py = shellBottomY - totH * frac
+                    val profile = sin(frac * PI).toFloat()
+                    val jag = cos(wavePhase * 8f + i * 1.9f + phaseShift) * (4.2.dp.toPx() * scale)
+                    val px = handAnchor.x + halfW * (0.45f + 0.65f * profile) + jag
+                    val ctrlY = py - (totH / spikes) * 0.35f
+                    quadraticTo(px + 5.dp.toPx() * scale, ctrlY, px, py)
+                }
+                lineTo(handAnchor.x + halfW * 0.58f, shellBottomY)
+                close()
+            }
+        }
+
+        val outerShell = buildKiFlameShell(1.06f, 1.04f, 0f, 7)
+        drawPath(
+            path = outerShell,
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFFF8F00).copy(alpha = 0.55f),
+                    Color(0xFFFFD54F).copy(alpha = 0.58f),
+                    Color(0xFF29B6F6).copy(alpha = 0.52f)
+                ),
+                startY = shellTopY,
+                endY = shellBottomY
+            )
+        )
+        drawPath(
+            path = outerShell,
+            color = Color(0xFF0288D1).copy(alpha = 0.92f),
+            style = Stroke(width = 2.5.dp.toPx() * scale, join = StrokeJoin.Round)
+        )
+        drawPath(
+            path = outerShell,
+            color = DoodleColors.InkBlack.copy(alpha = 0.72f),
+            style = Stroke(width = 1.2.dp.toPx() * scale, join = StrokeJoin.Round)
+        )
+
+        val innerShell = buildKiFlameShell(0.74f, 0.84f, 1.6f, 6)
+        drawPath(
+            path = innerShell,
+            color = Color(0xFFFFF176).copy(alpha = 0.64f)
+        )
+        drawPath(
+            path = innerShell,
+            color = Color.White.copy(alpha = 0.95f),
+            style = Stroke(width = 2.0.dp.toPx() * scale, join = StrokeJoin.Round)
+        )
+
+        // 4. Crackling Bio-Electric Z-Lightning Arcs & Rising Wind Streaks
+        for (b in 0..2) {
+            val side = if (b % 2 == 0) -1f else 1f
+            val startX = handAnchor.x + side * (10f + b * 4f).dp.toPx() * scale
+            val startY = headCenter.y + (b * 15f).dp.toPx() * scale
+            val boltPath = Path().apply {
+                moveTo(startX, startY)
+                lineTo(startX + side * 9.dp.toPx() * scale, startY - 7.dp.toPx() * scale)
+                lineTo(startX + side * 3.dp.toPx() * scale, startY - 14.dp.toPx() * scale)
+                lineTo(startX + side * 12.dp.toPx() * scale, startY - 21.dp.toPx() * scale)
+            }
+            drawPath(
+                path = boltPath,
+                color = if (b % 2 == 0) Color(0xFFFFEA00) else Color(0xFF00E5FF),
+                style = Stroke(width = 2.0.dp.toPx() * scale, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            )
+        }
+    }
 
     fun drawCartoonHand(center: Offset, thumbDir: Float) {
         val handR = 3.8.dp.toPx() * scale
