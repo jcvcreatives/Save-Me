@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaPlayer
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -1681,8 +1682,6 @@ class WordGameViewModel : ViewModel() {
             }
         }
 
-        AdMobTestAdManager.initAndPreload(context.applicationContext)
-
         startAutomaticStateChangeSyncWatcher()
         initFirebaseSync(context.applicationContext)
     }
@@ -3189,6 +3188,9 @@ class WordGameViewModel : ViewModel() {
                 }
             )
         } else {
+            if (nextClaimNumber % 5 == 4) {
+                appContext?.let { AdMobTestAdManager.initAndPreload(it) }
+            }
             freeBonusClaimCount = nextClaimNumber
             coins += amount
             ProceduralSoundEngine.play(DoodleSoundEffect.CHIME)
@@ -3487,7 +3489,29 @@ object AdMobTestAdManager {
     private var isLoadingRewardedInterstitial = false
     private var isLoadingRewarded = false
 
+    /**
+     * Detects virtualized Android emulator images where `android.adservices.MEASUREMENT_SERVICE`
+     * returns a null binder (`E/adservices: onNullBinding android.adservices.MEASUREMENT_SERVICE`).
+     */
+    private fun isEmulatorWithoutMeasurementService(): Boolean {
+        val fp = Build.FINGERPRINT.lowercase()
+        val model = Build.MODEL.lowercase()
+        val hw = Build.HARDWARE.lowercase()
+        val prod = Build.PRODUCT.lowercase()
+        return fp.startsWith("generic") ||
+            fp.startsWith("unknown") ||
+            model.contains("sdk_gphone") ||
+            model.contains("emulator") ||
+            model.contains("android sdk built for") ||
+            hw.contains("ranchu") ||
+            hw.contains("goldfish") ||
+            prod.contains("sdk_gphone") ||
+            prod.contains("emulator") ||
+            prod.contains("simulator")
+    }
+
     fun initAndPreload(context: Context) {
+        if (isEmulatorWithoutMeasurementService()) return
         val appCtx = context.applicationContext
         runCatching {
             if (!isInitialized) {
@@ -3495,12 +3519,14 @@ object AdMobTestAdManager {
                 MobileAds.initialize(appCtx) {
                     preloadAds(appCtx)
                 }
+            } else {
+                preloadAds(appCtx)
             }
-            preloadAds(appCtx)
         }
     }
 
     fun preloadAds(context: Context) {
+        if (isEmulatorWithoutMeasurementService()) return
         val appCtx = context.applicationContext
         runCatching {
             if (rewardedInterstitialAd == null && !isLoadingRewardedInterstitial) {
@@ -3551,6 +3577,10 @@ object AdMobTestAdManager {
         onAdDismissedWithoutReward: () -> Unit = {},
         onFallbackOverlayRequired: () -> Unit
     ) {
+        if (isEmulatorWithoutMeasurementService()) {
+            onFallbackOverlayRequired()
+            return
+        }
         val currentRewardedInterstitial = rewardedInterstitialAd
         if (activity != null && currentRewardedInterstitial != null) {
             rewardedInterstitialAd = null
@@ -3624,7 +3654,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ProceduralSoundEngine.init(applicationContext)
-        AdMobTestAdManager.initAndPreload(applicationContext)
         enableEdgeToEdge()
         setContent {
             val vm: WordGameViewModel = viewModel()
@@ -4996,22 +5025,23 @@ private fun DrawScope.drawHomeGroundAndStageEffects(
         )
     }
 
-    // Scaling sketchy oval shadow on the ground line
-    val shadowScale = (1f - (hoverOffsetPx / 95.dp.toPx()).coerceIn(0f, 0.58f)) *
-        (1f + (surgeMultiplier - 1f) * 0.18f)
-    val shadowW = 54.dp.toPx() * shadowScale
-    val shadowH = 10.dp.toPx() * shadowScale
-    drawOval(
-        color = DoodleColors.InkBlack.copy(alpha = 0.22f),
-        topLeft = Offset(centerX - shadowW * 0.5f, groundY - shadowH * 0.5f),
-        size = Size(shadowW, shadowH)
-    )
-    drawOval(
-        color = DoodleColors.InkBlack.copy(alpha = 0.55f),
-        topLeft = Offset(centerX - shadowW * 0.5f, groundY - shadowH * 0.5f),
-        size = Size(shadowW, shadowH),
-        style = Stroke(width = 1.4.dp.toPx())
-    )
+    // Sketchy oval shadow on the ground line (only when grounded in Tiers 1–5; removed when flying in Tiers 6–20!)
+    if (currentTier <= 5 && hoverOffsetPx <= 0.5f) {
+        val shadowScale = 1f + (surgeMultiplier - 1f) * 0.18f
+        val shadowW = 54.dp.toPx() * shadowScale
+        val shadowH = 10.dp.toPx() * shadowScale
+        drawOval(
+            color = DoodleColors.InkBlack.copy(alpha = 0.22f),
+            topLeft = Offset(centerX - shadowW * 0.5f, groundY - shadowH * 0.5f),
+            size = Size(shadowW, shadowH)
+        )
+        drawOval(
+            color = DoodleColors.InkBlack.copy(alpha = 0.55f),
+            topLeft = Offset(centerX - shadowW * 0.5f, groundY - shadowH * 0.5f),
+            size = Size(shadowW, shadowH),
+            style = Stroke(width = 1.4.dp.toPx())
+        )
+    }
 
     // Tiers 6–12 (Ascendant Hover): Small pebble doodles floating upward off the ground line
     if (currentTier in 6..20) {
@@ -12786,17 +12816,19 @@ private fun DrawScope.drawDoodleStickman(
             center = Offset(handAnchor.x, centerBodyY)
         )
 
-        // 2. Pulsing Ground Ki Shockwave Rings Under Feet
-        for (r in 0..1) {
-            val ripProg = ((wavePhase * 0.7f + r * 0.5f) % 1f).let { if (it < 0f) it + 1f else it }
-            val rw = (16f + ripProg * 36f).dp.toPx() * scale
-            val rh = (3.5f + ripProg * 5.5f).dp.toPx() * scale
-            drawOval(
-                color = (if (r == 0) Color(0xFF0288D1) else Color(0xFFFFB300)).copy(alpha = (1f - ripProg) * 0.82f),
-                topLeft = Offset(handAnchor.x - rw, footBaseY - rh),
-                size = Size(rw * 2f, rh * 2f),
-                style = Stroke(width = 2.2.dp.toPx() * scale)
-            )
+        // 2. Pulsing Ground Ki Shockwave Rings Under Feet (only when standing on ground, not flying!)
+        if (!handsUp) {
+            for (r in 0..1) {
+                val ripProg = ((wavePhase * 0.7f + r * 0.5f) % 1f).let { if (it < 0f) it + 1f else it }
+                val rw = (16f + ripProg * 36f).dp.toPx() * scale
+                val rh = (3.5f + ripProg * 5.5f).dp.toPx() * scale
+                drawOval(
+                    color = (if (r == 0) Color(0xFF0288D1) else Color(0xFFFFB300)).copy(alpha = (1f - ripProg) * 0.82f),
+                    topLeft = Offset(handAnchor.x - rw, footBaseY - rh),
+                    size = Size(rw * 2f, rh * 2f),
+                    style = Stroke(width = 2.2.dp.toPx() * scale)
+                )
+            }
         }
 
         // 3. Double-Layered Jagged Dragon Ball Ki Flame Shell

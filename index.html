@@ -4589,17 +4589,20 @@
       ctx.arc(x, centerBodyY, bloomR, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2. PULSING GROUND KI SHOCKWAVE RINGS UNDER FEET
-      for (let r = 0; r < 2; r++) {
-        const ripProg = (t * 1.45 + r * 0.5) % 1;
-        const rw = (16 + ripProg * 36) * scale * surgeScale;
-        const rh = (3.2 + ripProg * 5.5) * scale;
-        ctx.globalAlpha = (1 - ripProg) * 0.82;
-        ctx.strokeStyle = r === 0 ? auraAccent : auraPrimary;
-        ctx.lineWidth = 2.2 * scale;
-        ctx.beginPath();
-        ctx.ellipse(x, footBaseY, rw, rh, 0, 0, Math.PI * 2);
-        ctx.stroke();
+      // 2. PULSING GROUND KI SHOCKWAVE RINGS UNDER FEET (Only when grounded, not flying/suspended)
+      const isStickmanFlying = Boolean(handsUp) || currentTier >= 6;
+      if (!isStickmanFlying) {
+        for (let r = 0; r < 2; r++) {
+          const ripProg = (t * 1.45 + r * 0.5) % 1;
+          const rw = (16 + ripProg * 36) * scale * surgeScale;
+          const rh = (3.2 + ripProg * 5.5) * scale;
+          ctx.globalAlpha = (1 - ripProg) * 0.82;
+          ctx.strokeStyle = r === 0 ? auraAccent : auraPrimary;
+          ctx.lineWidth = 2.2 * scale;
+          ctx.beginPath();
+          ctx.ellipse(x, footBaseY, rw, rh, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
 
       // 3. 20-TIER SIGNATURE COSMIC BACKDROP MOTIFS
@@ -4833,11 +4836,13 @@
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
-      // Ground/floating shadow
-      ctx.fillStyle = 'rgba(30, 30, 30, 0.09)';
-      ctx.beginPath();
-      ctx.ellipse(x, hipY + 26 * scale, 15 * scale, 3.8 * scale, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // Ground shadow (only drawn when standing on ground — removed when flying/suspended!)
+      if (!isStickmanFlying) {
+        ctx.fillStyle = 'rgba(30, 30, 30, 0.09)';
+        ctx.beginPath();
+        ctx.ellipse(x, hipY + 26 * scale, 15 * scale, 3.8 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // Helper for sketchy cartoon hand / glove at wrist
       function drawCartoonHand(hx, hy, thumbDir) {
@@ -8361,19 +8366,21 @@
         ctx.stroke();
       }
 
-      // Scaling sketchy oval shadow on ground line
-      const shadowScale = (1 - Math.min(0.58, hoverOffset / 95)) * (1 + surgeBoost * 0.18);
-      const shadowW = 27 * shadowScale;
-      const shadowH = 5 * shadowScale;
-      ctx.globalAlpha = 0.22;
-      ctx.fillStyle = '#1E1E1E';
-      ctx.beginPath();
-      ctx.ellipse(centerX, groundY, shadowW, shadowH, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.55;
-      ctx.strokeStyle = '#1E1E1E';
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
+      // Sketchy oval shadow on ground line (only when grounded in Tiers 1–5; removed when flying in Tiers 6–20!)
+      if (currentTier <= 5 && hoverOffset <= 0) {
+        const shadowScale = 1 + surgeBoost * 0.18;
+        const shadowW = 27 * shadowScale;
+        const shadowH = 5 * shadowScale;
+        ctx.globalAlpha = 0.22;
+        ctx.fillStyle = '#1E1E1E';
+        ctx.beginPath();
+        ctx.ellipse(centerX, groundY, shadowW, shadowH, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = '#1E1E1E';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
 
       // Tiers 6–20: Floating pebble doodles rising off the ground line
       if (currentTier >= 6) {
