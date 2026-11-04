@@ -7550,11 +7550,12 @@ fun GameplayScreen(
                 }
             }
 
-            // 5. Visual Word Progress Bar beneath the Word Slots (Guessed Letters / Total Word Length)
+            // 5. Visual Word Progress Bar beneath the Word Slots (Guessed Letters / Total Word Length) + Floating Streak Multiplier
             val guessedLettersCount = targetWord.count { viewModel.revealedChars.contains(it) }
             WordCompletionProgressBar(
                 guessedLettersCount = guessedLettersCount,
                 totalWordLength = targetWord.length.coerceAtLeast(1),
+                streakMultiplier = viewModel.comboCount,
                 comboPopupText = viewModel.comboPopupText,
                 comboPopupTrigger = viewModel.comboPopupTrigger,
                 counterPushbackTrigger = viewModel.counterPushbackTrigger,
@@ -8615,6 +8616,7 @@ private fun TacticalStarPowerUpButton(
 fun WordCompletionProgressBar(
     guessedLettersCount: Int,
     totalWordLength: Int,
+    streakMultiplier: Int = 0,
     comboPopupText: String?,
     comboPopupTrigger: Int,
     counterPushbackTrigger: Int,
@@ -8630,6 +8632,33 @@ fun WordCompletionProgressBar(
             stiffness = Spring.StiffnessMediumLow
         ),
         label = "wordCompletionProgress"
+    )
+
+    val streakPopScale = remember { Animatable(1f) }
+    LaunchedEffect(streakMultiplier) {
+        if (streakMultiplier >= 2) {
+            streakPopScale.snapTo(1.32f)
+            streakPopScale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioHighBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        } else {
+            streakPopScale.snapTo(1f)
+        }
+    }
+
+    val floatInfinite = rememberInfiniteTransition(label = "streakFloatTransition")
+    val floatOffsetY by floatInfinite.animateFloat(
+        initialValue = -2f,
+        targetValue = 2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 680, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "streakFloatOffsetY"
     )
 
     val popupAnim = remember { Animatable(1f) }
@@ -8744,6 +8773,46 @@ fun WordCompletionProgressBar(
                         )
                     }
                 }
+            }
+        }
+
+        // Persistent Floating Streak Multiplier Badge when player guesses multiple letters in a row (x2..x5)
+        if (streakMultiplier >= 2) {
+            val streakBadgeColor = when {
+                streakMultiplier >= 5 -> Color(0xFFFF5252)
+                streakMultiplier == 4 -> Color(0xFFFF7043)
+                streakMultiplier == 3 -> Color(0xFFFFB300)
+                else -> Color(0xFFFFEE58)
+            }
+            val streakTextColor = if (streakMultiplier >= 4) Color.White else DoodleColors.InkBlack
+            val streakBadgeLabel = when {
+                streakMultiplier >= 5 -> "🌟 x$streakMultiplier MAX STREAK!"
+                streakMultiplier == 4 -> "💥 x4 ULTRA STREAK!"
+                streakMultiplier == 3 -> "⚡ x3 SUPER STREAK!"
+                else -> "🔥 x2 STREAK!"
+            }
+
+            SketchyContainer(
+                fillColor = streakBadgeColor,
+                borderColor = DoodleColors.InkBlack,
+                cornerRadius = 12.dp,
+                strokeWidth = 1.8.dp,
+                shadowOffset = 2.dp,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-6).dp, y = (-13f + floatOffsetY).dp)
+                    .scale(streakPopScale.value)
+                    .graphicsLayer { rotationZ = -2.5f }
+                    .testTag("streak_multiplier_badge")
+            ) {
+                Text(
+                    text = streakBadgeLabel,
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 10.5.sp,
+                    color = streakTextColor,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                )
             }
         }
 
@@ -9329,6 +9398,7 @@ fun DoodleLetterKey(
         isFrozen -> DoodleColors.IceCubeBorder
         else -> DoodleColors.InkBlack
     }
+    val haptic = LocalHapticFeedback.current
     val tileShadowOffset = if (status == KeyStatus.DEFAULT) 3.dp else 1.5.dp
 
     Box(
@@ -9339,7 +9409,12 @@ fun DoodleLetterKey(
             .scale(keyBounceScale.value)
             .clickable(
                 enabled = status == KeyStatus.DEFAULT,
-                onClick = onClick
+                onClick = {
+                    runCatching {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                    onClick()
+                }
             )
             .testTag("key_$letter")
             .semantics {
