@@ -1095,15 +1095,15 @@
 
       <div id="wordSlots" class="word-slots"></div>
 
-      <!-- KI COMBO SPEED FUSE BAR -->
-      <div id="kiComboFuseContainer" style="display:none;flex-direction:column;width:100%;max-width:360px;margin:1px auto 3px;padding:4px 10px;border:2px solid var(--ink-black);border-radius:12px;background:#FFF8E1;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;font-weight:800;margin-bottom:2px;width:100%;">
-          <span id="kiComboLabelText" style="color:#E65100;white-space:nowrap;">⚡ Ki Speed Fuse</span>
-          <span id="kiComboStreakText" style="color:#1B5E20;font-size:10px;white-space:nowrap;">Pushback: 0/3</span>
-          <span id="kiComboTimerText" style="color:var(--ink-blue);white-space:nowrap;">4.0s</span>
+      <!-- WORD COMPLETION PROGRESS BAR (Beneath Word Slots) -->
+      <div id="wordProgressContainer" style="display:flex;flex-direction:column;width:100%;max-width:360px;margin:2px auto 4px;padding:5px 10px;border:2px solid var(--ink-black);border-radius:12px;background:#FFFFFF;box-shadow:2px 2px 0 var(--ink-black);">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;font-weight:800;margin-bottom:3px;width:100%;">
+          <span id="wordProgressLabelText" style="color:var(--ink-black);white-space:nowrap;">📝 Word Progress</span>
+          <span id="wordProgressCountText" style="color:var(--correct-green);font-size:11px;white-space:nowrap;">0 / 0 Letters</span>
+          <span id="wordProgressPctText" style="color:var(--ink-blue);white-space:nowrap;">0%</span>
         </div>
-        <div class="progress-track" style="height:8px;width:100%;background:#FFF;border:1.5px solid var(--ink-black);">
-          <div id="kiComboFuseFill" class="progress-fill" style="background:linear-gradient(90deg,#FFD54F,#FF6D00);width:0%;"></div>
+        <div class="progress-track" style="height:10px;width:100%;background:#ECEFF1;border:1.5px solid var(--ink-black);border-radius:999px;overflow:hidden;">
+          <div id="wordProgressFill" class="progress-fill" style="background:linear-gradient(90deg,#2ECC71,#00C853);width:0%;transition:width 0.25s cubic-bezier(0.34,1.56,0.64,1);"></div>
         </div>
       </div>
 
@@ -1122,7 +1122,7 @@
           <div class="powerup-circle" style="background:rgba(255,87,34,0.18)">💥</div>
           <div id="sparkBadge" class="powerup-badge">💥 ⭐ 20</div>
         </div>
-        <div class="powerup-wrap" onclick="useMagnifierHint()" title="Ki Strike: Fire Ki Blast &amp; Reveal 1 Letter!">
+        <div class="powerup-wrap" onclick="useMagnifierHint()" title="Zap Hint: Zap 2 Wrong Keys &amp; Reveal 1 Letter!">
           <div class="powerup-circle" style="background:rgba(76,175,80,0.18)">⚡</div>
           <div class="powerup-badge">⚡ ⭐ 30</div>
         </div>
@@ -3519,42 +3519,46 @@
 
     function updateKiComboFuseDOM() {
       const fuseBox = document.getElementById('kiComboFuseContainer');
-      if (!fuseBox) return;
-      if (!enableKiComboFuse) {
-        fuseBox.style.display = 'none';
-        return;
-      }
-      fuseBox.style.display = 'flex';
-      const labelEl = document.getElementById('kiComboLabelText');
-      const streakEl = document.getElementById('kiComboStreakText');
-      const fillEl = document.getElementById('kiComboFuseFill');
-      const timerEl = document.getElementById('kiComboTimerText');
-      const frac = comboTimeRemainingMs > 0 ? Math.min(1, Math.max(0, comboTimeRemainingMs / COMBO_MAX_DURATION_MS)) : 0;
+      if (fuseBox) fuseBox.style.display = 'none';
 
+      const wordProgBox = document.getElementById('wordProgressContainer');
+      const labelEl = document.getElementById('wordProgressLabelText');
+      const countEl = document.getElementById('wordProgressCountText');
+      const pctEl = document.getElementById('wordProgressPctText');
+      const fillEl = document.getElementById('wordProgressFill');
+
+      const wordStr = (activeLevel && activeLevel.word) ? activeLevel.word.toUpperCase() : '';
+      const totalLetters = Math.max(1, wordStr.length);
+      let guessedLetters = 0;
+      for (let i = 0; i < wordStr.length; i++) {
+        if (revealed.has(wordStr[i])) guessedLetters++;
+      }
+      const frac = wordStr.length > 0 ? Math.min(1, Math.max(0, guessedLetters / totalLetters)) : 0;
+      const pct = Math.round(frac * 100);
+
+      if (wordProgBox) wordProgBox.style.display = 'flex';
       if (labelEl) {
-        if (comboCount >= 5) {
-          labelEl.textContent = `🔥 x${comboCount} MAX OVERDRIVE!`;
-          labelEl.style.color = '#D84315';
-        } else if (comboCount >= 2) {
-          labelEl.textContent = `⚡ x${comboCount} KI COMBO!`;
+        if (guessedLetters >= totalLetters && wordStr.length > 0) {
+          labelEl.textContent = '✅ Word Complete!';
           labelEl.style.color = '#1B5E20';
         } else {
-          labelEl.textContent = '⚡ Ki Speed Fuse';
-          labelEl.style.color = '#424242';
+          labelEl.textContent = '📝 Word Progress';
+          labelEl.style.color = '#1E1E1E';
         }
       }
-      if (streakEl) {
-        streakEl.textContent = `Pushback: ${fastCorrectStreak}/3`;
+      if (countEl) {
+        countEl.textContent = `${guessedLetters} / ${wordStr.length} Letters`;
+      }
+      if (pctEl) {
+        pctEl.textContent = `${pct}%`;
       }
       if (fillEl) {
         fillEl.style.width = `${(frac * 100).toFixed(1)}%`;
       }
-      if (timerEl) {
-        timerEl.textContent = comboTimeRemainingMs > 0 ? `${(comboTimeRemainingMs / 1000).toFixed(1)}s` : '4.0s';
-      }
+
       const overdriveBorder = document.getElementById('overdriveScreenBorder');
       if (overdriveBorder) {
-        overdriveBorder.style.display = (enableKiComboFuse && comboCount >= 5 && comboTimeRemainingMs > 0) ? 'block' : 'none';
+        overdriveBorder.style.display = (enableKiComboFuse && comboCount >= 5) ? 'block' : 'none';
       }
     }
 
@@ -3849,19 +3853,8 @@
     }
 
     function spawnKiBlastTowardPeril() {
-      if (!enableStickmanKiBlasts) return;
-      const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
-      const rank = getActiveMenuRank(curLvl);
-      kiAttackPoseTimer = 0.42;
-      kiBlasts.push({
-        prog: 0,
-        startX: 0.30,
-        startY: 0.52,
-        endX: 0.68,
-        endY: 0.38,
-        color: (rank && rank.primaryColor) || '#FFD166',
-        coreColor: (rank && rank.secondaryColor) || '#29B6F6'
-      });
+      kiAttackPoseTimer = 0;
+      kiBlasts = [];
     }
 
     function renderGameplayUI() {
@@ -4046,13 +4039,7 @@
           }
           comboTimeRemainingMs = COMBO_MAX_DURATION_MS;
           fastCorrectStreak++;
-          playProceduralKiBurstSound(comboCount, Math.floor(campaignIdx / 50) + 1);
           playProceduralSound('chime');
-
-          if (comboCount >= 2) {
-            const label = comboCount >= 5 ? '🔥 x5 MAX OVERDRIVE!' : comboCount === 4 ? '⚡ 4x ULTRA!' : comboCount === 3 ? '⚡ 3x SUPER!' : '⚡ 2x COMBO!';
-            floatingHits.push({ text: label, rx: 0.48, ry: 0.30, life: 1.1 });
-          }
 
           if (fastCorrectStreak >= 3) {
             fastCorrectStreak = 0;
@@ -4060,11 +4047,10 @@
             spawnBezierFlyingStars(8);
             if (lives < 6) {
               lives = Math.min(6, lives + 1);
-              showToast('💥 KI COUNTER-PUSHBACK! +1 ❤️ Restored & +10 ⭐!');
+              showToast('🔥 3-STREAK BONUS! +1 ❤️ Restored & +10 ⭐!');
             } else {
-              showToast('💥 KI COUNTER-PUSHBACK! +10 Bonus ⭐!');
+              showToast('🔥 3-STREAK BONUS! +10 Bonus ⭐!');
             }
-            floatingHits.push({ text: '💥 COUNTER-PUSHBACK! +10 ⭐', rx: 0.42, ry: 0.24, life: 1.3 });
             saveState();
           }
         } else {
@@ -4207,7 +4193,7 @@
       const unrevealed = activeLevel.word.toUpperCase().split('').filter(c => !revealed.has(c));
       if (!unrevealed.length) return;
       const cost = 30;
-      if (coins < cost) { showToast(`Need ⭐ ${cost} Stars for Ki Strike! Tap + to get stars.`); return; }
+      if (coins < cost) { showToast(`Need ⭐ ${cost} Stars for Zap Hint! Tap + to get stars.`); return; }
       coins -= cost;
       // Also zap up to 2 wrong keys + reveal 1 correct letter!
       const targetSet = new Set(activeLevel.word.toUpperCase().split(''));
@@ -4220,11 +4206,10 @@
       revealed.add(pick);
       lastSlammedChar = pick;
       if (hintSparkChar === pick) hintSparkChar = null;
-      spawnKiBlastTowardPeril();
       spawnJuiceConfettiFromKey(pick, true);
       saveState();
       playProceduralSound('chime');
-      showToast(`⚡ Ki Strike! Zapped 2 wrong keys & revealed '${pick}'!`);
+      showToast(`⚡ Zap Hint! Cleared 2 wrong keys & revealed '${pick}'!`);
       renderGameplayUI();
       checkVictory();
     }
@@ -4554,267 +4539,7 @@
       const footBaseY = hipY + 24 * scale;
       const centerBodyY = (headY + hipY) * 0.5;
 
-      // =====================================================================
-      // HIGH-IMPACT GAMEPLAY DRAGON BALL COSMIC TIER AURA ENGINE (20 TIERS)
-      // =====================================================================
-      const curLvl = (activeLevel && activeLevel.number) ? activeLevel.number : ((campaignIdx % CAMPAIGN_LEVELS.length) + 1);
-      const rank = getActiveMenuRank(curLvl) || {};
-      const currentTier = rank.tier || Math.min(20, Math.max(1, Math.floor((curLvl - 1) / 50) + 1));
-      // Boost Tier 1 pale yellow so it pops vividly off the cream notebook grid
-      const auraPrimary = (currentTier === 1) ? '#FFD54F' : (rank.primaryColor || '#FFD54F');
-      const auraSecondary = (currentTier === 1) ? '#FF8F00' : (rank.secondaryColor || '#29B6F6');
-      const auraAccent = (currentTier === 1) ? '#0288D1' : (rank.color || '#0288D1');
-
-      const comboBoost = Math.min(4, Math.max(0, comboCount || 0)) * 0.08;
-      const attackBoost = (typeof kiAttackPoseTimer !== 'undefined' && kiAttackPoseTimer > 0) ? 0.25 : 0;
-      const surgeScale = 1 + comboBoost + attackBoost;
-      const auraPulse = (0.94 + Math.sin(t * 8.5) * 0.10) * surgeScale;
-      const phase = t * 2.4;
-      const baseR = 34 * scale * auraPulse;
-
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      // 1. VIVID RADIAL BLOOM BACKDROP HALO
-      const bloomR = baseR * 1.45;
-      const radialGrad = ctx.createRadialGradient(x, centerBodyY, 4 * scale, x, centerBodyY, bloomR);
-      radialGrad.addColorStop(0, '#FFFFFF');
-      radialGrad.addColorStop(0.28, auraPrimary);
-      radialGrad.addColorStop(0.68, auraSecondary);
-      radialGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.globalAlpha = Math.min(0.92, 0.58 + comboBoost * 0.6);
-      ctx.fillStyle = radialGrad;
-      ctx.beginPath();
-      ctx.arc(x, centerBodyY, bloomR, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 2. PULSING GROUND KI SHOCKWAVE RINGS UNDER FEET (Only when grounded, not flying/suspended)
-      const isStickmanFlying = Boolean(handsUp) || currentTier >= 6;
-      if (!isStickmanFlying) {
-        for (let r = 0; r < 2; r++) {
-          const ripProg = (t * 1.45 + r * 0.5) % 1;
-          const rw = (16 + ripProg * 36) * scale * surgeScale;
-          const rh = (3.2 + ripProg * 5.5) * scale;
-          ctx.globalAlpha = (1 - ripProg) * 0.82;
-          ctx.strokeStyle = r === 0 ? auraAccent : auraPrimary;
-          ctx.lineWidth = 2.2 * scale;
-          ctx.beginPath();
-          ctx.ellipse(x, footBaseY, rw, rh, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      }
-
-      // 3. 20-TIER SIGNATURE COSMIC BACKDROP MOTIFS
-      ctx.save();
-      if (currentTier === 1 || currentTier === 2) {
-        // Tiers 1–2: Expanding energy rings + orbiting 4-point Ki sparkle stars
-        for (let i = 0; i < 4; i++) {
-          const ang = phase * 1.4 + (i * Math.PI) / 2;
-          const ox = x + Math.cos(ang) * baseR * 0.92;
-          const oy = centerBodyY + Math.sin(ang) * baseR * 1.05;
-          if (typeof drawHomeSparkleStar === 'function') {
-            ctx.globalAlpha = 0.92;
-            drawHomeSparkleStar(ctx, ox, oy, 5.2 * scale * surgeScale, i % 2 === 0 ? auraPrimary : '#FFFFFF', ang);
-          }
-        }
-      } else if (currentTier === 3 || currentTier === 4) {
-        // Tiers 3–4: Rotating starburst rays & cyber grid sparks
-        const rays = 12;
-        for (let i = 0; i < rays; i++) {
-          const ang = phase * 1.2 + (i * Math.PI * 2) / rays;
-          const rOut = baseR * (i % 2 === 0 ? 1.28 : 0.92);
-          ctx.strokeStyle = i % 2 === 0 ? auraAccent : auraPrimary;
-          ctx.globalAlpha = 0.72;
-          ctx.lineWidth = 2.0 * scale;
-          ctx.beginPath();
-          ctx.moveTo(x + Math.cos(ang) * baseR * 0.35, centerBodyY + Math.sin(ang) * baseR * 0.35);
-          ctx.lineTo(x + Math.cos(ang) * rOut, centerBodyY + Math.sin(ang) * rOut);
-          ctx.stroke();
-        }
-      } else if (currentTier === 5 || currentTier === 6) {
-        // Tiers 5–6: Super-Saiyan golden flame tongues & rainbow aura rings
-        if (currentTier === 6) {
-          const rainbow = ['#FF1744', '#FF9100', '#FFEA00', '#00E676', '#2979FF', '#D500F9'];
-          rainbow.forEach((col, idx) => {
-            ctx.strokeStyle = col;
-            ctx.globalAlpha = 0.55;
-            ctx.lineWidth = 2.2 * scale;
-            ctx.beginPath();
-            ctx.arc(x, centerBodyY, baseR * (0.65 + idx * 0.11), 0, Math.PI * 2);
-            ctx.stroke();
-          });
-        }
-      } else if (currentTier === 7 || currentTier === 8) {
-        // Tiers 7–8: Orbiting ringed mini-planets / Matrix streams
-        for (let p = 0; p < 3; p++) {
-          const ang = phase * (1.3 + p * 0.2) + p * 2.1;
-          const px = x + Math.cos(ang) * baseR * 1.05;
-          const py = centerBodyY + Math.sin(ang) * baseR * 0.75;
-          ctx.globalAlpha = 0.9;
-          ctx.fillStyle = auraPrimary;
-          ctx.strokeStyle = '#1E1E1E';
-          ctx.lineWidth = 1.4 * scale;
-          ctx.beginPath();
-          ctx.arc(px, py, 4.2 * scale, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.strokeStyle = auraAccent;
-          ctx.beginPath();
-          ctx.ellipse(px, py, 7.5 * scale, 2.4 * scale, 0.35, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      } else if (currentTier >= 9 && currentTier <= 12) {
-        // Tiers 9–12: Tilted atomic electron orbits & spiral galaxy rings
-        for (let ring = 0; ring < 3; ring++) {
-          const tilt = (ring * Math.PI) / 3 + phase * 0.5;
-          ctx.strokeStyle = ring % 2 === 0 ? auraAccent : auraPrimary;
-          ctx.globalAlpha = 0.72;
-          ctx.lineWidth = 1.9 * scale;
-          ctx.beginPath();
-          ctx.ellipse(x, centerBodyY, baseR * 1.18, baseR * 0.42, tilt, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      } else if (currentTier >= 13 && currentTier <= 16) {
-        // Tiers 13–16: Blackhole singularity / Supernova / Chrono gear halo
-        const spikes = 16;
-        ctx.beginPath();
-        for (let i = 0; i < spikes; i++) {
-          const ang = phase * 1.4 + (i * Math.PI * 2) / spikes;
-          const r = baseR * (i % 2 === 0 ? 1.32 : 0.72);
-          const px = x + Math.cos(ang) * r;
-          const py = centerBodyY + Math.sin(ang) * r;
-          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fillStyle = auraPrimary;
-        ctx.globalAlpha = 0.36;
-        ctx.fill();
-        ctx.strokeStyle = auraAccent;
-        ctx.globalAlpha = 0.82;
-        ctx.lineWidth = 2.0 * scale;
-        ctx.stroke();
-      } else {
-        // Tiers 17–20: Transcendent Omni-Doodle rainbow cosmos rays & divine halo
-        const rays = 14;
-        for (let i = 0; i < rays; i++) {
-          const ang = phase * 1.2 + (i * Math.PI * 2) / rays;
-          const rOut = baseR * (i % 2 === 0 ? 1.42 : 0.98);
-          ctx.strokeStyle = i % 2 === 0 ? '#FFD700' : '#D500F9';
-          ctx.globalAlpha = 0.8;
-          ctx.lineWidth = 2.4 * scale;
-          ctx.beginPath();
-          ctx.moveTo(x, centerBodyY);
-          ctx.lineTo(x + Math.cos(ang) * rOut, centerBodyY + Math.sin(ang) * rOut);
-          ctx.stroke();
-        }
-      }
-      ctx.restore();
-
-      // 4. DOUBLE-LAYERED JAGGED DRAGON BALL KI FLAME SHELL (POP-OUT SILHOUETTE!)
-      const shellW = 34 * scale * auraPulse;
-      const shellBottomY = footBaseY + 2 * scale;
-      const shellTopY = headY - 26 * scale * surgeScale;
-      const shellTotalH = shellBottomY - shellTopY;
-
-      function traceGameplayKiFlameShell(scaleX, scaleY, phaseShift, spikes) {
-        const halfW = shellW * scaleX;
-        const totH = shellTotalH * scaleY;
-        const topY = shellBottomY - totH;
-        ctx.beginPath();
-        ctx.moveTo(x - halfW * 0.58, shellBottomY);
-        for (let i = 1; i <= spikes; i++) {
-          const frac = i / spikes;
-          const py = shellBottomY - totH * frac;
-          const profile = Math.sin(frac * Math.PI);
-          const jag = Math.sin(t * 24 + i * 1.7 + phaseShift) * (4.2 * scale * surgeScale);
-          const px = x - halfW * (0.45 + 0.65 * profile) + jag;
-          const ctrlY = py + (totH / spikes) * 0.45;
-          ctx.quadraticCurveTo(px - 5 * scale, ctrlY, px, py);
-        }
-        const apexX = x + Math.sin(t * 28 + phaseShift) * 3.5 * scale;
-        const apexY = topY - 7 * scale * surgeScale;
-        ctx.lineTo(apexX, apexY);
-        for (let i = spikes; i >= 1; i--) {
-          const frac = i / spikes;
-          const py = shellBottomY - totH * frac;
-          const profile = Math.sin(frac * Math.PI);
-          const jag = Math.cos(t * 24 + i * 1.9 + phaseShift) * (4.2 * scale * surgeScale);
-          const px = x + halfW * (0.45 + 0.65 * profile) + jag;
-          const ctrlY = py - (totH / spikes) * 0.35;
-          ctx.quadraticCurveTo(px + 5 * scale, ctrlY, px, py);
-        }
-        ctx.lineTo(x + halfW * 0.58, shellBottomY);
-        ctx.closePath();
-      }
-
-      // Outer Dragon Ball Jagged Ki Shell
-      traceGameplayKiFlameShell(1.06, 1.04, 0, 7);
-      const outerShellGrad = ctx.createLinearGradient(x, shellTopY, x, shellBottomY);
-      outerShellGrad.addColorStop(0, auraSecondary);
-      outerShellGrad.addColorStop(0.5, auraPrimary);
-      outerShellGrad.addColorStop(1, auraAccent);
-      ctx.globalAlpha = 0.52;
-      ctx.fillStyle = outerShellGrad;
-      ctx.fill();
-      ctx.globalAlpha = 0.95;
-      ctx.strokeStyle = auraAccent;
-      ctx.lineWidth = 2.6 * scale;
-      ctx.stroke();
-      ctx.globalAlpha = 0.72;
-      ctx.strokeStyle = '#1E1E1E';
-      ctx.lineWidth = 1.2 * scale;
-      ctx.stroke();
-
-      // Inner Intense White-Hot Ki Core Shell
-      traceGameplayKiFlameShell(0.74, 0.84, 1.6, 6);
-      ctx.globalAlpha = 0.62;
-      ctx.fillStyle = auraPrimary;
-      ctx.fill();
-      ctx.globalAlpha = 0.96;
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2.0 * scale;
-      ctx.stroke();
-
-      // 5. CRACKLING BIO-ELECTRIC Z-LIGHTNING ARCS & RISING KI WIND LINES
-      const boltCount = (currentTier >= 5 || comboCount >= 1 || attackBoost > 0) ? 4 : 2;
-      for (let b = 0; b < boltCount; b++) {
-        const bSeed = Math.floor(t * 14) + b * 17;
-        const side = b % 2 === 0 ? -1 : 1;
-        const startX = x + side * (8 + (bSeed % 12)) * scale;
-        const startY = headY - 6 * scale + ((b * 16 + (bSeed % 14)) * scale);
-        ctx.globalAlpha = 0.95;
-        ctx.strokeStyle = b % 2 === 0 ? '#FFEA00' : '#00E5FF';
-        ctx.lineWidth = 2.1 * scale;
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(startX + side * 9 * scale, startY - 7 * scale);
-        ctx.lineTo(startX + side * 3 * scale, startY - 14 * scale);
-        ctx.lineTo(startX + side * 12 * scale, startY - 21 * scale);
-        ctx.stroke();
-      }
-
-      // Upward-rising wind/ki speed lines & glowing plasma orbs
-      for (let sp = 0; sp < 6; sp++) {
-        const spProg = (t * 2.1 + sp * 0.17) % 1;
-        const side = sp % 2 === 0 ? -1 : 1;
-        const sx = x + side * (12 + (sp % 3) * 8) * scale + Math.sin(t * 6 + sp) * 3 * scale;
-        const sy = footBaseY - spProg * (shellTotalH * 1.05);
-        ctx.globalAlpha = Math.sin(spProg * Math.PI) * 0.9;
-        // Streak line
-        ctx.strokeStyle = sp % 2 === 0 ? '#FFFFFF' : auraAccent;
-        ctx.lineWidth = 1.9 * scale;
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(sx, sy - 9 * scale * surgeScale);
-        ctx.stroke();
-        // Glowing orb tip
-        ctx.fillStyle = sp % 2 === 0 ? auraPrimary : auraSecondary;
-        ctx.beginPath();
-        ctx.arc(sx, sy - 10 * scale * surgeScale, 2.5 * scale, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
+      const isStickmanFlying = Boolean(handsUp);
 
       // Active Ink Shield Forcefield Bubble when 🛡️ Shield Guard is active
       if (typeof shieldGuardActive !== 'undefined' && shieldGuardActive) {
@@ -4962,30 +4687,13 @@
       ctx.stroke();
       drawCartoonHand(leftHandX, leftHandY, 1);
 
-      // Right arm (with Ki Kamehameha Forward Thrust Pose when attacking!)
+      // Right arm
       let rightHandX, rightHandY;
       ctx.strokeStyle = '#1E1E1E';
       ctx.lineWidth = 3.0 * scale;
       ctx.beginPath();
       ctx.moveTo(x + 3 * scale, shoulderY);
-      if (kiAttackPoseTimer > 0) {
-        rightHandX = x + 23 * scale;
-        rightHandY = shoulderY - 3 * scale;
-        ctx.lineTo(rightHandX, rightHandY);
-        ctx.stroke();
-        drawCartoonHand(rightHandX, rightHandY, -1);
-        // Glowing Ki palm flare
-        ctx.save();
-        ctx.fillStyle = auraSecondary;
-        ctx.beginPath();
-        ctx.arc(rightHandX + 4 * scale, rightHandY, 6.5 * scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.arc(rightHandX + 4 * scale, rightHandY, 3.2 * scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      } else if (handsUp) {
+      if (handsUp) {
         const elbowX = x + 18 * scale;
         const elbowY = headY - 2 * scale + Math.cos(t * 5) * 1.5 * scale;
         rightHandX = x + 5 * scale;
@@ -7550,13 +7258,6 @@
       // Smooth spring interpolation toward target lives
       smoothLives += (lives - smoothLives) * Math.min(1, dt * 10);
       if (shakeTimer > 0) shakeTimer = Math.max(0, shakeTimer - dt);
-      if (enableKiComboFuse && comboTimeRemainingMs > 0) {
-        comboTimeRemainingMs = Math.max(0, comboTimeRemainingMs - dt * 1000);
-        if (comboTimeRemainingMs <= 0) {
-          comboCount = 0;
-        }
-        updateKiComboFuseDOM();
-      }
 
       try {
         const menuScreenEl = document.getElementById('menuScreen');
@@ -8403,8 +8104,8 @@
         }
       }
 
-      // Tiers 13–20 (or active Surge): Rhythmic downward shockwave rings rippling across the ground line
-      if (currentTier >= 13 || surgeMultiplier > 1.15) {
+      // Ground shockwave rings only when grounded (currentTier <= 5), never when flying!
+      if (currentTier <= 5 && surgeMultiplier > 1.15) {
         for (let r = 0; r < 3; r++) {
           const prog = (t * 1.35 + r / 3) % 1;
           const rw = (18 + prog * 78) * (1 + surgeBoost * 0.3);

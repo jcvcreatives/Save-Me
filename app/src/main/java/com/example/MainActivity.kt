@@ -2760,21 +2760,10 @@ class WordGameViewModel : ViewModel() {
     }
 
     /**
-     * Called every ~50ms by GameplayScreen's frame loop to decay the 4.0s Ki Combo fuse
-     * and the 3.0s Hint Spark gold highlight.
+     * Called every ~50ms by GameplayScreen's frame loop to decay the 3.0s Hint Spark gold highlight.
      */
     fun tickArcadeTimers(deltaMs: Long) {
         if (roundOutcome != RoundOutcome.PLAYING) return
-
-        if (comboFuseRemainingMs > 0L) {
-            val nextFuse = (comboFuseRemainingMs - deltaMs).coerceAtLeast(0L)
-            comboFuseRemainingMs = nextFuse
-            if (nextFuse == 0L) {
-                comboCount = 0
-                consecutiveFastStreak = 0
-                comboPopupText = null
-            }
-        }
 
         if (hintSparkRemainingMs > 0L) {
             val nextSpark = (hintSparkRemainingMs - deltaMs).coerceAtLeast(0L)
@@ -7099,11 +7088,11 @@ fun GameplayScreen(
     val isLastStand = viewModel.isLastStandDangerMode
     val comboCount = viewModel.comboCount
 
-    // Real-time 50ms ticker for the 4.0s decaying Ki Combo Fuse & 3.0s Hint Spark Gold Flash
-    LaunchedEffect(viewModel.roundOutcome, viewModel.comboFuseRemainingMs > 0L, viewModel.hintSparkRemainingMs > 0L) {
+    // Real-time 50ms ticker for the 3.0s Hint Spark Gold Flash
+    LaunchedEffect(viewModel.roundOutcome, viewModel.hintSparkRemainingMs > 0L) {
         while (
             viewModel.roundOutcome == RoundOutcome.PLAYING &&
-            (viewModel.comboFuseRemainingMs > 0L || viewModel.hintSparkRemainingMs > 0L)
+            viewModel.hintSparkRemainingMs > 0L
         ) {
             delay(50L)
             viewModel.tickArcadeTimers(50L)
@@ -7561,19 +7550,16 @@ fun GameplayScreen(
                 }
             }
 
-            // 5. Real-Time "Ki Combo" Speed Meter & Overdrive Fuse Bar (Twice as thick: 22.dp track with glowing animated flame tip!)
-            if (viewModel.gmToggleKiComboFuse) {
-                KiComboSpeedMeterBar(
-                    comboCount = viewModel.comboCount,
-                    fuseFraction = viewModel.comboFuseFraction,
-                    consecutiveFastStreak = viewModel.consecutiveFastStreak,
-                    comboPopupText = viewModel.comboPopupText,
-                    comboPopupTrigger = viewModel.comboPopupTrigger,
-                    counterPushbackTrigger = viewModel.counterPushbackTrigger,
-                    rankTier = rankTier,
-                    fontFamily = fontFamily
-                )
-            }
+            // 5. Visual Word Progress Bar beneath the Word Slots (Guessed Letters / Total Word Length)
+            val guessedLettersCount = targetWord.count { viewModel.revealedChars.contains(it) }
+            WordCompletionProgressBar(
+                guessedLettersCount = guessedLettersCount,
+                totalWordLength = targetWord.length.coerceAtLeast(1),
+                comboPopupText = viewModel.comboPopupText,
+                comboPopupTrigger = viewModel.comboPopupTrigger,
+                counterPushbackTrigger = viewModel.counterPushbackTrigger,
+                fontFamily = fontFamily
+            )
 
             Spacer(modifier = Modifier.height(3.dp))
 
@@ -8624,6 +8610,177 @@ private fun TacticalStarPowerUpButton(
 // REAL-TIME "KI COMBO" SPEED METER & OVERDRIVE FUSE BAR (Right Above Keyboard)
 // Twice as thick (22.dp track height) with a glowing animated flame tip & rhythmic bounce!
 // ============================================================================
+
+@Composable
+fun WordCompletionProgressBar(
+    guessedLettersCount: Int,
+    totalWordLength: Int,
+    comboPopupText: String?,
+    comboPopupTrigger: Int,
+    counterPushbackTrigger: Int,
+    fontFamily: FontFamily
+) {
+    val safeTotal = totalWordLength.coerceAtLeast(1)
+    val safeGuessed = guessedLettersCount.coerceIn(0, safeTotal)
+    val targetProgress = (safeGuessed.toFloat() / safeTotal.toFloat()).coerceIn(0f, 1f)
+    val animatedProgress by animateFloatAsState(
+        targetValue = targetProgress,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "wordCompletionProgress"
+    )
+
+    val popupAnim = remember { Animatable(1f) }
+    LaunchedEffect(comboPopupTrigger) {
+        if (comboPopupTrigger > 0) {
+            popupAnim.snapTo(0f)
+            popupAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing)
+            )
+        }
+    }
+
+    val isComplete = safeGuessed >= safeTotal
+    val percentage = (targetProgress * 100f).toInt()
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp)
+            .testTag("word_progress_bar")
+    ) {
+        SketchyContainer(
+            fillColor = if (isComplete) Color(0xFFE8F5E9) else Color.White,
+            borderColor = if (isComplete) DoodleColors.CorrectGreen else DoodleColors.InkBlack,
+            cornerRadius = 12.dp,
+            strokeWidth = 1.8.dp,
+            shadowOffset = 2.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isComplete) "✅ Word Complete!" else "📝 Word Progress",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        color = if (isComplete) DoodleColors.CorrectGreen else DoodleColors.InkBlack,
+                        modifier = Modifier.testTag("word_progress_label")
+                    )
+
+                    Text(
+                        text = "$safeGuessed / $safeTotal Letters",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp,
+                        color = DoodleColors.CorrectGreen,
+                        modifier = Modifier.testTag("word_progress_count")
+                    )
+
+                    Text(
+                        text = "$percentage%",
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        color = DoodleColors.InkBlue,
+                        modifier = Modifier.testTag("word_progress_percentage")
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(11.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFFECEFF1))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(animatedProgress)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color(0xFF2ECC71),
+                                        Color(0xFF00C853)
+                                    )
+                                )
+                            )
+                    )
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        // Draw segmented letter ticks along the progress track
+                        if (safeTotal in 2..16) {
+                            for (tick in 1 until safeTotal) {
+                                val tickX = (size.width * tick) / safeTotal.toFloat()
+                                drawLine(
+                                    color = DoodleColors.InkBlack.copy(alpha = 0.28f),
+                                    start = Offset(tickX, 0f),
+                                    end = Offset(tickX, size.height),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                            }
+                        }
+                        drawRoundRect(
+                            color = DoodleColors.InkBlack,
+                            size = size,
+                            cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
+                            style = Stroke(width = 1.4.dp.toPx())
+                        )
+                    }
+                }
+            }
+        }
+
+        if (comboPopupText != null && comboPopupTrigger > 0 && popupAnim.value < 0.96f) {
+            val p = popupAnim.value
+            val popScale = when {
+                p < 0.2f -> 0.6f + (p / 0.2f) * 0.65f
+                p < 0.4f -> 1.25f - ((p - 0.2f) / 0.2f) * 0.2f
+                else -> 1.05f
+            }
+            val alpha = (1f - ((p - 0.55f).coerceAtLeast(0f) / 0.45f)).coerceIn(0f, 1f)
+            SketchyContainer(
+                fillColor = if (counterPushbackTrigger > 0 && comboPopupText.contains("PUSHBACK"))
+                    Color(0xFFFFF176)
+                else
+                    DoodleColors.DoodleYellow.copy(alpha = alpha),
+                borderColor = DoodleColors.InkBlack.copy(alpha = alpha),
+                cornerRadius = 14.dp,
+                strokeWidth = 2.dp,
+                shadowOffset = 2.dp,
+                modifier = Modifier
+                    .offset(y = (-24f - p * 16f).dp)
+                    .scale(popScale)
+                    .testTag("combo_comic_popup")
+            ) {
+                Text(
+                    text = comboPopupText,
+                    fontFamily = fontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    color = DoodleColors.InkBlack.copy(alpha = alpha),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun KiComboSpeedMeterBar(
