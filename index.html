@@ -1596,6 +1596,18 @@
       { tier: 20, start: 951, end: 1000, title: 'The Supreme Doodle God', badge: '👑 Gold & Rainbow Cosmos', primaryColor: '#FFD700', secondaryColor: '#FF4081', color: '#FFD600' }
     ];
 
+    const GM_EXCLUSIVE_RANK = {
+      tier: 21,
+      isGmExclusive: true,
+      start: 1,
+      end: 1000,
+      title: 'Cosmic-Static Singularity',
+      badge: '👑⚡ GM Exclusive: Deep-Space Nebula × TV Static Glitch',
+      primaryColor: '#00E5FF',
+      secondaryColor: '#D500F9',
+      color: '#12002B'
+    };
+
     function getRankForLevel(lvlNum) {
       const safe = Math.max(1, Math.min(1000, lvlNum));
       const idx = Math.min(19, Math.floor((safe - 1) / 50));
@@ -3254,8 +3266,11 @@
     }
 
     function getActiveMenuRank(lvlNum) {
-      if (isGmLoggedIn && gmTierOverride && gmTierOverride >= 1 && gmTierOverride <= RANK_TIERS.length) {
-        return RANK_TIERS[gmTierOverride - 1];
+      if (isGmLoggedIn) {
+        if (gmTierOverride && gmTierOverride >= 1 && gmTierOverride <= RANK_TIERS.length) {
+          return RANK_TIERS[gmTierOverride - 1];
+        }
+        return GM_EXCLUSIVE_RANK;
       }
       return getRankForLevel(lvlNum);
     }
@@ -3273,25 +3288,36 @@
       const doneCount = completedCampaignSet.size;
       const tierSpan = Math.max(1, displayRank.end - displayRank.start + 1);
       const levelInTier = Math.min(tierSpan, Math.max(1, lvlNum - displayRank.start + 1));
-      const tierPct = (isGmLoggedIn && gmTierOverride) ? 100 : Math.min(100, Math.max(6, (levelInTier / tierSpan) * 100));
+      const tierPct = isGmLoggedIn ? 100 : Math.min(100, Math.max(6, (levelInTier / tierSpan) * 100));
       const nextTierLabel = displayRank.tier < RANK_TIERS.length
         ? `Next Tier at Lv ${displayRank.end + 1}`
         : 'Max Rank Tier!';
 
       document.getElementById('menuCoinText').textContent = coins;
       document.getElementById('gameCoinText').textContent = coins;
-      document.getElementById('menuRankTitleText').textContent = `Tier ${displayRank.tier}: ${displayRank.title}`;
-      document.getElementById('menuRankTierSub').textContent = (isGmLoggedIn && gmTierOverride)
-        ? `👑 GM Preview: Tier ${displayRank.tier} / 20 (Real Level ${lvlNum})`
-        : `Progress: Level ${lvlNum} / ${displayRank.end} (${nextTierLabel})`;
+      if (displayRank.isGmExclusive) {
+        document.getElementById('menuRankTitleText').textContent = `👑 GM EXCLUSIVE: ${displayRank.title}`;
+        document.getElementById('menuRankTierSub').textContent = `🌌⚡ Cosmic Nebula × Reality Static (Default GM Aura • Lv ${lvlNum})`;
+      } else {
+        document.getElementById('menuRankTitleText').textContent = `Tier ${displayRank.tier}: ${displayRank.title}`;
+        document.getElementById('menuRankTierSub').textContent = (isGmLoggedIn && gmTierOverride)
+          ? `👑 GM Preview: Tier ${displayRank.tier} / 20 (Real Level ${lvlNum})`
+          : `Progress: Level ${lvlNum} / ${displayRank.end} (${nextTierLabel})`;
+      }
       document.getElementById('menuRankBadgeDesc').textContent = displayRank.badge;
       document.getElementById('menuCampaignProgressText').textContent = `${doneCount}/${totalLevels} ★`;
       const fillEl = document.getElementById('menuCampaignProgressFill');
       fillEl.style.width = `${tierPct}%`;
-      fillEl.style.background = `linear-gradient(90deg, ${displayRank.primaryColor || displayRank.color}, ${displayRank.secondaryColor || displayRank.color}, ${displayRank.color})`;
+      if (displayRank.isGmExclusive) {
+        fillEl.style.background = 'linear-gradient(90deg, #0B0726, #00E5FF, #FFFFFF, #111111, #D500F9, #FF1744)';
+      } else {
+        fillEl.style.background = `linear-gradient(90deg, ${displayRank.primaryColor || displayRank.color}, ${displayRank.secondaryColor || displayRank.color}, ${displayRank.color})`;
+      }
       const cardEl = document.getElementById('tierProgressionCard');
       if (cardEl) {
-        cardEl.style.boxShadow = `0 0 18px ${displayRank.color}77, 3px 3.5px 0px rgba(30, 30, 30, 0.22)`;
+        cardEl.style.boxShadow = displayRank.isGmExclusive
+          ? '0 0 24px rgba(0, 229, 255, 0.72), 0 0 38px rgba(213, 0, 249, 0.55), 3px 3.5px 0px rgba(30, 30, 30, 0.35)'
+          : `0 0 18px ${displayRank.color}77, 3px 3.5px 0px rgba(30, 30, 30, 0.22)`;
       }
       document.getElementById('menuLevelBtnText').textContent =
         (lvlNum % 5 === 0) ? `Level ${lvlNum} (BOSS 💣)` : `Level ${lvlNum}`;
@@ -4586,7 +4612,161 @@
       const footBaseY = hipY + 24 * scale;
       const centerBodyY = (headY + hipY) * 0.5;
 
-      const isStickmanFlying = Boolean(handsUp);
+      const activeGameRank = getActiveMenuRank(activeLevel ? activeLevel.number : 1);
+      const isGmCosmicStatic = Boolean(activeGameRank && activeGameRank.isGmExclusive);
+      const isStickmanFlying = Boolean(handsUp || isGmCosmicStatic || (activeGameRank && activeGameRank.tier >= 6));
+
+      // Render active Cosmic / GM-Exclusive Cosmic-Static Aura behind gameplay stickman
+      if (activeGameRank) {
+        ctx.save();
+        const auraR = 38 * scale;
+        const pulse = 0.92 + Math.sin(t * 5.2) * 0.12;
+        if (isGmCosmicStatic) {
+          // 1. Deep-Space Galaxy Nebula Vortex Core (IMG_1437: deep indigo, royal cyan, magenta-violet, crimson stardust)
+          const nebGrad = ctx.createRadialGradient(x, centerBodyY, 2 * scale, x, centerBodyY, auraR * 1.48 * pulse);
+          nebGrad.addColorStop(0, '#FFFFFF');
+          nebGrad.addColorStop(0.18, '#00E5FF');
+          nebGrad.addColorStop(0.45, '#D500F9');
+          nebGrad.addColorStop(0.72, '#1A073E');
+          nebGrad.addColorStop(0.88, 'rgba(255, 23, 68, 0.38)');
+          nebGrad.addColorStop(1, 'rgba(8, 3, 27, 0)');
+          ctx.fillStyle = nebGrad;
+          ctx.beginPath();
+          ctx.arc(x, centerBodyY, auraR * 1.48 * pulse, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 2. Rotating Spiral Galaxy Arms & Glowing Cyan Plasma Filament Loops (IMG_1437 center filaments)
+          for (let arm = 0; arm < 3; arm++) {
+            ctx.strokeStyle = arm % 2 === 0 ? '#00E5FF' : '#EA80FC';
+            ctx.lineWidth = 2.0 * scale;
+            ctx.globalAlpha = 0.85;
+            ctx.beginPath();
+            for (let s = 0; s <= 18; s++) {
+              const frac = s / 18;
+              const r = frac * auraR * 1.25;
+              const ang = t * 2.8 + (arm * Math.PI * 2) / 3 + frac * 3.8;
+              const px = x + Math.cos(ang) * r;
+              const py = centerBodyY + Math.sin(ang) * r * 0.82;
+              if (s === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          }
+
+          // Irregular electric-cyan nebula loop tendrils (like center of IMG_1437)
+          for (let lp = 0; lp < 4; lp++) {
+            const lang = -t * 2.2 + lp * (Math.PI / 2);
+            const lx = x + Math.cos(lang) * (14 * scale);
+            const ly = centerBodyY + Math.sin(lang) * (16 * scale);
+            ctx.strokeStyle = '#80D8FF';
+            ctx.lineWidth = 1.8 * scale;
+            ctx.globalAlpha = 0.92;
+            ctx.beginPath();
+            ctx.ellipse(lx, ly, 9 * scale, 5 * scale, lang + Math.sin(t * 6 + lp), 0, Math.PI * 2);
+            ctx.stroke();
+          }
+
+          // 3. Jagged Cosmic-Static Dragon Ball Flame Shell around Stickman
+          const shellW = 28 * scale * pulse;
+          const shellTop = headY - 22 * scale;
+          const shellBot = footBaseY + 5 * scale;
+          ctx.beginPath();
+          ctx.moveTo(x - shellW * 0.65, shellBot);
+          for (let i = 1; i <= 6; i++) {
+            const f = i / 6;
+            const sy = shellBot - (shellBot - shellTop) * f;
+            const sx = x - shellW * (0.45 + 0.65 * Math.sin(f * Math.PI)) + Math.sin(t * 32 + i * 1.9) * 4.5 * scale;
+            ctx.lineTo(sx, sy);
+          }
+          ctx.lineTo(x + Math.sin(t * 38) * 3.5 * scale, shellTop - 7 * scale);
+          for (let i = 6; i >= 1; i--) {
+            const f = i / 6;
+            const sy = shellBot - (shellBot - shellTop) * f;
+            const sx = x + shellW * (0.45 + 0.65 * Math.sin(f * Math.PI)) + Math.cos(t * 32 + i * 2.1) * 4.5 * scale;
+            ctx.lineTo(sx, sy);
+          }
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(13, 6, 40, 0.46)';
+          ctx.fill();
+          ctx.strokeStyle = '#00E5FF';
+          ctx.lineWidth = 2.4 * scale;
+          ctx.stroke();
+
+          // 4. High-Contrast Black & White TV Static Noise Grain & Glitch Scanlines (IMG_1436)
+          const staticSeed = Math.floor(t * 28);
+          for (let g = 0; g < 46; g++) {
+            const h1 = Math.sin(staticSeed * 19.7 + g * 73.1) * 43758.5453;
+            const r1 = h1 - Math.floor(h1);
+            const h2 = Math.cos(staticSeed * 23.3 + g * 41.9) * 29481.1357;
+            const r2 = h2 - Math.floor(h2);
+            const ang = r1 * Math.PI * 2;
+            const dist = Math.sqrt(r2) * auraR * 1.05;
+            const gx = x + Math.cos(ang) * dist;
+            const gy = centerBodyY + Math.sin(ang) * (dist * 1.25);
+            const bw = (g % 2 === 0) ? '#FFFFFF' : '#0A0A0A';
+            ctx.fillStyle = bw;
+            ctx.globalAlpha = 0.88;
+            const gw = (1.8 + (g % 3) * 1.1) * scale;
+            const gh = (1.6 + ((g + 1) % 2) * 1.0) * scale;
+            ctx.fillRect(gx - gw * 0.5, gy - gh * 0.5, gw, gh);
+          }
+          // CRT Reality Glitch Tear Scanlines across aura
+          for (let sl = 0; sl < 4; sl++) {
+            const sy = headY - 12 * scale + (((t * 55 + sl * 19) % 58) * scale);
+            const sw = (18 + ((staticSeed + sl * 7) % 22)) * scale;
+            const sx = x + Math.sin(staticSeed + sl * 3.1) * 12 * scale - sw * 0.5;
+            ctx.fillStyle = sl % 2 === 0 ? '#FFFFFF' : '#0A0A0A';
+            ctx.globalAlpha = 0.82;
+            ctx.fillRect(sx, sy, sw, 2.0 * scale);
+            ctx.fillStyle = sl % 2 === 0 ? '#00E5FF' : '#FF1744';
+            ctx.globalAlpha = 0.65;
+            ctx.fillRect(sx + 2 * scale, sy + 1 * scale, sw * 0.7, 1.2 * scale);
+          }
+
+          // 5. Radiant Multi-Point Diffraction Stars (IMG_1437 bright stars)
+          for (let st = 0; st < 5; st++) {
+            const sang = t * 1.7 + st * ((Math.PI * 2) / 5);
+            const sr = auraR * (0.75 + (st % 2) * 0.35);
+            const stX = x + Math.cos(sang) * sr;
+            const stY = centerBodyY + Math.sin(sang) * sr;
+            const fl = (5.5 + (st % 2) * 2.5) * scale;
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1.6 * scale;
+            ctx.globalAlpha = 0.95;
+            ctx.beginPath();
+            ctx.moveTo(stX - fl, stY);
+            ctx.lineTo(stX + fl, stY);
+            ctx.moveTo(stX, stY - fl);
+            ctx.lineTo(stX, stY + fl);
+            ctx.stroke();
+            ctx.fillStyle = st % 2 === 0 ? '#00E5FF' : '#FF80AB';
+            ctx.beginPath();
+            ctx.arc(stX, stY, 2.2 * scale, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          // Standard 20-Tier Vivid Gameplay Aura
+          const pCol = activeGameRank.primaryColor || '#FFD54F';
+          const sCol = activeGameRank.secondaryColor || '#FF9800';
+          const aCol = activeGameRank.color || '#EF6C00';
+          const gGrad = ctx.createRadialGradient(x, centerBodyY, 3 * scale, x, centerBodyY, auraR * 1.28 * pulse);
+          gGrad.addColorStop(0, pCol);
+          gGrad.addColorStop(0.55, sCol);
+          gGrad.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.globalAlpha = 0.55;
+          ctx.fillStyle = gGrad;
+          ctx.beginPath();
+          ctx.arc(x, centerBodyY, auraR * 1.28 * pulse, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 0.85;
+          ctx.strokeStyle = aCol;
+          ctx.lineWidth = 2.2 * scale;
+          ctx.beginPath();
+          ctx.arc(x, centerBodyY, auraR * 0.88 * pulse, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
 
       // Active Ink Shield Forcefield Bubble when 🛡️ Shield Guard is active
       if (typeof shieldGuardActive !== 'undefined' && shieldGuardActive) {
@@ -7555,15 +7735,16 @@
       const groundY = h * 0.84;
       const centerX = w * 0.5;
 
+      const isGmCosmicStatic = Boolean(activeRank && activeRank.isGmExclusive);
       // 3-Stage Evolving Dragon Ball Levitation Offset:
       // Tiers 1–5 (Grounded Ki Charge): 0px
       // Tiers 6–12 (Ascendant Hover): 25px + sin(t * 4) * 8
-      // Tiers 13–20 (Transcendent Cosmic Float): 40px + sin(t * 3.2) * 10
+      // Tiers 13–20 & GM Exclusive Cosmic-Static (Transcendent Cosmic Float): 40px + sin(t * 3.2) * 10
       let hoverOffset = 0;
-      if (currentTier >= 6 && currentTier <= 12) {
+      if (isGmCosmicStatic || currentTier >= 13) {
+        hoverOffset = 42 + Math.sin(phase * 1.45) * 10 + surgeBoost * 9;
+      } else if (currentTier >= 6 && currentTier <= 12) {
         hoverOffset = 25 + Math.sin(phase * 1.8) * 8 + surgeBoost * 6;
-      } else if (currentTier >= 13) {
-        hoverOffset = 40 + Math.sin(phase * 1.45) * 10 + surgeBoost * 9;
       }
 
       const footY = groundY - hoverOffset;
@@ -7573,28 +7754,157 @@
       ctx.translate(shakeX, shakeY);
 
       // =======================================================================
-      // 1. SYNCHRONIZED 20-TIER STICKMAN AURA (MATCHES TIER PROGRESS CARD)
+      // 1. SYNCHRONIZED 20-TIER + GM EXCLUSIVE COSMIC-STATIC STICKMAN AURA
       // =======================================================================
       const baseRadius = Math.min(w, h) * 0.34 * effectivePulse;
 
       // Vivid radial aura backdrop wash around stickman
-      const bgRadial = ctx.createRadialGradient(centerX, coreY, 6, centerX, coreY, baseRadius * 1.38);
-      bgRadial.addColorStop(0, primary);
-      bgRadial.addColorStop(0.55, secondary);
-      bgRadial.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.save();
-      ctx.globalAlpha = Math.min(0.85, 0.42 * effectivePulse);
-      ctx.fillStyle = bgRadial;
-      ctx.beginPath();
-      ctx.arc(centerX, coreY, baseRadius * 1.38, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      if (isGmCosmicStatic) {
+        // Deep-space galaxy nebula core (IMG_1437: deep indigo, royal cyan, magenta-violet, crimson nebula dust)
+        const gmRadial = ctx.createRadialGradient(centerX, coreY, 4, centerX, coreY, baseRadius * 1.68);
+        gmRadial.addColorStop(0, '#FFFFFF');
+        gmRadial.addColorStop(0.16, '#00E5FF');
+        gmRadial.addColorStop(0.38, '#7C4DFF');
+        gmRadial.addColorStop(0.62, '#D500F9');
+        gmRadial.addColorStop(0.82, 'rgba(255, 23, 68, 0.48)');
+        gmRadial.addColorStop(0.94, 'rgba(9, 4, 30, 0.25)');
+        gmRadial.addColorStop(1, 'rgba(9, 4, 30, 0)');
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.96, 0.84 * effectivePulse);
+        ctx.fillStyle = gmRadial;
+        ctx.beginPath();
+        ctx.arc(centerX, coreY, baseRadius * 1.68, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else {
+        const bgRadial = ctx.createRadialGradient(centerX, coreY, 6, centerX, coreY, baseRadius * 1.38);
+        bgRadial.addColorStop(0, primary);
+        bgRadial.addColorStop(0.55, secondary);
+        bgRadial.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.85, 0.42 * effectivePulse);
+        ctx.fillStyle = bgRadial;
+        ctx.beginPath();
+        ctx.arc(centerX, coreY, baseRadius * 1.38, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
 
       ctx.save();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
-      if (currentTier === 1) {
+      if (isGmCosmicStatic) {
+        // GM EXCLUSIVE DEFAULT AURA: Deep-Space Galaxy Nebula (IMG_1437) × High-Contrast TV Static Glitch (IMG_1436)
+        // A. Deep cosmic void portal disc behind the nebula
+        ctx.fillStyle = 'rgba(8, 3, 27, 0.76)';
+        ctx.beginPath();
+        ctx.arc(centerX, coreY, baseRadius * 1.24, 0, Math.PI * 2);
+        ctx.fill();
+
+        // B. Swirling Spiral Galaxy Arms & Crimson/Magenta Nebula Clouds (IMG_1437 upper-right & center)
+        for (let cl = 0; cl < 10; cl++) {
+          const cAng = phase * 0.72 + (cl * Math.PI * 2) / 10;
+          const cDist = baseRadius * (0.38 + (cl % 3) * 0.28);
+          const cxNeb = centerX + Math.cos(cAng) * cDist;
+          const cyNeb = coreY + Math.sin(cAng) * cDist * 0.78;
+          const nebCol = cl % 3 === 0 ? 'rgba(213, 0, 249, 0.36)' : (cl % 3 === 1 ? 'rgba(0, 176, 255, 0.36)' : 'rgba(255, 23, 68, 0.32)');
+          ctx.fillStyle = nebCol;
+          ctx.beginPath();
+          ctx.arc(cxNeb, cyNeb, (18 + (cl % 3) * 7) * basePulse, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Spiral Galaxy Vortex (inspired by the dark spiral galaxy ring in upper-center of IMG_1437)
+        for (let arm = 0; arm < 4; arm++) {
+          ctx.strokeStyle = arm % 2 === 0 ? '#00E5FF' : '#EA80FC';
+          ctx.globalAlpha = 0.84;
+          ctx.lineWidth = 2.6;
+          ctx.beginPath();
+          for (let s = 0; s <= 32; s++) {
+            const frac = s / 32;
+            const r = frac * baseRadius * 1.36;
+            const ang = phase * 1.65 + (arm * Math.PI) / 2 + frac * 4.5;
+            const px = centerX + Math.cos(ang) * r;
+            const py = coreY + Math.sin(ang) * r * 0.76;
+            if (s === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+
+        // C. Glowing Electric-Cyan Plasma Filaments & Loops (signature center loops of IMG_1437)
+        for (let f = 0; f < 6; f++) {
+          const fang = -phase * 1.3 + (f * Math.PI) / 3;
+          const fx = centerX + Math.cos(fang) * (baseRadius * 0.48);
+          const fy = coreY + Math.sin(fang) * (baseRadius * 0.42);
+          ctx.strokeStyle = '#80D8FF';
+          ctx.globalAlpha = 0.92;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.ellipse(
+            fx,
+            fy,
+            (15 + Math.sin(t * 7 + f) * 4) * basePulse,
+            (8 + Math.cos(t * 6 + f) * 3) * basePulse,
+            fang + Math.sin(t * 4 + f),
+            0,
+            Math.PI * 2
+          );
+          ctx.stroke();
+        }
+
+        // D. High-Contrast Black & White TV Static Noise Matrix (IMG_1436 crisp black/white grain)
+        const staticFrame = Math.floor(t * 30);
+        for (let g = 0; g < 110; g++) {
+          const s1 = Math.sin(staticFrame * 31.7 + g * 97.3) * 43758.5453;
+          const r1 = s1 - Math.floor(s1);
+          const s2 = Math.cos(staticFrame * 17.9 + g * 53.1) * 28411.9137;
+          const r2 = s2 - Math.floor(s2);
+          const ang = r1 * Math.PI * 2;
+          const dist = Math.sqrt(r2) * baseRadius * 1.32;
+          const gx = centerX + Math.cos(ang) * dist;
+          const gy = coreY + Math.sin(ang) * dist * 0.95;
+          const isWhite = ((g + staticFrame) % 2 === 0);
+          ctx.fillStyle = isWhite ? '#FFFFFF' : '#0A0A0A';
+          ctx.globalAlpha = isWhite ? 0.92 : 0.88;
+          const bwW = 2.2 + (g % 3) * 1.4;
+          const bwH = 2.0 + ((g + 1) % 2) * 1.2;
+          ctx.fillRect(gx - bwW * 0.5, gy - bwH * 0.5, bwW, bwH);
+        }
+
+        // Horizontal CRT TV Static Glitch Tear Bars
+        for (let bar = 0; bar < 6; bar++) {
+          const by = (coreY - baseRadius * 1.05) + (((t * 75 + bar * 29) % (baseRadius * 2.1)));
+          const bw = 28 + ((staticFrame * 13 + bar * 19) % 54);
+          const bx = centerX + Math.sin(staticFrame * 0.8 + bar * 2.4) * (baseRadius * 0.55) - bw * 0.5;
+          ctx.fillStyle = bar % 2 === 0 ? '#FFFFFF' : '#0D0D0D';
+          ctx.globalAlpha = 0.85;
+          ctx.fillRect(bx, by, bw, 2.5);
+          ctx.fillStyle = bar % 2 === 0 ? '#00E5FF' : '#FF1744';
+          ctx.globalAlpha = 0.72;
+          ctx.fillRect(bx + 4, by + 1.2, bw * 0.65, 1.5);
+        }
+
+        // E. Multi-Point Diffraction Flare Stars (IMG_1437 bright lens-flare stars)
+        for (let st = 0; st < 8; st++) {
+          const sAng = phase * 0.85 + (st * Math.PI * 2) / 8;
+          const sRad = baseRadius * (0.62 + (st % 3) * 0.28);
+          const sx = centerX + Math.cos(sAng) * sRad;
+          const sy = coreY + Math.sin(sAng) * sRad * 0.88;
+          const flare = (8 + (st % 2) * 5) * effectivePulse;
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.globalAlpha = 0.95;
+          ctx.lineWidth = 1.9;
+          ctx.beginPath();
+          ctx.moveTo(sx - flare, sy);
+          ctx.lineTo(sx + flare, sy);
+          ctx.moveTo(sx, sy - flare);
+          ctx.lineTo(sx, sy + flare);
+          ctx.stroke();
+          drawHomeSparkleStar(ctx, sx, sy, 4.8 * basePulse, st % 2 === 0 ? '#00E5FF' : '#FF80AB', phase + st);
+        }
+      } else if (currentTier === 1) {
         // Tier 1 (Lv 1–50): Soft pale-yellow hatching lines & subtle golden ki pulse
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2.2;
@@ -8046,33 +8356,63 @@
       ctx.save();
       traceJaggedKiShell(1.05, 1.04, 0, 7);
       const outerGrad = ctx.createLinearGradient(centerX, crownTopY, centerX, baseBottomY);
-      outerGrad.addColorStop(0, secondary);
-      outerGrad.addColorStop(0.55, primary);
-      outerGrad.addColorStop(1, secondary);
-      ctx.globalAlpha = 0.42;
+      if (isGmCosmicStatic) {
+        outerGrad.addColorStop(0, '#00E5FF');
+        outerGrad.addColorStop(0.35, '#12002B');
+        outerGrad.addColorStop(0.68, '#D500F9');
+        outerGrad.addColorStop(1, '#FF1744');
+        ctx.globalAlpha = 0.62;
+      } else {
+        outerGrad.addColorStop(0, secondary);
+        outerGrad.addColorStop(0.55, primary);
+        outerGrad.addColorStop(1, secondary);
+        ctx.globalAlpha = 0.42;
+      }
       ctx.fillStyle = outerGrad;
       ctx.fill();
-      ctx.globalAlpha = 0.86;
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 2.6;
+      ctx.globalAlpha = 0.92;
+      ctx.strokeStyle = isGmCosmicStatic ? '#00E5FF' : accent;
+      ctx.lineWidth = isGmCosmicStatic ? 3.2 : 2.6;
       ctx.stroke();
-      ctx.globalAlpha = 0.52;
-      ctx.strokeStyle = '#1E1E1E';
-      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 0.58;
+      ctx.strokeStyle = isGmCosmicStatic ? '#FFFFFF' : '#1E1E1E';
+      ctx.lineWidth = 1.4;
       ctx.stroke();
 
       // Layer 2: Inner intense core aura shell
       traceJaggedKiShell(0.74, 0.82, 1.6, 6);
-      ctx.globalAlpha = 0.55;
-      ctx.fillStyle = primary;
-      ctx.fill();
-      ctx.globalAlpha = 0.92;
+      if (isGmCosmicStatic) {
+        ctx.save();
+        ctx.clip();
+        ctx.globalAlpha = 0.52;
+        ctx.fillStyle = '#09041E';
+        ctx.fillRect(centerX - outerW, crownTopY - 20, outerW * 2, (baseBottomY - crownTopY) + 40);
+        // Live TV Static Noise Matrix inside the inner Dragon Ball Ki shell!
+        const shellStaticSeed = Math.floor(t * 36);
+        for (let sp = 0; sp < 75; sp++) {
+          const n1 = Math.sin(shellStaticSeed * 43.1 + sp * 19.7) * 43758.5453;
+          const u1 = n1 - Math.floor(n1);
+          const n2 = Math.cos(shellStaticSeed * 29.3 + sp * 67.3) * 31987.2319;
+          const u2 = n2 - Math.floor(n2);
+          const sx = centerX + (u1 - 0.5) * outerW * 1.4;
+          const sy = crownTopY + u2 * (baseBottomY - crownTopY);
+          ctx.fillStyle = (sp % 3 === 0) ? '#00E5FF' : ((sp % 2 === 0) ? '#FFFFFF' : '#0A0A0A');
+          ctx.globalAlpha = 0.88;
+          ctx.fillRect(sx, sy, 3.2, 2.4);
+        }
+        ctx.restore();
+      } else {
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = primary;
+        ctx.fill();
+      }
+      ctx.globalAlpha = 0.94;
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2.0;
+      ctx.lineWidth = 2.2;
       ctx.stroke();
 
       // Upward-rising sketchy wind/ki lines
-      const windLines = surgeMultiplier > 1.2 ? 14 : 9;
+      const windLines = (surgeMultiplier > 1.2 || isGmCosmicStatic) ? 14 : 9;
       for (let i = 0; i < windLines; i++) {
         const side = i % 2 === 0 ? -1 : 1;
         const lane = Math.floor(i / 2) + 1;
@@ -8080,9 +8420,13 @@
         const cycle = (t * (2.2 + (i % 3) * 0.45) + i * 0.21) % 1;
         const sy = baseBottomY - cycle * (outerH * 1.25);
         const lineLen = (14 + (i % 3) * 6) * surgeScale;
-        ctx.globalAlpha = Math.sin(cycle * Math.PI) * 0.78;
-        ctx.strokeStyle = i % 3 === 0 ? '#1E1E1E' : accent;
-        ctx.lineWidth = 2.0;
+        ctx.globalAlpha = Math.sin(cycle * Math.PI) * 0.85;
+        if (isGmCosmicStatic) {
+          ctx.strokeStyle = i % 3 === 0 ? '#FFFFFF' : (i % 3 === 1 ? '#00E5FF' : '#0A0A0A');
+        } else {
+          ctx.strokeStyle = i % 3 === 0 ? '#1E1E1E' : accent;
+        }
+        ctx.lineWidth = 2.2;
         ctx.beginPath();
         ctx.moveTo(centerX + xSpread, sy);
         ctx.lineTo(centerX + xSpread * 0.94, sy - lineLen);
@@ -8483,24 +8827,71 @@
       ctx.save();
 
       // 1. Vivid multi-stop animated gradient background wash
-      const bgGrad = ctx.createLinearGradient(0, 0, w, h);
-      bgGrad.addColorStop(0, primary);
-      bgGrad.addColorStop(0.5, secondary);
-      bgGrad.addColorStop(1, primary);
-      ctx.globalAlpha = 0.28 + Math.sin(t * 3.2) * 0.08;
-      ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, w, h);
+      if (rank.isGmExclusive) {
+        // GM Exclusive Cosmic Nebula × TV Static Banner
+        const nebBg = ctx.createLinearGradient(0, 0, w, h);
+        nebBg.addColorStop(0, '#07031A');
+        nebBg.addColorStop(0.32, '#0A224E');
+        nebBg.addColorStop(0.65, '#310B54');
+        nebBg.addColorStop(1, '#4A082A');
+        ctx.globalAlpha = 0.88;
+        ctx.fillStyle = nebBg;
+        ctx.fillRect(0, 0, w, h);
 
-      // 2. Pulsing radial energy core behind the badge/title
-      const coreX = w * 0.25 + Math.sin(t * 2.2) * (w * 0.12);
-      const coreY = h * 0.5;
-      const radGrad = ctx.createRadialGradient(coreX, coreY, 4, coreX, coreY, Math.max(w, h) * 0.65);
-      radGrad.addColorStop(0, secondary);
-      radGrad.addColorStop(0.55, primary);
-      radGrad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.globalAlpha = 0.34 * pulse;
-      ctx.fillStyle = radGrad;
-      ctx.fillRect(0, 0, w, h);
+        // Glowing cyan/magenta nebula clouds (IMG_1437)
+        for (let c = 0; c < 4; c++) {
+          const nx = w * (0.18 + c * 0.22) + Math.sin(t * 1.8 + c) * 14;
+          const ny = h * 0.5 + Math.cos(t * 2.1 + c) * 10;
+          const rg = ctx.createRadialGradient(nx, ny, 2, nx, ny, 48 * pulse);
+          rg.addColorStop(0, c % 2 === 0 ? 'rgba(0, 229, 255, 0.55)' : 'rgba(213, 0, 249, 0.52)');
+          rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = rg;
+          ctx.fillRect(0, 0, w, h);
+        }
+
+        // Electric cyan plasma loops (IMG_1437 center filaments)
+        ctx.strokeStyle = '#80D8FF';
+        ctx.lineWidth = 2.0;
+        ctx.globalAlpha = 0.82;
+        for (let lp = 0; lp < 5; lp++) {
+          const lx = w * (0.14 + lp * 0.18);
+          const ly = h * 0.5 + Math.sin(t * 3.2 + lp) * 12;
+          ctx.beginPath();
+          ctx.ellipse(lx, ly, 16 * pulse, 8 * pulse, t * 1.4 + lp, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // High-contrast flickering black & white TV static grain patches (IMG_1436)
+        const cardSeed = Math.floor(t * 28);
+        for (let s = 0; s < 90; s++) {
+          const v1 = Math.sin(cardSeed * 23.7 + s * 91.1) * 43758.5453;
+          const rx = (v1 - Math.floor(v1)) * w;
+          const v2 = Math.cos(cardSeed * 19.3 + s * 47.7) * 29381.1931;
+          const ry = (v2 - Math.floor(v2)) * h;
+          ctx.fillStyle = (s + cardSeed) % 2 === 0 ? '#FFFFFF' : '#080808';
+          ctx.globalAlpha = 0.78;
+          ctx.fillRect(rx, ry, 2.5 + (s % 2), 2.0);
+        }
+      } else {
+        const bgGrad = ctx.createLinearGradient(0, 0, w, h);
+        bgGrad.addColorStop(0, primary);
+        bgGrad.addColorStop(0.5, secondary);
+        bgGrad.addColorStop(1, primary);
+        ctx.globalAlpha = 0.28 + Math.sin(t * 3.2) * 0.08;
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // 2. Pulsing radial energy core behind the badge/title
+        const coreX = w * 0.25 + Math.sin(t * 2.2) * (w * 0.12);
+        const coreY = h * 0.5;
+        const radGrad = ctx.createRadialGradient(coreX, coreY, 4, coreX, coreY, Math.max(w, h) * 0.65);
+        radGrad.addColorStop(0, secondary);
+        radGrad.addColorStop(0.55, primary);
+        radGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.globalAlpha = 0.34 * pulse;
+        ctx.fillStyle = radGrad;
+        ctx.fillRect(0, 0, w, h);
+      }
 
       // 3. Tier-specific procedural animated patterns that POP!
       ctx.globalAlpha = 0.72;
@@ -8508,7 +8899,23 @@
       ctx.fillStyle = primary;
       ctx.lineCap = 'round';
 
-      if (rank.tier === 1) {
+      if (rank.isGmExclusive) {
+        // Diffraction flare stars across the GM Exclusive banner
+        for (let st = 0; st < 6; st++) {
+          const sx = w * (0.1 + st * 0.16);
+          const sy = h * (st % 2 === 0 ? 0.28 : 0.72);
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 1.8;
+          ctx.globalAlpha = 0.92;
+          const fl = 7 * pulse;
+          ctx.beginPath();
+          ctx.moveTo(sx - fl, sy);
+          ctx.lineTo(sx + fl, sy);
+          ctx.moveTo(sx, sy - fl);
+          ctx.lineTo(sx, sy + fl);
+          ctx.stroke();
+        }
+      } else if (rank.tier === 1) {
         // Tier 1: Golden Sunburst Hatching + Rising Sparkle Stars
         ctx.lineWidth = 2.4;
         const step = 16;
@@ -9502,13 +9909,23 @@
       const peekTierLabel = document.getElementById('gmPeekTierLabel');
       const peekLevelLabel = document.getElementById('gmPeekLevelLabel');
       if (activeRank) {
-        if (tierLabel) tierLabel.textContent = `Tier ${activeRank.tier} / 20: ${activeRank.title}${gmTierOverride ? ' (Override)' : ' (Real)'}`;
-        if (consoleTierLabel) consoleTierLabel.textContent = `Tier ${activeRank.tier} / 20${gmTierOverride ? ' (Preview)' : ' (Real)'}`;
-        if (quickTierLabel) {
-          quickTierLabel.textContent = `Tier ${activeRank.tier}/20`;
-          quickTierLabel.style.color = gmTierOverride ? '#E65100' : '#1E1E1E';
+        if (activeRank.isGmExclusive) {
+          if (tierLabel) tierLabel.textContent = `👑⚡ GM Exclusive: Cosmic × Static Aura (Default)`;
+          if (consoleTierLabel) consoleTierLabel.textContent = `👑⚡ GM Exclusive Aura (Default)`;
+          if (quickTierLabel) {
+            quickTierLabel.textContent = `👑⚡ GM Aura`;
+            quickTierLabel.style.color = '#6A1B9A';
+          }
+          if (peekTierLabel) peekTierLabel.textContent = `👑⚡ GM Aura`;
+        } else {
+          if (tierLabel) tierLabel.textContent = `Tier ${activeRank.tier} / 20: ${activeRank.title}${gmTierOverride ? ' (Override)' : ' (Real)'}`;
+          if (consoleTierLabel) consoleTierLabel.textContent = `Tier ${activeRank.tier} / 20${gmTierOverride ? ' (Preview)' : ' (Real)'}`;
+          if (quickTierLabel) {
+            quickTierLabel.textContent = `Tier ${activeRank.tier}/20`;
+            quickTierLabel.style.color = gmTierOverride ? '#E65100' : '#1E1E1E';
+          }
+          if (peekTierLabel) peekTierLabel.textContent = `Tier ${activeRank.tier}/20`;
         }
-        if (peekTierLabel) peekTierLabel.textContent = `Tier ${activeRank.tier}/20`;
       }
       if (peekLevelLabel) peekLevelLabel.textContent = `Lv ${lvlNum}`;
 
@@ -9592,7 +10009,7 @@
     function gmResetTierToReal() {
       gmTierOverride = null;
       updateMenuUI();
-      showToast('👑 Reset to Real Campaign Tier');
+      showToast('👑⚡ Restored GM Exclusive Cosmic × Static Aura!');
     }
 
     function gmTeleportToLevel(targetLvl) {

@@ -1580,6 +1580,9 @@ class WordGameViewModel : ViewModel() {
             realTierIndex
         }
 
+    val isGmExclusiveAuraActive: Boolean
+        get() = isGmLoggedIn && gmTierOverride == null
+
     val currentRankTier: RankTier
         get() = RankTier.entries[(activeDisplayTier - 1).coerceIn(0, RankTier.entries.lastIndex)]
 
@@ -4291,6 +4294,7 @@ fun HomeScreen(
                     currentLevel = effectiveCardLevel,
                     currentTier = activeTier,
                     rankTier = activeRank,
+                    isGmExclusiveAura = isGmLoggedIn && !isTierPreviewOverride,
                     fontFamily = fontFamily,
                     modifier = Modifier
                         .fillMaxSize()
@@ -4305,12 +4309,13 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Dynamic Tier Progression Card (Synchronized with activeRank & 20-Tier Cosmic Aura)
+        // Dynamic Tier Progression Card (Synchronized with activeRank & 20-Tier Cosmic Aura + GM Exclusive Cosmic-Static Aura)
         TierProgressionCard(
             rankTier = activeRank,
             levelNumber = effectiveCardLevel,
             completedLevels = completedLevels,
             totalLevels = totalCampaignLevels,
+            isGmExclusiveAura = isGmLoggedIn && !isTierPreviewOverride,
             fontFamily = fontFamily,
             onClick = null,
             modifier = Modifier
@@ -4347,7 +4352,11 @@ fun HomeScreen(
                         color = DoodleColors.InkBlack
                     )
                     Text(
-                        text = "${activePeril.displayName} • ${activeRank.title}",
+                        text = if (isGmLoggedIn && !isTierPreviewOverride) {
+                            "${activePeril.displayName} • 👑⚡ Cosmic-Static Singularity"
+                        } else {
+                            "${activePeril.displayName} • ${activeRank.title}"
+                        },
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
@@ -4391,6 +4400,7 @@ fun HomeChargingStickmanCenterpiece(
     currentLevel: Int,
     currentTier: Int = ((currentLevel - 1) / 50 + 1).coerceIn(1, 20),
     rankTier: RankTier = RankTier.forLevel(currentLevel),
+    isGmExclusiveAura: Boolean = false,
     fontFamily: FontFamily,
     modifier: Modifier = Modifier
 ) {
@@ -4587,8 +4597,10 @@ fun HomeChargingStickmanCenterpiece(
             // Compute stickman vertical levitation offset based on 3-stage Dragon Ball evolution:
             // Tiers 1–5: Grounded Ki Charge (planted firmly on groundY)
             // Tiers 6–12: Ascendant Hover (levitating 25.dp above ground line + sin(time * 4f) * 8f)
-            // Tiers 13–20: Transcendent Cosmic Float (levitating 40.dp above ground line + Zen float)
+            // Tiers 13–20 & GM Exclusive Cosmic-Static: Transcendent Cosmic Float (levitating 42.dp above ground line + Zen float)
+            val effectiveStageTier = if (isGmExclusiveAura) 20 else currentTier
             val hoverOffsetPx = when {
+                isGmExclusiveAura -> 42.dp.toPx() + sin(time * 3.2f) * 10.dp.toPx() + surgeBoost * 9.dp.toPx()
                 currentTier in 1..5 -> 0f
                 currentTier in 6..12 -> 25.dp.toPx() + sin(time * 4f) * 8.dp.toPx() + surgeBoost * 6.dp.toPx()
                 else -> 40.dp.toPx() + sin(time * 3.2f) * 10.dp.toPx() + surgeBoost * 9.dp.toPx()
@@ -4600,16 +4612,17 @@ fun HomeChargingStickmanCenterpiece(
             withTransform({
                 translate(left = shakeX, top = shakeY)
             }) {
-                // 1. Draw Tier-Synchronized Background & Midground Aura (Tiers 1 to 20)
+                // 1. Draw Tier-Synchronized Background & Midground Aura (Tiers 1 to 20 + GM Exclusive Cosmic-Static Singularity)
                 drawStickmanTierAura(
-                    currentTier = currentTier,
+                    currentTier = effectiveStageTier,
                     rankTier = rankTier,
                     center = Offset(centerX, stickmanCoreY),
                     groundY = groundY,
                     time = time,
                     phase = effectivePhase,
                     pulse = effectivePulse,
-                    surgeMultiplier = surgeMultiplier
+                    surgeMultiplier = surgeMultiplier,
+                    isGmExclusiveAura = isGmExclusiveAura
                 )
 
                 // 2. Draw Double-Layered Jagged Dragon Ball Energy Shell + Upward Wind/Ki Lines
@@ -4621,12 +4634,13 @@ fun HomeChargingStickmanCenterpiece(
                     time = time,
                     pulse = effectivePulse,
                     flicker = fastFlicker,
-                    surgeMultiplier = surgeMultiplier
+                    surgeMultiplier = surgeMultiplier,
+                    isGmExclusiveAura = isGmExclusiveAura
                 )
 
                 // 3. Draw Horizontal Sketchy Ground Line, Stage Shadows, Floating Pebbles & Shockwave Rings
                 drawHomeGroundAndStageEffects(
-                    currentTier = currentTier,
+                    currentTier = effectiveStageTier,
                     rankTier = rankTier,
                     centerX = centerX,
                     groundY = groundY,
@@ -4637,7 +4651,7 @@ fun HomeChargingStickmanCenterpiece(
 
                 // 4. Draw 3-Stage Evolving Dragon Ball Black Doodle Stickman
                 drawEvolvingKiStickman(
-                    currentTier = currentTier,
+                    currentTier = effectiveStageTier,
                     rankTier = rankTier,
                     centerX = centerX,
                     footY = stickmanFootY,
@@ -4832,7 +4846,8 @@ private fun DrawScope.drawDragonBallEnergyShell(
     time: Float,
     pulse: Float,
     flicker: Float,
-    surgeMultiplier: Float
+    surgeMultiplier: Float,
+    isGmExclusiveAura: Boolean = false
 ) {
     val surgeScale = 1f + (surgeMultiplier - 1f) * 0.35f
     val outerWidth = 58.dp.toPx() * pulse * surgeScale
@@ -4843,11 +4858,20 @@ private fun DrawScope.drawDragonBallEnergyShell(
     // Soft radial core glow behind the energy shell
     drawCircle(
         brush = Brush.radialGradient(
-            colors = listOf(
-                rankTier.primaryColor.copy(alpha = (0.48f * surgeScale).coerceIn(0f, 0.82f)),
-                rankTier.accentColor.copy(alpha = (0.24f * surgeScale).coerceIn(0f, 0.55f)),
-                Color.Transparent
-            ),
+            colors = if (isGmExclusiveAura) {
+                listOf(
+                    Color(0xFF00E5FF).copy(alpha = (0.64f * surgeScale).coerceIn(0f, 0.92f)),
+                    Color(0xFFD500F9).copy(alpha = (0.42f * surgeScale).coerceIn(0f, 0.78f)),
+                    Color(0xFFFF1744).copy(alpha = 0.22f),
+                    Color.Transparent
+                )
+            } else {
+                listOf(
+                    rankTier.primaryColor.copy(alpha = (0.48f * surgeScale).coerceIn(0f, 0.82f)),
+                    rankTier.accentColor.copy(alpha = (0.24f * surgeScale).coerceIn(0f, 0.55f)),
+                    Color.Transparent
+                )
+            },
             center = center,
             radius = outerHeight * 1.15f
         ),
@@ -4907,47 +4931,86 @@ private fun DrawScope.drawDragonBallEnergyShell(
     drawPath(
         path = outerShellPath,
         brush = Brush.verticalGradient(
-            colors = listOf(
-                rankTier.accentColor.copy(alpha = 0.30f),
-                rankTier.primaryColor.copy(alpha = 0.46f),
-                rankTier.accentColor.copy(alpha = 0.22f)
-            ),
+            colors = if (isGmExclusiveAura) {
+                listOf(
+                    Color(0xFF00E5FF).copy(alpha = 0.62f),
+                    Color(0xFF12002B).copy(alpha = 0.72f),
+                    Color(0xFFD500F9).copy(alpha = 0.62f),
+                    Color(0xFFFF1744).copy(alpha = 0.54f)
+                )
+            } else {
+                listOf(
+                    rankTier.accentColor.copy(alpha = 0.30f),
+                    rankTier.primaryColor.copy(alpha = 0.46f),
+                    rankTier.accentColor.copy(alpha = 0.22f)
+                )
+            },
             startY = crownTopY,
             endY = baseBottomY
         )
     )
     drawPath(
         path = outerShellPath,
-        color = rankTier.accentColor.copy(alpha = 0.82f),
-        style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        color = if (isGmExclusiveAura) Color(0xFF00E5FF) else rankTier.accentColor.copy(alpha = 0.82f),
+        style = Stroke(width = if (isGmExclusiveAura) 3.2.dp.toPx() else 2.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
     )
     drawPath(
         path = outerShellPath,
-        color = DoodleColors.InkBlack.copy(alpha = 0.55f),
-        style = Stroke(width = 1.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        color = if (isGmExclusiveAura) Color.White.copy(alpha = 0.75f) else DoodleColors.InkBlack.copy(alpha = 0.55f),
+        style = Stroke(width = 1.3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
     )
 
     // Layer 2: Inner intense core aura shell
     drawPath(
         path = innerShellPath,
         brush = Brush.verticalGradient(
-            colors = listOf(
-                Color.White.copy(alpha = 0.58f),
-                rankTier.primaryColor.copy(alpha = 0.55f),
-                Color.White.copy(alpha = 0.32f)
-            ),
+            colors = if (isGmExclusiveAura) {
+                listOf(
+                    Color(0xFF09041E).copy(alpha = 0.75f),
+                    Color(0xFF00E5FF).copy(alpha = 0.52f),
+                    Color(0xFFD500F9).copy(alpha = 0.58f)
+                )
+            } else {
+                listOf(
+                    Color.White.copy(alpha = 0.58f),
+                    rankTier.primaryColor.copy(alpha = 0.55f),
+                    Color.White.copy(alpha = 0.32f)
+                )
+            },
             startY = crownTopY,
             endY = baseBottomY
         )
     )
+    // Live High-Contrast Black & White TV Static Noise Pixels inside the GM Exclusive Ki Shell (IMG_1436)
+    if (isGmExclusiveAura) {
+        val staticTick = (time * 32f).toInt()
+        for (sp in 0 until 64) {
+            val h1 = sin(staticTick * 37.3f + sp * 19.1f) * 43758.54f
+            val u1 = h1 - kotlin.math.floor(h1)
+            val h2 = cos(staticTick * 23.9f + sp * 61.7f) * 29481.13f
+            val u2 = h2 - kotlin.math.floor(h2)
+            val sx = center.x + (u1 - 0.5f) * outerWidth * 1.15f
+            val sy = crownTopY + u2 * (baseBottomY - crownTopY)
+            val isWhite = (sp + staticTick) % 2 == 0
+            drawRect(
+                color = when {
+                    sp % 5 == 0 -> Color(0xFF00E5FF)
+                    isWhite -> Color.White
+                    else -> Color(0xFF0A0A0A)
+                },
+                topLeft = Offset(sx, sy),
+                size = Size(3.2.dp.toPx(), 2.2.dp.toPx())
+            )
+        }
+    }
     drawPath(
         path = innerShellPath,
-        color = rankTier.primaryColor.copy(alpha = 0.92f),
-        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        color = if (isGmExclusiveAura) Color.White else rankTier.primaryColor.copy(alpha = 0.92f),
+        style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
     )
 
     // Upward-rising sketchy wind / ki lines around the stickman
-    val windLineCount = if (surgeMultiplier > 1.2f) 14 else 9
+    val windLineCount = if (surgeMultiplier > 1.2f || isGmExclusiveAura) 14 else 9
     for (i in 0 until windLineCount) {
         val side = if (i % 2 == 0) -1f else 1f
         val lane = (i / 2) + 1
@@ -4956,13 +5019,22 @@ private fun DrawScope.drawDragonBallEnergyShell(
         val cycle = ((time * (2.4f + (i % 3) * 0.45f) + i * 0.21f) % 1f)
         val startY = baseBottomY - cycle * (outerHeight * 1.28f)
         val lineLen = (14.dp.toPx() + (i % 3) * 6.dp.toPx()) * surgeScale
-        val alpha = sin(cycle * PI).toFloat().coerceIn(0f, 1f) * 0.78f
+        val alpha = sin(cycle * PI).toFloat().coerceIn(0f, 1f) * 0.84f
 
+        val windCol = if (isGmExclusiveAura) {
+            when (i % 3) {
+                0 -> Color.White.copy(alpha = alpha)
+                1 -> Color(0xFF00E5FF).copy(alpha = alpha)
+                else -> Color(0xFF0A0A0A).copy(alpha = alpha)
+            }
+        } else {
+            if (i % 3 == 0) DoodleColors.InkBlack.copy(alpha = alpha * 0.55f) else rankTier.accentColor.copy(alpha = alpha)
+        }
         drawLine(
-            color = if (i % 3 == 0) DoodleColors.InkBlack.copy(alpha = alpha * 0.55f) else rankTier.accentColor.copy(alpha = alpha),
+            color = windCol,
             start = Offset(center.x + xSpread, startY),
             end = Offset(center.x + xSpread * 0.94f, startY - lineLen),
-            strokeWidth = 2.dp.toPx(),
+            strokeWidth = 2.2.dp.toPx(),
             cap = StrokeCap.Round
         )
     }
@@ -5399,12 +5471,161 @@ private fun DrawScope.drawStickmanTierAura(
     time: Float,
     phase: Float,
     pulse: Float,
-    surgeMultiplier: Float
+    surgeMultiplier: Float,
+    isGmExclusiveAura: Boolean = false
 ) {
     val w = size.width
     val h = size.height
     val scale = pulse * (1f + (surgeMultiplier - 1f) * 0.28f)
     val baseRadius = min(w, h) * 0.34f * scale
+
+    if (isGmExclusiveAura) {
+        // =========================================================================
+        // GM EXCLUSIVE DEFAULT AURA: DEEP-SPACE COSMIC NEBULA (IMG_1437) ×
+        // HIGH-CONTRAST BLACK-AND-WHITE TV STATIC GLITCH (IMG_1436)
+        // =========================================================================
+        // 1. Deep-Space Cosmic Nebula Portal Core (indigo void + royal cyan + magenta-violet + crimson nebula dust)
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.95f),
+                    Color(0xFF00E5FF).copy(alpha = 0.85f),
+                    Color(0xFF7C4DFF).copy(alpha = 0.74f),
+                    Color(0xFFD500F9).copy(alpha = 0.62f),
+                    Color(0xFFFF1744).copy(alpha = 0.42f),
+                    Color(0xFF08031B).copy(alpha = 0.78f),
+                    Color.Transparent
+                ),
+                center = center,
+                radius = baseRadius * 1.62f
+            ),
+            radius = baseRadius * 1.62f,
+            center = center
+        )
+
+        // 2. Swirling Spiral Galaxy Arms & Nebula Clouds (IMG_1437 spiral galaxy & crimson/violet stardust)
+        for (cl in 0 until 10) {
+            val cAng = phase * 1.4f + (cl * 2.0 * PI / 10.0).toFloat()
+            val cDist = baseRadius * (0.36f + (cl % 3) * 0.28f)
+            val cxNeb = center.x + cos(cAng) * cDist
+            val cyNeb = center.y + sin(cAng) * cDist * 0.78f
+            val nebColor = when (cl % 3) {
+                0 -> Color(0xFFD500F9).copy(alpha = 0.38f)
+                1 -> Color(0xFF00B0FF).copy(alpha = 0.38f)
+                else -> Color(0xFFFF1744).copy(alpha = 0.34f)
+            }
+            drawCircle(
+                color = nebColor,
+                radius = (18.dp.toPx() + (cl % 3) * 7.dp.toPx()) * pulse,
+                center = Offset(cxNeb, cyNeb)
+            )
+        }
+
+        for (arm in 0 until 4) {
+            val armPath = Path()
+            val steps = 28
+            for (s in 0..steps) {
+                val frac = s.toFloat() / steps
+                val r = frac * baseRadius * 1.38f
+                val ang = phase * 1.8f + (arm * PI / 2.0).toFloat() + frac * 4.5f
+                val px = center.x + cos(ang) * r
+                val py = center.y + sin(ang) * r * 0.78f
+                if (s == 0) armPath.moveTo(px, py) else armPath.lineTo(px, py)
+            }
+            drawPath(
+                path = armPath,
+                color = if (arm % 2 == 0) Color(0xFF00E5FF).copy(alpha = 0.88f) else Color(0xFFEA80FC).copy(alpha = 0.84f),
+                style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round)
+            )
+        }
+
+        // 3. Glowing Electric-Cyan Plasma Filaments & Loops (IMG_1437 center cyan nebula loops)
+        for (f in 0 until 6) {
+            val fang = -phase * 1.3f + (f * PI / 3.0).toFloat()
+            val fx = center.x + cos(fang) * (baseRadius * 0.48f)
+            val fy = center.y + sin(fang) * (baseRadius * 0.42f)
+            val rx = (15.dp.toPx() + sin(time * 7f + f) * 4.dp.toPx()) * pulse
+            val ry = (8.dp.toPx() + cos(time * 6f + f) * 3.dp.toPx()) * pulse
+            withTransform({
+                rotate(degrees = (fang * 57.3f + sin(time * 4f + f) * 25f), pivot = Offset(fx, fy))
+            }) {
+                drawOval(
+                    color = Color(0xFF80D8FF).copy(alpha = 0.92f),
+                    topLeft = Offset(fx - rx, fy - ry),
+                    size = Size(rx * 2f, ry * 2f),
+                    style = Stroke(width = 2.2.dp.toPx())
+                )
+            }
+        }
+
+        // 4. High-Contrast Black & White TV Static Noise Grain Matrix & CRT Glitch Scanlines (IMG_1436)
+        val staticFrame = (time * 30f).toInt()
+        for (g in 0 until 105) {
+            val s1 = sin(staticFrame * 31.7f + g * 97.3f) * 43758.54f
+            val r1 = s1 - kotlin.math.floor(s1)
+            val s2 = cos(staticFrame * 17.9f + g * 53.1f) * 28411.91f
+            val r2 = s2 - kotlin.math.floor(s2)
+            val ang = r1 * (2f * PI.toFloat())
+            val dist = kotlin.math.sqrt(r2) * baseRadius * 1.32f
+            val gx = center.x + cos(ang) * dist
+            val gy = center.y + sin(ang) * dist * 0.96f
+            val isWhite = (g + staticFrame) % 2 == 0
+            val bwW = (2.2f + (g % 3) * 1.3f).dp.toPx()
+            val bwH = (2.0f + ((g + 1) % 2) * 1.1f).dp.toPx()
+            drawRect(
+                color = if (isWhite) Color.White.copy(alpha = 0.92f) else Color(0xFF0A0A0A).copy(alpha = 0.88f),
+                topLeft = Offset(gx - bwW * 0.5f, gy - bwH * 0.5f),
+                size = Size(bwW, bwH)
+            )
+        }
+
+        // Horizontal CRT TV Static Glitch Tear Bars
+        for (bar in 0 until 6) {
+            val by = (center.y - baseRadius * 1.05f) + (((time * 75f + bar * 29f) % (baseRadius * 2.1f)))
+            val bw = (28 + ((staticFrame * 13 + bar * 19) % 54)).dp.toPx()
+            val bx = center.x + sin(staticFrame * 0.8f + bar * 2.4f) * (baseRadius * 0.52f) - bw * 0.5f
+            drawRect(
+                color = if (bar % 2 == 0) Color.White.copy(alpha = 0.86f) else Color(0xFF0D0D0D).copy(alpha = 0.86f),
+                topLeft = Offset(bx, by),
+                size = Size(bw, 2.5.dp.toPx())
+            )
+            drawRect(
+                color = if (bar % 2 == 0) Color(0xFF00E5FF).copy(alpha = 0.72f) else Color(0xFFFF1744).copy(alpha = 0.72f),
+                topLeft = Offset(bx + 4.dp.toPx(), by + 1.2.dp.toPx()),
+                size = Size(bw * 0.65f, 1.5.dp.toPx())
+            )
+        }
+
+        // 5. Multi-Point Diffraction Flare Stars (IMG_1437 bright lens-flare stars)
+        for (st in 0 until 8) {
+            val sAng = phase * 0.9f + (st * 2.0 * PI / 8.0).toFloat()
+            val sRad = baseRadius * (0.62f + (st % 3) * 0.28f)
+            val sx = center.x + cos(sAng) * sRad
+            val sy = center.y + sin(sAng) * sRad * 0.88f
+            val flare = (8.dp.toPx() + (st % 2) * 5.dp.toPx()) * pulse
+            drawLine(
+                color = Color.White,
+                start = Offset(sx - flare, sy),
+                end = Offset(sx + flare, sy),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = Color.White,
+                start = Offset(sx, sy - flare),
+                end = Offset(sx, sy + flare),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawDoodleSparkleStar(
+                center = Offset(sx, sy),
+                radius = 4.8.dp.toPx() * pulse,
+                color = if (st % 2 == 0) Color(0xFF00E5FF) else Color(0xFFFF80AB),
+                rotationRad = phase + st
+            )
+        }
+        return
+    }
 
     when (currentTier) {
         1 -> {
@@ -5948,6 +6169,7 @@ fun TierProgressionCard(
     levelNumber: Int,
     completedLevels: Int,
     totalLevels: Int,
+    isGmExclusiveAura: Boolean = false,
     fontFamily: FontFamily,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -5975,7 +6197,7 @@ fun TierProgressionCard(
         label = "auraPulse"
     )
 
-    val targetTierFraction = rankTier.tierProgressFraction(levelNumber)
+    val targetTierFraction = if (isGmExclusiveAura) 1f else rankTier.tierProgressFraction(levelNumber)
     val animatedTierFraction by animateFloatAsState(
         targetValue = targetTierFraction,
         animationSpec = spring(
@@ -5984,6 +6206,17 @@ fun TierProgressionCard(
         ),
         label = "tierProgressFraction"
     )
+
+    val cardTitle = if (isGmExclusiveAura) {
+        "👑 GM EXCLUSIVE: Cosmic-Static Singularity"
+    } else {
+        rankTier.displayTierTitle
+    }
+    val cardSubLabel = if (isGmExclusiveAura) {
+        "🌌⚡ Cosmic Nebula × Reality Static (Default GM Aura • Lv $levelNumber)"
+    } else {
+        rankTier.progressSubLabel(levelNumber)
+    }
 
     SketchyContainer(
         fillColor = DoodleColors.PaperOffWhite,
@@ -5995,7 +6228,7 @@ fun TierProgressionCard(
         modifier = modifier
             .testTag("tier_progression_card")
             .semantics {
-                contentDescription = "${rankTier.displayTierTitle}. ${rankTier.progressSubLabel(levelNumber)}. Campaign completed: $clampedCompleted of $safeTotal"
+                contentDescription = "$cardTitle. $cardSubLabel. Campaign completed: $clampedCompleted of $safeTotal"
             }
     ) {
         Box(
@@ -6013,20 +6246,23 @@ fun TierProgressionCard(
                 drawRankTierAura(
                     rankTier = rankTier,
                     phase = auraPhase,
-                    pulse = pulse
+                    pulse = pulse,
+                    isGmExclusiveAura = isGmExclusiveAura
                 )
 
                 // Outer & inner glowing neon/ink aura border rings inside the 2.dp black sketch frame
                 val borderRadius = 15.dp.toPx()
+                val primaryBorderCol = if (isGmExclusiveAura) Color(0xFF00E5FF) else rankTier.primaryColor
+                val accentBorderCol = if (isGmExclusiveAura) Color(0xFFD500F9) else rankTier.accentColor
                 drawRoundRect(
-                    color = rankTier.primaryColor.copy(alpha = (0.55f * pulse).coerceIn(0.25f, 0.78f)),
+                    color = primaryBorderCol.copy(alpha = (0.65f * pulse).coerceIn(0.25f, 0.88f)),
                     topLeft = Offset(2.dp.toPx(), 2.dp.toPx()),
                     size = Size(size.width - 4.dp.toPx(), size.height - 4.dp.toPx()),
                     cornerRadius = CornerRadius(borderRadius, borderRadius),
                     style = Stroke(width = (3.4.dp.toPx() * pulse))
                 )
                 drawRoundRect(
-                    color = rankTier.accentColor.copy(alpha = (0.45f * pulse).coerceIn(0.20f, 0.70f)),
+                    color = accentBorderCol.copy(alpha = (0.55f * pulse).coerceIn(0.20f, 0.80f)),
                     topLeft = Offset(4.dp.toPx(), 4.dp.toPx()),
                     size = Size(size.width - 8.dp.toPx(), size.height - 8.dp.toPx()),
                     cornerRadius = CornerRadius(borderRadius - 2.dp.toPx(), borderRadius - 2.dp.toPx()),
@@ -6048,7 +6284,7 @@ fun TierProgressionCard(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = rankTier.displayTierTitle,
+                            text = cardTitle,
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Black,
                             fontSize = 15.sp,
@@ -6057,11 +6293,11 @@ fun TierProgressionCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = rankTier.progressSubLabel(levelNumber),
+                            text = cardSubLabel,
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
-                            color = DoodleColors.InkBlue,
+                            color = if (isGmExclusiveAura) Color(0xFF4A148C) else DoodleColors.InkBlue,
                             modifier = Modifier.testTag("tier_progress_subtext")
                         )
                     }
@@ -6080,13 +6316,13 @@ fun TierProgressionCard(
                         ) {
                             val r = size.minDimension * 0.48f
                             drawCircle(
-                                color = rankTier.primaryColor.copy(alpha = 0.75f),
+                                color = if (isGmExclusiveAura) Color(0xFF09041E) else rankTier.primaryColor.copy(alpha = 0.75f),
                                 radius = r
                             )
                             for (k in 0 until 8) {
                                 val a = auraPhase + (k * PI / 4.0).toFloat()
                                 drawLine(
-                                    color = rankTier.secondaryColor.copy(alpha = 0.75f),
+                                    color = if (isGmExclusiveAura) Color(0xFF00E5FF) else rankTier.secondaryColor.copy(alpha = 0.75f),
                                     start = Offset(center.x + cos(a) * r * 0.65f, center.y + sin(a) * r * 0.65f),
                                     end = Offset(center.x + cos(a) * r * 1.08f, center.y + sin(a) * r * 1.08f),
                                     strokeWidth = 1.6.dp.toPx(),
@@ -6094,7 +6330,7 @@ fun TierProgressionCard(
                                 )
                             }
                             drawCircle(
-                                color = rankTier.accentColor,
+                                color = if (isGmExclusiveAura) Color(0xFFD500F9) else rankTier.accentColor,
                                 radius = size.minDimension * 0.44f,
                                 style = Stroke(width = 2.dp.toPx())
                             )
@@ -6138,11 +6374,22 @@ fun TierProgressionCard(
 
                             drawRoundRect(
                                 brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        rankTier.primaryColor,
-                                        rankTier.secondaryColor,
-                                        rankTier.primaryColor
-                                    )
+                                    colors = if (isGmExclusiveAura) {
+                                        listOf(
+                                            Color(0xFF0B0726),
+                                            Color(0xFF00E5FF),
+                                            Color.White,
+                                            Color(0xFF111111),
+                                            Color(0xFFD500F9),
+                                            Color(0xFFFF1744)
+                                        )
+                                    } else {
+                                        listOf(
+                                            rankTier.primaryColor,
+                                            rankTier.secondaryColor,
+                                            rankTier.primaryColor
+                                        )
+                                    }
                                 ),
                                 size = Size(fillW, size.height),
                                 cornerRadius = CornerRadius(r, r)
@@ -6222,12 +6469,55 @@ private fun DrawScope.drawDoodleSparkleStar(
 private fun DrawScope.drawRankTierAura(
     rankTier: RankTier,
     phase: Float,
-    pulse: Float
+    pulse: Float,
+    isGmExclusiveAura: Boolean = false
 ) {
     val w = size.width
     val h = size.height
     val cx = w * 0.5f
     val cy = h * 0.5f
+
+    if (isGmExclusiveAura) {
+        // GM Exclusive Cosmic Nebula (IMG_1437) × High-Contrast TV Static (IMG_1436) Card Aura
+        drawRect(
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFF07031A).copy(alpha = 0.42f),
+                    Color(0xFF00E5FF).copy(alpha = 0.36f),
+                    Color(0xFFD500F9).copy(alpha = 0.38f),
+                    Color(0xFFFF1744).copy(alpha = 0.34f)
+                ),
+                start = Offset(0f, 0f),
+                end = Offset(w, h)
+            )
+        )
+        // Electric-cyan plasma loop filaments (IMG_1437)
+        for (lp in 0 until 5) {
+            val lx = w * (0.14f + lp * 0.18f)
+            val ly = cy + sin(phase * 2f + lp) * 10.dp.toPx()
+            drawOval(
+                color = Color(0xFF00E5FF).copy(alpha = 0.72f),
+                topLeft = Offset(lx - 14.dp.toPx() * pulse, ly - 7.dp.toPx() * pulse),
+                size = Size(28.dp.toPx() * pulse, 14.dp.toPx() * pulse),
+                style = Stroke(width = 1.8.dp.toPx())
+            )
+        }
+        // Flickering Black & White TV Static Noise Grain across card (IMG_1436)
+        val seed = (phase * 18f).toInt()
+        for (s in 0 until 65) {
+            val v1 = sin(seed * 23.7f + s * 91.1f) * 43758.54f
+            val rx = (v1 - kotlin.math.floor(v1)) * w
+            val v2 = cos(seed * 19.3f + s * 47.7f) * 29381.19f
+            val ry = (v2 - kotlin.math.floor(v2)) * h
+            val isW = (s + seed) % 2 == 0
+            drawRect(
+                color = if (isW) Color.White.copy(alpha = 0.75f) else Color(0xFF0A0A0A).copy(alpha = 0.65f),
+                topLeft = Offset(rx, ry),
+                size = Size(2.5.dp.toPx(), 2.dp.toPx())
+            )
+        }
+        return
+    }
 
     // 1. Vivid multi-stop animated gradient background wash so the Tier Aura immediately pops
     val shiftX = sin(phase) * (w * 0.25f)
@@ -7390,6 +7680,7 @@ fun GameplayScreen(
                         isMenuPreview = false,
                         fontFamily = fontFamily,
                         rankTier = rankTier,
+                        isGmExclusiveAura = viewModel.isGmExclusiveAuraActive,
                         comboCount = comboCount,
                         kiAttackTrigger = viewModel.kiAttackTrigger,
                         counterPushbackTrigger = viewModel.counterPushbackTrigger,
@@ -9703,6 +9994,7 @@ fun DynamicPerilSceneCanvas(
     isMenuPreview: Boolean,
     fontFamily: FontFamily,
     rankTier: RankTier = RankTier.entries.first(),
+    isGmExclusiveAura: Boolean = false,
     comboCount: Int = 0,
     kiAttackTrigger: Int = 0,
     counterPushbackTrigger: Int = 0,
@@ -9898,7 +10190,8 @@ fun DynamicPerilSceneCanvas(
                         time = effectiveWavePhase,
                         phase = (effectiveWavePhase / (2f * PI.toFloat())).coerceIn(0f, 1f),
                         pulse = auraPulse,
-                        surgeMultiplier = 1.22f + comboIntensity * 0.85f
+                        surgeMultiplier = 1.22f + comboIntensity * 0.85f,
+                        isGmExclusiveAura = isGmExclusiveAura
                     )
                 }
             }
@@ -15193,11 +15486,11 @@ fun GmQuickTierSwitcherPill(
             }
 
             Text(
-                text = "Tier $activeTier/20",
+                text = if (isTierPreviewOverride) "Tier $activeTier/20" else "👑⚡ GM Aura",
                 fontFamily = fontFamily,
                 fontWeight = FontWeight.Black,
                 fontSize = 11.sp,
-                color = if (isTierPreviewOverride) Color(0xFFE65100) else DoodleColors.InkBlack,
+                color = if (isTierPreviewOverride) Color(0xFFE65100) else Color(0xFF6A1B9A),
                 modifier = Modifier
                     .padding(horizontal = 3.dp)
                     .testTag("gm_quick_tier_label")
