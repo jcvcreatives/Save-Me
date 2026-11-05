@@ -11189,7 +11189,8 @@ private fun DrawScope.drawSharkBalloonsPeril(
     val isJawsOpen = (!isMenuPreview && livesRemaining <= 2)
     val circleAngle = wavePhase * (if (!isMenuPreview && livesRemaining <= 4) 0.95f else 0.65f)
     val sharkX = centerX + sin(circleAngle) * (w * 0.23f)
-    val sharkDepthY = waterY + cos(circleAngle) * 4.5.dp.toPx()
+    val yWaveBounce = sin(wavePhase * 3.4f) * 3.6.dp.toPx() + sin(circleAngle * 3f) * 2.2.dp.toPx()
+    val sharkDepthY = waterY + cos(circleAngle) * 4.5.dp.toPx() + yWaveBounce
     val depthScale = (0.94f + cos(circleAngle) * 0.12f).coerceIn(0.80f, 1.10f)
 
     if (isJawsOpen) {
@@ -11200,12 +11201,17 @@ private fun DrawScope.drawSharkBalloonsPeril(
         )
     } else {
         val movingRight = cos(circleAngle) >= 0f
-        drawCirclingSharkFin(
-            x = sharkX,
-            waterY = sharkDepthY,
-            facingRight = movingRight,
-            scale = (w / 380f).coerceIn(0.75f, 1.2f) * depthScale
-        )
+        val pitchTiltDeg = sin(wavePhase * 3.4f) * 3.2f
+        withTransform({
+            rotate(degrees = pitchTiltDeg, pivot = Offset(sharkX, sharkDepthY))
+        }) {
+            drawCirclingSharkFin(
+                x = sharkX,
+                waterY = sharkDepthY,
+                facingRight = movingRight,
+                scale = (w / 380f).coerceIn(0.75f, 1.2f) * depthScale
+            )
+        }
     }
 
     drawDoodleWaterWaves(waterY = waterY, wavePhase = wavePhase)
