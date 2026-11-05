@@ -988,56 +988,57 @@
 
     <!-- ================= SCREEN 1: MAIN MENU ================= -->
     <div id="menuScreen" class="screen">
-      <div class="top-bar">
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="sketch-box sketch-btn icon-btn" onclick="openSettings()" title="Settings">⚙️</button>
-          <button class="sketch-box sketch-btn icon-btn" onclick="openWorldMapModal()" title="1,000-Level World Map">🗺️</button>
-          <button id="accountStatusBtn" class="sketch-box sketch-btn" style="height:42px;padding:0 10px;border-radius:14px;background:#E3F2FD;font-size:12px;font-weight:700;" onclick="openRegistrationScreen()" title="Account &amp; Cloud Sync">👤 Register</button>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-          <div class="sketch-box coin-pill" onclick="openCoinModal()">
+      <div style="display:flex;flex-direction:column;width:100%;gap:4px;z-index:5;">
+        <div class="top-bar">
+          <div style="display:flex;gap:8px;align-items:center;min-width:0;">
+            <button class="sketch-box sketch-btn icon-btn" style="flex-shrink:0;" onclick="openSettings()" title="Settings">⚙️</button>
+            <button class="sketch-box sketch-btn icon-btn" style="flex-shrink:0;" onclick="openWorldMapModal()" title="1,000-Level World Map">🗺️</button>
+            <button id="accountStatusBtn" class="sketch-box sketch-btn" style="height:42px;padding:0 11px;border-radius:14px;background:#E3F2FD;font-size:12px;font-weight:700;white-space:nowrap;flex-shrink:0;line-height:1;" onclick="openRegistrationScreen()" title="Account &amp; Cloud Sync">👤 Register</button>
+          </div>
+          <div class="sketch-box coin-pill" style="flex-shrink:0;white-space:nowrap;" onclick="openCoinModal()">
             <span>⭐</span>
             <span id="menuCoinText">1231</span>
             <span class="coin-plus">+</span>
           </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <div id="menuQuickTierPill" class="sketch-box" style="display:none;height:28px;padding:0 5px;border-radius:12px;background:#FFFDE7;align-items:center;gap:3px;font-size:11px;font-weight:800;">
-              <button class="sketch-box sketch-btn" style="width:22px;height:20px;border-radius:6px;padding:0;font-size:10px;background:#FFF;" onclick="gmStepTier(-1)" title="Previous Tier">◀</button>
-              <span id="menuQuickTierLabel" style="padding:0 3px;white-space:nowrap;">Tier 1/20</span>
-              <button class="sketch-box sketch-btn" style="width:22px;height:20px;border-radius:6px;padding:0;font-size:10px;background:#FFF;" onclick="gmStepTier(1)" title="Next Tier">▶</button>
-              <button class="sketch-box sketch-btn" style="width:22px;height:20px;border-radius:6px;padding:0;font-size:11px;background:#E3F2FD;" onclick="gmResetTierToReal()" title="Reset to Real Tier">↺</button>
-            </div>
-            <button id="menuGmBadgeBtn" class="sketch-box sketch-btn" style="display:none;height:28px;padding:0 10px;border-radius:10px;background:#FFD54F;font-size:12px;font-weight:800;color:#1E1E1E;" onclick="openGmConsoleModal()">👑 GM</button>
+        </div>
+        <div id="menuGmSubBar" style="display:flex;justify-content:flex-end;align-items:center;gap:6px;width:100%;">
+          <div id="menuQuickTierPill" class="sketch-box" style="display:none;height:30px;padding:0 6px;border-radius:12px;background:#FFFDE7;align-items:center;gap:4px;font-size:11px;font-weight:800;white-space:nowrap;flex-shrink:0;">
+            <button class="sketch-box sketch-btn" style="width:22px;height:20px;border-radius:6px;padding:0;font-size:10px;background:#FFF;flex-shrink:0;" onclick="gmStepTier(-1)" title="Previous Tier">◀</button>
+            <span id="menuQuickTierLabel" style="padding:0 4px;white-space:nowrap;line-height:1;">Tier 1/20</span>
+            <button class="sketch-box sketch-btn" style="width:22px;height:20px;border-radius:6px;padding:0;font-size:10px;background:#FFF;flex-shrink:0;" onclick="gmStepTier(1)" title="Next Tier">▶</button>
+            <button class="sketch-box sketch-btn" style="width:22px;height:20px;border-radius:6px;padding:0;font-size:11px;background:#E3F2FD;flex-shrink:0;" onclick="gmResetTierToReal()" title="Reset to Real Tier">↺</button>
           </div>
+          <button id="menuGmBadgeBtn" class="sketch-box sketch-btn" style="display:none;height:30px;padding:0 11px;border-radius:12px;background:#FFD54F;font-size:12px;font-weight:800;color:#1E1E1E;white-space:nowrap;flex-shrink:0;line-height:1;align-items:center;justify-content:center;gap:4px;" onclick="openGmConsoleModal()">👑 GM</button>
         </div>
       </div>
 
       <div class="menu-hero">
         <canvas id="menuCanvas" width="420" height="270"></canvas>
 
-        <div class="word-title-row">
-          <div class="word-letter-col">W<div class="word-underline" style="background:#FF595E"></div></div>
-          <div class="word-letter-col">O<div class="word-underline" style="background:#2ECC71"></div></div>
-          <div class="word-letter-col">R<div class="word-underline" style="background:#2196F3"></div></div>
-          <div class="word-letter-col">D<div class="word-underline" style="background:#FF9800"></div></div>
+        <div id="menuWordTitleRow" class="word-title-row" style="position:relative;padding:6px 18px;border-radius:20px;width:auto;display:inline-flex;">
+          <canvas id="wordTitleAuraCanvas" width="280" height="64" style="position:absolute;inset:-8px -16px;width:calc(100% + 32px);height:calc(100% + 16px);pointer-events:none;z-index:0;"></canvas>
+          <div class="word-letter-col menu-word-aura-letter" style="position:relative;z-index:1;">W<div class="word-underline" style="background:#FF595E"></div></div>
+          <div class="word-letter-col menu-word-aura-letter" style="position:relative;z-index:1;">O<div class="word-underline" style="background:#2ECC71"></div></div>
+          <div class="word-letter-col menu-word-aura-letter" style="position:relative;z-index:1;">R<div class="word-underline" style="background:#2196F3"></div></div>
+          <div class="word-letter-col menu-word-aura-letter" style="position:relative;z-index:1;">D<div class="word-underline" style="background:#FF9800"></div></div>
         </div>
       </div>
 
       <div class="menu-buttons">
-        <div id="tierProgressionCard" class="sketch-box" style="padding:11px 14px;border-radius:18px;width:100%;position:relative;overflow:hidden;background:var(--paper-bg);">
-          <canvas id="rankAuraCanvas" width="360" height="86" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:1;display:block;"></canvas>
+        <div id="tierProgressionCard" class="sketch-box" style="padding:9px 13px;border-radius:18px;width:100%;position:relative;overflow:hidden;background:var(--paper-bg);">
+          <canvas id="rankAuraCanvas" width="360" height="72" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:1;display:block;"></canvas>
           <div style="position:relative;z-index:1;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:7px;">
-              <div style="text-align:left;flex:1;">
-                <div id="menuRankTitleText" style="font-size:15px;font-weight:700;color:var(--ink-black);line-height:1.2;text-shadow:0 1px 0 rgba(255,255,255,0.85);">Tier 1: Doodle Novice</div>
-                <div id="menuRankTierSub" style="font-size:11px;font-weight:700;color:var(--ink-blue);margin-top:2px;text-shadow:0 1px 0 rgba(255,255,255,0.85);">Progress: Level 1 / 50 (Next Tier at Lv 51)</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+              <div style="text-align:left;flex:1;min-width:0;">
+                <div id="menuRankTitleText" style="font-size:15px;font-weight:700;color:var(--ink-black);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 0 rgba(255,255,255,0.85);">Tier 1: Doodle Novice</div>
+                <div id="menuRankTierSub" style="font-size:11px;font-weight:700;color:var(--ink-blue);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 0 rgba(255,255,255,0.85);">Level 1 / 50 (Next Tier at Lv 51)</div>
               </div>
               <div style="text-align:right;flex-shrink:0;">
-                <div id="menuRankBadgeDesc" style="font-size:10px;font-weight:700;background:rgba(255,255,255,0.94);padding:2px 8px;border-radius:10px;border:1.8px solid var(--ink-black);box-shadow:1.5px 1.5px 0 rgba(0,0,0,0.18);">✨ Hatching Pulse</div>
-                <div id="menuCampaignProgressText" style="font-size:10px;font-weight:700;color:var(--ink-black);opacity:0.85;margin-top:2px;">0/1000 ★</div>
+                <div id="menuRankBadgeDesc" style="display:none;"></div>
+                <div id="menuCampaignProgressText" style="font-size:11px;font-weight:800;color:var(--ink-black);background:rgba(255,255,255,0.92);padding:2px 8px;border-radius:10px;border:1.6px solid var(--ink-black);white-space:nowrap;">0/1000 ★</div>
               </div>
             </div>
-            <div class="progress-track" style="height:15px;background:rgba(250,249,246,0.9);border:2px solid var(--ink-black);">
+            <div class="progress-track" style="height:13px;background:rgba(250,249,246,0.9);border:2px solid var(--ink-black);">
               <div id="menuCampaignProgressFill" class="progress-fill" style="background:#FFF59D;width:2%;transition:width 0.3s ease, background 0.3s ease;"></div>
             </div>
           </div>
@@ -1070,7 +1071,7 @@
             <span id="gameCoinText">1231</span>
             <span class="coin-plus">+</span>
           </div>
-          <button id="gameGmBadgeBtn" class="sketch-box sketch-btn" style="display:none;height:26px;padding:0 9px;border-radius:10px;background:#FFD54F;font-size:11px;font-weight:800;color:#1E1E1E;" onclick="openGmConsoleModal()">👑 GM</button>
+          <button id="gameGmBadgeBtn" class="sketch-box sketch-btn" style="display:none;height:28px;padding:0 10px;border-radius:10px;background:#FFD54F;font-size:11px;font-weight:800;color:#1E1E1E;white-space:nowrap;flex-shrink:0;line-height:1;" onclick="openGmConsoleModal()">👑 GM</button>
         </div>
       </div>
 
@@ -1166,6 +1167,9 @@
         </button>
         <button id="doubleDownVictoryBtn" class="sketch-box sketch-btn menu-btn" style="margin-top:8px;height:44px;font-size:14px;background:#FFE0B2;color:#E65100;border-color:#E65100;" onclick="nextLevelAfterVictory(true)">
           🔥 DOUBLE DOWN (Bet Half for 2.5x ⭐ &amp; 2x Combo!)
+        </button>
+        <button id="shareVictoryStatsBtn" class="sketch-box sketch-btn menu-btn" style="margin-top:8px;height:42px;font-size:14px;background:#E3F2FD;color:var(--ink-blue);flex-direction:row;gap:8px;" onclick="shareVictoryStats()">
+          <span>📤 Share Victory &amp; Stats</span>
         </button>
       </div>
     </div>
@@ -1579,8 +1583,8 @@
       isGmExclusive: true,
       start: 1,
       end: 1000,
-      title: 'Cosmic-Static Singularity',
-      badge: '👑⚡ GM Exclusive: Deep-Space Nebula × TV Static Glitch',
+      title: 'Cosmic-Static',
+      badge: '👑⚡ GM Aura',
       primaryColor: '#00E5FF',
       secondaryColor: '#D500F9',
       color: '#12002B'
@@ -3273,16 +3277,26 @@
 
       document.getElementById('menuCoinText').textContent = coins;
       document.getElementById('gameCoinText').textContent = coins;
+      const titleEl = document.getElementById('menuRankTitleText');
+      const subEl = document.getElementById('menuRankTierSub');
       if (displayRank.isGmExclusive) {
-        document.getElementById('menuRankTitleText').textContent = `👑 GM EXCLUSIVE: ${displayRank.title}`;
-        document.getElementById('menuRankTierSub').textContent = `🌌⚡ Cosmic Nebula × Reality Static (Default GM Aura • Lv ${lvlNum})`;
+        titleEl.textContent = `👑 GM: Cosmic-Static`;
+        titleEl.style.color = '#FFFFFF';
+        titleEl.style.textShadow = '0 1.5px 3px rgba(0,0,0,0.95)';
+        subEl.textContent = `Level ${lvlNum} / 1000`;
+        subEl.style.color = '#80D8FF';
+        subEl.style.textShadow = '0 1.5px 3px rgba(0,0,0,0.95)';
       } else {
-        document.getElementById('menuRankTitleText').textContent = `Tier ${displayRank.tier}: ${displayRank.title}`;
-        document.getElementById('menuRankTierSub').textContent = (isGmLoggedIn && gmTierOverride)
-          ? `👑 GM Preview: Tier ${displayRank.tier} / 20 (Real Level ${lvlNum})`
-          : `Progress: Level ${lvlNum} / ${displayRank.end} (${nextTierLabel})`;
+        titleEl.textContent = `Tier ${displayRank.tier}: ${displayRank.title}`;
+        titleEl.style.color = 'var(--ink-black)';
+        titleEl.style.textShadow = '0 1px 0 rgba(255,255,255,0.85)';
+        subEl.textContent = (isGmLoggedIn && gmTierOverride)
+          ? `👑 GM Preview: Tier ${displayRank.tier}/20 (Lv ${lvlNum})`
+          : `Level ${lvlNum} / ${displayRank.end} (${nextTierLabel})`;
+        subEl.style.color = 'var(--ink-blue)';
+        subEl.style.textShadow = '0 1px 0 rgba(255,255,255,0.85)';
       }
-      document.getElementById('menuRankBadgeDesc').textContent = displayRank.badge;
+      document.getElementById('menuRankBadgeDesc').textContent = '';
       document.getElementById('menuCampaignProgressText').textContent = `${doneCount}/${totalLevels} ★`;
       const fillEl = document.getElementById('menuCampaignProgressFill');
       fillEl.style.width = `${tierPct}%`;
@@ -3294,7 +3308,7 @@
       const cardEl = document.getElementById('tierProgressionCard');
       if (cardEl) {
         cardEl.style.boxShadow = displayRank.isGmExclusive
-          ? '0 0 24px rgba(0, 229, 255, 0.72), 0 0 38px rgba(213, 0, 249, 0.55), 3px 3.5px 0px rgba(30, 30, 30, 0.35)'
+          ? '0 0 20px rgba(0, 229, 255, 0.68), 0 0 32px rgba(213, 0, 249, 0.50), 3px 3.5px 0px rgba(30, 30, 30, 0.35)'
           : `0 0 18px ${displayRank.color}77, 3px 3.5px 0px rgba(30, 30, 30, 0.22)`;
       }
       document.getElementById('menuLevelBtnText').textContent =
@@ -4357,6 +4371,35 @@
       document.getElementById('victoryModal').classList.add('active');
       renderVictoryCelebration(performance.now() / 1000, 0.016);
       requestAnimationFrame(() => renderVictoryCelebration(performance.now() / 1000, 0.016));
+    }
+
+    async function shareVictoryStats() {
+      const lvlNum = activeLevel ? activeLevel.number : ((campaignIdx % CAMPAIGN_LEVELS.length) + 1);
+      const rank = getActiveMenuRank(lvlNum);
+      const rankName = rank && rank.isGmExclusive ? '👑 Cosmic-Static GM' : (rank ? rank.title : 'Doodle Novice');
+      const wordText = activeLevel && activeLevel.word ? activeLevel.word.toUpperCase() : 'WORD';
+      const shareText = `🦈 Doodle Word Shark — Level ${lvlNum} Solved! 🎉\n🔤 Word: ${wordText}\n🔥 Win Streak: ${streak} (Best: ${maxStreak})\n✨ Perfect Solves: ${perfectCount}\n🏆 Rank: ${rankName} • ⭐ ${coins} Coins\nCan you beat my level?`;
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `Doodle Word Shark — Level ${lvlNum} Victory!`,
+            text: shareText,
+            url: window.location.href
+          });
+          showToast('📤 Shared your victory stats!');
+          return;
+        } catch (err) {
+          if (err && err.name === 'AbortError') return;
+        }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(`${shareText} ${window.location.href}`);
+          showToast('📋 Victory stats copied to clipboard!');
+          return;
+        } catch (e) {}
+      }
+      showToast(`📤 Level ${lvlNum} • Streak ${streak} • Perfect ${perfectCount}`);
     }
 
     function nextLevelAfterVictory() {
@@ -7469,8 +7512,10 @@
         const menuCanvas = document.getElementById('menuCanvas');
         if (menuCanvas && menuScreenEl && menuScreenEl.classList.contains('active')) {
           const curLvl = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
-          renderHomeChargingStickman(menuCanvas, curLvl, getActiveMenuRank(curLvl), t, dt);
-          renderRankAuraCanvas(getActiveMenuRank(curLvl), t);
+          const activeMenuRank = getActiveMenuRank(curLvl);
+          renderHomeChargingStickman(menuCanvas, curLvl, activeMenuRank, t, dt);
+          renderWordTitleAuraCanvas(activeMenuRank, t);
+          renderRankAuraCanvas(activeMenuRank, t);
         }
       } catch (err) {
         console.error('Menu canvas render error:', err);
@@ -7710,23 +7755,20 @@
       const shakeX = Math.sin(t * 68) * shakeAmp;
       const shakeY = Math.cos(t * 79) * shakeAmp;
 
-      const groundY = h * 0.84;
+      const groundY = h * 0.88;
       const centerX = w * 0.5;
 
       const isGmCosmicStatic = Boolean(activeRank && activeRank.isGmExclusive);
-      // 3-Stage Evolving Dragon Ball Levitation Offset:
-      // Tiers 1–5 (Grounded Ki Charge): 0px
-      // Tiers 6–12 (Ascendant Hover): 25px + sin(t * 4) * 8
-      // Tiers 13–20 & GM Exclusive Cosmic-Static (Transcendent Cosmic Float): 40px + sin(t * 3.2) * 10
+      // 3-Stage Evolving Dragon Ball Levitation Offset (balanced so top aura is never clipped):
       let hoverOffset = 0;
       if (isGmCosmicStatic || currentTier >= 13) {
-        hoverOffset = 42 + Math.sin(phase * 1.45) * 10 + surgeBoost * 9;
+        hoverOffset = 26 + Math.sin(phase * 1.45) * 6 + surgeBoost * 4;
       } else if (currentTier >= 6 && currentTier <= 12) {
-        hoverOffset = 25 + Math.sin(phase * 1.8) * 8 + surgeBoost * 6;
+        hoverOffset = 18 + Math.sin(phase * 1.8) * 5 + surgeBoost * 3;
       }
 
       const footY = groundY - hoverOffset;
-      const coreY = footY - 46;
+      const coreY = footY - 44;
 
       ctx.save();
       ctx.translate(shakeX, shakeY);
@@ -7734,28 +7776,28 @@
       // =======================================================================
       // 1. SYNCHRONIZED 20-TIER + GM EXCLUSIVE COSMIC-STATIC STICKMAN AURA
       // =======================================================================
-      const baseRadius = Math.min(w, h) * 0.34 * effectivePulse;
+      const maxTopRadius = Math.max(24, (coreY - 8) / 1.50);
+      const baseRadius = Math.min(Math.min(w, h) * 0.28 * effectivePulse, maxTopRadius);
 
-      // Vivid radial aura backdrop wash around stickman
+      // Vivid radial aura backdrop wash around stickman (feathered to 0 before canvas top edge)
       if (isGmCosmicStatic) {
-        // Deep-space galaxy nebula core (IMG_1437: deep indigo, royal cyan, magenta-violet, crimson nebula dust)
-        const gmRadial = ctx.createRadialGradient(centerX, coreY, 4, centerX, coreY, baseRadius * 1.68);
+        const gmRadial = ctx.createRadialGradient(centerX, coreY, 4, centerX, coreY, baseRadius * 1.46);
         gmRadial.addColorStop(0, '#FFFFFF');
         gmRadial.addColorStop(0.16, '#00E5FF');
         gmRadial.addColorStop(0.38, '#7C4DFF');
         gmRadial.addColorStop(0.62, '#D500F9');
-        gmRadial.addColorStop(0.82, 'rgba(255, 23, 68, 0.48)');
-        gmRadial.addColorStop(0.94, 'rgba(9, 4, 30, 0.25)');
+        gmRadial.addColorStop(0.82, 'rgba(255, 23, 68, 0.45)');
+        gmRadial.addColorStop(0.94, 'rgba(9, 4, 30, 0.18)');
         gmRadial.addColorStop(1, 'rgba(9, 4, 30, 0)');
         ctx.save();
         ctx.globalAlpha = Math.min(0.96, 0.84 * effectivePulse);
         ctx.fillStyle = gmRadial;
         ctx.beginPath();
-        ctx.arc(centerX, coreY, baseRadius * 1.68, 0, Math.PI * 2);
+        ctx.arc(centerX, coreY, baseRadius * 1.46, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       } else {
-        const bgRadial = ctx.createRadialGradient(centerX, coreY, 6, centerX, coreY, baseRadius * 1.38);
+        const bgRadial = ctx.createRadialGradient(centerX, coreY, 6, centerX, coreY, baseRadius * 1.36);
         bgRadial.addColorStop(0, primary);
         bgRadial.addColorStop(0.55, secondary);
         bgRadial.addColorStop(1, 'rgba(255,255,255,0)');
@@ -7763,7 +7805,7 @@
         ctx.globalAlpha = Math.min(0.85, 0.42 * effectivePulse);
         ctx.fillStyle = bgRadial;
         ctx.beginPath();
-        ctx.arc(centerX, coreY, baseRadius * 1.38, 0, Math.PI * 2);
+        ctx.arc(centerX, coreY, baseRadius * 1.36, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
@@ -7774,10 +7816,15 @@
 
       if (isGmCosmicStatic) {
         // GM EXCLUSIVE DEFAULT AURA: Deep-Space Galaxy Nebula (IMG_1437) × High-Contrast TV Static Glitch (IMG_1436)
-        // A. Deep cosmic void portal disc behind the nebula
-        ctx.fillStyle = 'rgba(8, 3, 27, 0.76)';
+        // A. Feathered deep cosmic void portal disc behind the nebula (never hard-clipped at edges)
+        const voidDiscGrad = ctx.createRadialGradient(centerX, coreY, baseRadius * 0.15, centerX, coreY, baseRadius * 1.22);
+        voidDiscGrad.addColorStop(0, 'rgba(8, 3, 27, 0.84)');
+        voidDiscGrad.addColorStop(0.76, 'rgba(8, 3, 27, 0.72)');
+        voidDiscGrad.addColorStop(0.92, 'rgba(8, 3, 27, 0.28)');
+        voidDiscGrad.addColorStop(1, 'rgba(8, 3, 27, 0)');
+        ctx.fillStyle = voidDiscGrad;
         ctx.beginPath();
-        ctx.arc(centerX, coreY, baseRadius * 1.24, 0, Math.PI * 2);
+        ctx.arc(centerX, coreY, baseRadius * 1.22, 0, Math.PI * 2);
         ctx.fill();
 
         // B. Swirling Spiral Galaxy Arms & Crimson/Magenta Nebula Clouds (IMG_1437 upper-right & center)
@@ -8292,10 +8339,10 @@
       // 2. DOUBLE-LAYERED JAGGED DRAGON BALL ENERGY SHELL + UPWARD KI LINES
       // =======================================================================
       const surgeScale = 1 + surgeBoost * 0.35;
-      const outerW = 58 * effectivePulse * surgeScale;
-      const outerH = 76 * effectivePulse * surgeScale;
+      const outerW = 54 * effectivePulse * surgeScale;
+      const outerH = Math.min(70 * effectivePulse * surgeScale, Math.max(36, (coreY - 12) / 0.92));
       const baseBottomY = Math.max(footY + 6, groundY - 4);
-      const crownTopY = coreY - outerH * 0.88;
+      const crownTopY = Math.max(10, coreY - outerH * 0.86);
 
       function traceJaggedKiShell(scaleX, scaleY, phaseShift, spikes) {
         const halfW = outerW * scaleX;
@@ -8792,10 +8839,98 @@
       ctx.restore();
     }
 
+    function renderWordTitleAuraCanvas(rank, t) {
+      const canvas = document.getElementById('wordTitleAuraCanvas');
+      if (!canvas) return;
+      const { ctx, w, h } = syncCanvasHD(canvas, 280, 64);
+      ctx.clearRect(0, 0, w, h);
+
+      const activeRank = rank || RANK_TIERS[0];
+      const isGm = Boolean(activeRank.isGmExclusive);
+      const primary = activeRank.primaryColor || '#FFF59D';
+      const secondary = activeRank.secondaryColor || '#29B6F6';
+      const accent = activeRank.color || '#0288D1';
+      const pulse = 0.92 + Math.sin(t * 4.2) * 0.14;
+
+      const letters = document.querySelectorAll('.menu-word-aura-letter');
+      letters.forEach((el, idx) => {
+        const bob = Math.sin(t * 4.5 + idx * 0.9) * 1.8;
+        el.style.transform = `translateY(${bob.toFixed(2)}px)`;
+        if (isGm) {
+          el.style.color = '#FFFFFF';
+          el.style.textShadow = '0 0 8px #00E5FF, 0 0 15px #D500F9, 1.5px 1.5px 0 #1E1E1E, -1.5px -1.5px 0 #1E1E1E, 1.5px -1.5px 0 #1E1E1E, -1.5px 1.5px 0 #1E1E1E';
+        } else {
+          el.style.color = 'var(--ink-black)';
+          el.style.textShadow = `0 0 9px ${primary}, 0 0 15px ${secondary}, 0 1px 0 #FFFFFF`;
+        }
+      });
+
+      ctx.save();
+      const letterCenters = [0.17, 0.39, 0.61, 0.83].map(f => w * f);
+      const cy = h * 0.48;
+
+      if (isGm) {
+        // GM Exclusive Cosmic-Static Aura behind W O R D
+        letterCenters.forEach((lx, idx) => {
+          const r = 24 * (0.94 + Math.sin(t * 5 + idx) * 0.12);
+          const rg = ctx.createRadialGradient(lx, cy, 2, lx, cy, r);
+          rg.addColorStop(0, 'rgba(0, 229, 255, 0.78)');
+          rg.addColorStop(0.45, idx % 2 === 0 ? 'rgba(213, 0, 249, 0.55)' : 'rgba(124, 77, 255, 0.55)');
+          rg.addColorStop(0.78, 'rgba(11, 7, 38, 0.38)');
+          rg.addColorStop(1, 'rgba(11, 7, 38, 0)');
+          ctx.fillStyle = rg;
+          ctx.beginPath();
+          ctx.arc(lx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Flickering Black & White TV Static grain & cyan sparks around W O R D
+        const seed = Math.floor(t * 28);
+        for (let i = 0; i < 36; i++) {
+          const n1 = Math.sin(seed * 19.3 + i * 73.1) * 43758.5453;
+          const u1 = n1 - Math.floor(n1);
+          const n2 = Math.cos(seed * 27.7 + i * 41.9) * 28411.9137;
+          const u2 = n2 - Math.floor(n2);
+          const px = w * (0.08 + u1 * 0.84);
+          const py = h * (0.14 + u2 * 0.72);
+          ctx.fillStyle = (i + seed) % 3 === 0 ? '#00E5FF' : ((i + seed) % 2 === 0 ? '#FFFFFF' : '#0D0D0D');
+          ctx.globalAlpha = 0.85;
+          ctx.fillRect(px, py, 2.6, 2.0);
+        }
+      } else {
+        // 20-Tier Ki Aura Halos + Rising Sparks behind W O R D
+        letterCenters.forEach((lx, idx) => {
+          const r = 23 * (0.92 + Math.sin(t * 4.4 + idx * 0.8) * 0.12);
+          const rg = ctx.createRadialGradient(lx, cy, 2, lx, cy, r);
+          rg.addColorStop(0, primary);
+          rg.addColorStop(0.55, secondary);
+          rg.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.globalAlpha = 0.58 * pulse;
+          ctx.fillStyle = rg;
+          ctx.beginPath();
+          ctx.arc(lx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Rising Ki flame/spark line per letter
+          const cycle = (t * 1.9 + idx * 0.27) % 1;
+          const sx = lx + Math.sin(t * 5 + idx * 2) * 11;
+          const sy = (h - 8) - cycle * (h - 18);
+          ctx.globalAlpha = Math.sin(cycle * Math.PI) * 0.82;
+          ctx.strokeStyle = accent;
+          ctx.lineWidth = 2.0;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx, sy - 8);
+          ctx.stroke();
+        });
+      }
+      ctx.restore();
+    }
+
     function renderRankAuraCanvas(rank, t) {
       const canvas = document.getElementById('rankAuraCanvas');
       if (!canvas || !rank) return;
-      const { ctx, w, h } = syncCanvasHD(canvas, 360, 86);
+      const { ctx, w, h } = syncCanvasHD(canvas, 360, 72);
       ctx.clearRect(0, 0, w, h);
 
       const primary = rank.primaryColor || rank.color || '#FFC107';

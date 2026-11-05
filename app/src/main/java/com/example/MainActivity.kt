@@ -1,12 +1,16 @@
 package com.example
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -118,10 +122,12 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -4158,85 +4164,90 @@ fun HomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top Bar (Settings, Map, Cloud Status with 5-tap / long-press GM trigger, Star counter + Floating [👑 GM] badge)
-        Row(
+        // Top Bar (Settings, Map, Cloud Status, Star counter + dedicated right-aligned GM sub-bar so mobile never wraps)
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SketchyIconButton(
-                    testTag = "settings_button",
-                    contentDescription = "Settings",
-                    onClick = onOpenSettings
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    DrawDoodleGearIcon()
+                    SketchyIconButton(
+                        testTag = "settings_button",
+                        contentDescription = "Settings",
+                        onClick = onOpenSettings
+                    ) {
+                        DrawDoodleGearIcon()
+                    }
+
+                    SketchyIconButton(
+                        testTag = "world_map_button",
+                        contentDescription = "1,000-Level World Map",
+                        onClick = onOpenWorldMap
+                    ) {
+                        Text(
+                            text = "🗺️",
+                            fontSize = 18.sp
+                        )
+                    }
+
+                    // Cloud Profile Pill: opens normal player Login / Registration screen
+                    SketchyContainer(
+                        fillColor = Color(0xFFE3F2FD),
+                        cornerRadius = 14.dp,
+                        onClick = onOpenRegistration,
+                        modifier = Modifier
+                            .height(42.dp)
+                            .testTag("account_status_button")
+                    ) {
+                        Text(
+                            text = accountBadgeLabel,
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            color = DoodleColors.InkBlack,
+                            modifier = Modifier.padding(horizontal = 10.dp)
+                        )
+                    }
                 }
 
-                SketchyIconButton(
-                    testTag = "world_map_button",
-                    contentDescription = "1,000-Level World Map",
-                    onClick = onOpenWorldMap
-                ) {
-                    Text(
-                        text = "🗺️",
-                        fontSize = 18.sp
-                    )
-                }
-
-                // Cloud Profile Pill: opens normal player Login / Registration screen
-                SketchyContainer(
-                    fillColor = Color(0xFFE3F2FD),
-                    cornerRadius = 14.dp,
-                    onClick = onOpenRegistration,
-                    modifier = Modifier
-                        .height(44.dp)
-                        .testTag("account_status_button")
-                ) {
-                    Text(
-                        text = accountBadgeLabel,
-                        fontFamily = fontFamily,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 12.sp,
-                        color = DoodleColors.InkBlack,
-                        modifier = Modifier.padding(horizontal = 10.dp)
-                    )
-                }
-            }
-
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
                 CoinBalancePill(
                     coins = coins,
                     fontFamily = fontFamily,
                     onClickAdd = onOpenCoinShop,
                     testTag = "menu_coin_pill"
                 )
+            }
 
-                // Strictly invisible unless isGmLoggedIn == true!
-                if (isGmLoggedIn) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        GmQuickTierSwitcherPill(
-                            activeTier = activeTier,
-                            isTierPreviewOverride = isTierPreviewOverride,
-                            fontFamily = fontFamily,
-                            onStepTier = onGmStepTier,
-                            onResetTierToReal = onGmResetTierToReal
-                        )
-                        FloatingGmBadge(
-                            fontFamily = fontFamily,
-                            onClick = onToggleGmConsole,
-                            testTag = "gm_floating_badge"
-                        )
-                    }
+            // Strictly invisible unless isGmLoggedIn == true; dedicated sub-row prevents mobile wrapping
+            if (isGmLoggedIn) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    GmQuickTierSwitcherPill(
+                        activeTier = activeTier,
+                        isTierPreviewOverride = isTierPreviewOverride,
+                        fontFamily = fontFamily,
+                        onStepTier = onGmStepTier,
+                        onResetTierToReal = onGmResetTierToReal
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    FloatingGmBadge(
+                        fontFamily = fontFamily,
+                        onClick = onToggleGmConsole,
+                        testTag = "gm_floating_badge"
+                    )
                 }
             }
         }
@@ -4271,7 +4282,11 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            DoodleWordTitleHeader(fontFamily = fontFamily)
+            DoodleWordTitleHeader(
+                fontFamily = fontFamily,
+                rankTier = activeRank,
+                isGmExclusiveAura = isGmLoggedIn && !isTierPreviewOverride
+            )
         }
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -4320,13 +4335,15 @@ fun HomeScreen(
                     )
                     Text(
                         text = if (isGmLoggedIn && !isTierPreviewOverride) {
-                            "${activePeril.displayName} • 👑⚡ Cosmic-Static Singularity"
+                            "${activePeril.displayName} • Cosmic-Static"
                         } else {
                             "${activePeril.displayName} • ${activeRank.title}"
                         },
                         fontFamily = fontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = DoodleColors.InkBlack.copy(alpha = 0.75f)
                     )
                 }
@@ -4558,23 +4575,20 @@ fun HomeChargingStickmanCenterpiece(
             val shakeX = sin(time * 68f) * shakeAmp
             val shakeY = cos(time * 79f) * shakeAmp
 
-            val groundY = h * 0.84f
+            val groundY = h * 0.88f
             val centerX = w * 0.5f
 
-            // Compute stickman vertical levitation offset based on 3-stage Dragon Ball evolution:
-            // Tiers 1–5: Grounded Ki Charge (planted firmly on groundY)
-            // Tiers 6–12: Ascendant Hover (levitating 25.dp above ground line + sin(time * 4f) * 8f)
-            // Tiers 13–20 & GM Exclusive Cosmic-Static: Transcendent Cosmic Float (levitating 42.dp above ground line + Zen float)
+            // Compute stickman vertical levitation offset based on 3-stage Dragon Ball evolution (balanced so top aura is never cut):
             val effectiveStageTier = if (isGmExclusiveAura) 20 else currentTier
             val hoverOffsetPx = when {
-                isGmExclusiveAura -> 42.dp.toPx() + sin(time * 3.2f) * 10.dp.toPx() + surgeBoost * 9.dp.toPx()
+                isGmExclusiveAura -> 26.dp.toPx() + sin(time * 3.2f) * 6.dp.toPx() + surgeBoost * 4.dp.toPx()
                 currentTier in 1..5 -> 0f
-                currentTier in 6..12 -> 25.dp.toPx() + sin(time * 4f) * 8.dp.toPx() + surgeBoost * 6.dp.toPx()
-                else -> 40.dp.toPx() + sin(time * 3.2f) * 10.dp.toPx() + surgeBoost * 9.dp.toPx()
+                currentTier in 6..12 -> 18.dp.toPx() + sin(time * 4f) * 5.dp.toPx() + surgeBoost * 3.dp.toPx()
+                else -> 26.dp.toPx() + sin(time * 3.2f) * 6.dp.toPx() + surgeBoost * 4.dp.toPx()
             }
 
             val stickmanFootY = groundY - hoverOffsetPx
-            val stickmanCoreY = stickmanFootY - 46.dp.toPx()
+            val stickmanCoreY = stickmanFootY - 44.dp.toPx()
 
             withTransform({
                 translate(left = shakeX, top = shakeY)
@@ -4817,10 +4831,11 @@ private fun DrawScope.drawDragonBallEnergyShell(
     isGmExclusiveAura: Boolean = false
 ) {
     val surgeScale = 1f + (surgeMultiplier - 1f) * 0.35f
-    val outerWidth = 58.dp.toPx() * pulse * surgeScale
-    val outerHeight = 76.dp.toPx() * pulse * surgeScale
+    val outerWidth = 54.dp.toPx() * pulse * surgeScale
+    val maxShellHeight = ((center.y - 12.dp.toPx()) / 0.92f).coerceAtLeast(36.dp.toPx())
+    val outerHeight = (70.dp.toPx() * pulse * surgeScale).coerceAtMost(maxShellHeight)
     val baseBottomY = max(footY + 6.dp.toPx(), groundY - 4.dp.toPx())
-    val crownTopY = center.y - outerHeight * 0.88f
+    val crownTopY = (center.y - outerHeight * 0.86f).coerceAtLeast(10.dp.toPx())
 
     // Soft radial core glow behind the energy shell
     drawCircle(
@@ -5444,14 +5459,15 @@ private fun DrawScope.drawStickmanTierAura(
     val w = size.width
     val h = size.height
     val scale = pulse * (1f + (surgeMultiplier - 1f) * 0.28f)
-    val baseRadius = min(w, h) * 0.34f * scale
+    val maxTopRadius = ((center.y - 8.dp.toPx()) / 1.50f).coerceAtLeast(24.dp.toPx())
+    val baseRadius = (min(w, h) * 0.28f * scale).coerceAtMost(maxTopRadius)
 
     if (isGmExclusiveAura) {
         // =========================================================================
         // GM EXCLUSIVE DEFAULT AURA: DEEP-SPACE COSMIC NEBULA (IMG_1437) ×
         // HIGH-CONTRAST BLACK-AND-WHITE TV STATIC GLITCH (IMG_1436)
         // =========================================================================
-        // 1. Deep-Space Cosmic Nebula Portal Core (indigo void + royal cyan + magenta-violet + crimson nebula dust)
+        // 1. Deep-Space Cosmic Nebula Portal Core (feathered smoothly inside canvas top bound)
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
@@ -5460,13 +5476,13 @@ private fun DrawScope.drawStickmanTierAura(
                     Color(0xFF7C4DFF).copy(alpha = 0.74f),
                     Color(0xFFD500F9).copy(alpha = 0.62f),
                     Color(0xFFFF1744).copy(alpha = 0.42f),
-                    Color(0xFF08031B).copy(alpha = 0.78f),
+                    Color(0xFF08031B).copy(alpha = 0.72f),
                     Color.Transparent
                 ),
                 center = center,
-                radius = baseRadius * 1.62f
+                radius = baseRadius * 1.46f
             ),
-            radius = baseRadius * 1.62f,
+            radius = baseRadius * 1.46f,
             center = center
         )
 
@@ -6175,12 +6191,12 @@ fun TierProgressionCard(
     )
 
     val cardTitle = if (isGmExclusiveAura) {
-        "👑 GM EXCLUSIVE: Cosmic-Static Singularity"
+        "👑 GM: Cosmic-Static"
     } else {
         rankTier.displayTierTitle
     }
     val cardSubLabel = if (isGmExclusiveAura) {
-        "🌌⚡ Cosmic Nebula × Reality Static (Default GM Aura • Lv $levelNumber)"
+        "Level $levelNumber / $safeTotal"
     } else {
         rankTier.progressSubLabel(levelNumber)
     }
@@ -6240,7 +6256,7 @@ fun TierProgressionCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 13.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Header Row: Active Tier Title + Sub-label on Left, Animated Emblem + Total Solved Pill on Right
@@ -6255,16 +6271,20 @@ fun TierProgressionCard(
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Black,
                             fontSize = 15.sp,
-                            color = DoodleColors.InkBlack,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (isGmExclusiveAura) Color.White else DoodleColors.InkBlack,
                             modifier = Modifier.testTag("rank_title_text")
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(1.dp))
                         Text(
                             text = cardSubLabel,
                             fontFamily = fontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
-                            color = if (isGmExclusiveAura) Color(0xFF4A148C) else DoodleColors.InkBlue,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (isGmExclusiveAura) Color(0xFF80D8FF) else DoodleColors.InkBlue,
                             modifier = Modifier.testTag("tier_progress_subtext")
                         )
                     }
@@ -6817,7 +6837,11 @@ private fun DrawScope.drawRankTierAura(
 }
 
 @Composable
-fun DoodleWordTitleHeader(fontFamily: FontFamily) {
+fun DoodleWordTitleHeader(
+    fontFamily: FontFamily,
+    rankTier: RankTier = RankTier.forLevel(1),
+    isGmExclusiveAura: Boolean = false
+) {
     val letters = listOf('W', 'O', 'R', 'D')
     val underlineColors = listOf(
         Color(0xFFFF595E),
@@ -6826,44 +6850,166 @@ fun DoodleWordTitleHeader(fontFamily: FontFamily) {
         Color(0xFFFF9800)
     )
 
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(vertical = 2.dp)
+    val infiniteTransition = rememberInfiniteTransition(label = "wordTitleAuraInfinite")
+    val auraPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "wordTitleAuraPhase"
+    )
+    val auraPulse by infiniteTransition.animateFloat(
+        initialValue = 0.90f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 680, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "wordTitleAuraPulse"
+    )
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .padding(vertical = 2.dp)
+            .testTag("word_title_aura_header")
     ) {
-        letters.forEachIndexed { index, letter ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = letter.toString(),
-                    fontFamily = fontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 40.sp,
-                    color = DoodleColors.InkBlack
-                )
-                Canvas(
-                    modifier = Modifier
-                        .width(40.dp)
-                        .height(9.dp)
+        // Synchronized Character Aura behind "W O R D" letters
+        Canvas(
+            modifier = Modifier
+                .width(248.dp)
+                .height(60.dp)
+        ) {
+            val w = size.width
+            val h = size.height
+            val cy = h * 0.48f
+            val letterFractions = floatArrayOf(0.14f, 0.38f, 0.62f, 0.86f)
+
+            if (isGmExclusiveAura) {
+                // GM Exclusive Cosmic-Static Singularity Aura around W O R D
+                letterFractions.forEachIndexed { idx, frac ->
+                    val lx = w * frac
+                    val r = 26.dp.toPx() * (0.94f + sin(auraPhase + idx) * 0.12f)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF00E5FF).copy(alpha = 0.78f),
+                                if (idx % 2 == 0) Color(0xFFD500F9).copy(alpha = 0.56f) else Color(0xFF7C4DFF).copy(alpha = 0.56f),
+                                Color(0xFF08031B).copy(alpha = 0.34f),
+                                Color.Transparent
+                            ),
+                            center = Offset(lx, cy),
+                            radius = r
+                        ),
+                        radius = r,
+                        center = Offset(lx, cy)
+                    )
+                }
+
+                // Flickering Black & White TV Static grain + cyan sparks around W O R D
+                val staticStep = (auraPhase * 12f).toInt()
+                for (i in 0 until 32) {
+                    val s1 = sin(staticStep * 19.3f + i * 73.1f) * 43758.54f
+                    val u1 = s1 - kotlin.math.floor(s1)
+                    val s2 = cos(staticStep * 27.7f + i * 41.9f) * 28411.91f
+                    val u2 = s2 - kotlin.math.floor(s2)
+                    val px = w * (0.06f + u1 * 0.88f)
+                    val py = h * (0.14f + u2 * 0.72f)
+                    val staticCol = when {
+                        (i + staticStep) % 3 == 0 -> Color(0xFF00E5FF).copy(alpha = 0.88f)
+                        (i + staticStep) % 2 == 0 -> Color.White.copy(alpha = 0.90f)
+                        else -> Color(0xFF0D0D0D).copy(alpha = 0.86f)
+                    }
+                    drawRect(
+                        color = staticCol,
+                        topLeft = Offset(px, py),
+                        size = Size(2.6.dp.toPx(), 2.dp.toPx())
+                    )
+                }
+            } else {
+                // 20-Tier Ki Aura Halos + Rising Sparks behind W O R D
+                letterFractions.forEachIndexed { idx, frac ->
+                    val lx = w * frac
+                    val r = 24.dp.toPx() * auraPulse * (0.94f + sin(auraPhase + idx * 0.8f) * 0.10f)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                rankTier.primaryColor.copy(alpha = 0.68f),
+                                rankTier.secondaryColor.copy(alpha = 0.42f),
+                                Color.Transparent
+                            ),
+                            center = Offset(lx, cy),
+                            radius = r
+                        ),
+                        radius = r,
+                        center = Offset(lx, cy)
+                    )
+
+                    val cycle = ((auraPhase / (2f * PI.toFloat())) + idx * 0.25f) % 1f
+                    val sx = lx + sin(auraPhase * 2f + idx * 1.7f) * 10.dp.toPx()
+                    val sy = (h - 6.dp.toPx()) - cycle * (h - 14.dp.toPx())
+                    drawLine(
+                        color = rankTier.accentColor.copy(alpha = (sin(cycle * PI).toFloat() * 0.82f).coerceIn(0f, 1f)),
+                        start = Offset(sx, sy),
+                        end = Offset(sx, sy - 7.dp.toPx()),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+            }
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            letters.forEachIndexed { index, letter ->
+                val bobDp = (sin(auraPhase + index * 0.9f) * 1.8f).dp
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.offset(y = bobDp)
                 ) {
-                    val path = Path().apply {
-                        moveTo(2f, size.height * 0.55f)
-                        quadraticTo(
-                            size.width * 0.5f,
-                            size.height * (if (index % 2 == 0) 0.2f else 0.9f),
-                            size.width - 2f,
-                            size.height * 0.5f
+                    Text(
+                        text = letter.toString(),
+                        fontFamily = fontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 40.sp,
+                        color = DoodleColors.InkBlack,
+                        style = TextStyle(
+                            shadow = Shadow(
+                                color = if (isGmExclusiveAura) Color(0xFF00E5FF) else rankTier.primaryColor,
+                                offset = Offset(0f, 0f),
+                                blurRadius = 18f * auraPulse
+                            )
+                        )
+                    )
+                    Canvas(
+                        modifier = Modifier
+                            .width(40.dp)
+                            .height(9.dp)
+                    ) {
+                        val path = Path().apply {
+                            moveTo(2f, size.height * 0.55f)
+                            quadraticTo(
+                                size.width * 0.5f,
+                                size.height * (if (index % 2 == 0) 0.2f else 0.9f),
+                                size.width - 2f,
+                                size.height * 0.5f
+                            )
+                        }
+                        drawPath(
+                            path = path,
+                            color = underlineColors[index],
+                            style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
+                        )
+                        drawPath(
+                            path = path,
+                            color = DoodleColors.InkBlack,
+                            style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round)
                         )
                     }
-                    drawPath(
-                        path = path,
-                        color = underlineColors[index],
-                        style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
-                    )
-                    drawPath(
-                        path = path,
-                        color = DoodleColors.InkBlack,
-                        style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round)
-                    )
                 }
             }
         }
@@ -14124,6 +14270,57 @@ fun VictoryOverlay(
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Social Share Button: shares current level & game stats
+                    val context = LocalContext.current
+                    SketchyContainer(
+                        fillColor = Color(0xFFE3F2FD),
+                        borderColor = DoodleColors.InkBlack,
+                        cornerRadius = 22.dp,
+                        strokeWidth = 1.8.dp,
+                        onClick = {
+                            val shareMessage = buildString {
+                                append("🦈 Doodle Word Shark — Level ${level.number} Solved! 🎉\n")
+                                append("🔤 Word: ${level.word.uppercase()}\n")
+                                append("🔥 Win Streak: $streak (Best: $maxStreak)\n")
+                                append("✨ Perfect Solves: $perfectCount\n")
+                                append("Can you beat my level?")
+                            }
+                            runCatching {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                clipboard?.setPrimaryClip(ClipData.newPlainText("Doodle Word Victory", shareMessage))
+                            }
+                            runCatching {
+                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_SUBJECT, "Doodle Word Shark — Level ${level.number} Victory!")
+                                    putExtra(Intent.EXTRA_TEXT, shareMessage)
+                                }
+                                val chooser = Intent.createChooser(sendIntent, "Share Victory & Stats").apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(chooser)
+                            }.onFailure {
+                                runCatching {
+                                    Toast.makeText(context, "📋 Victory stats copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .testTag("share_victory_stats_button")
+                    ) {
+                        Text(
+                            text = "📤 Share Victory & Stats",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 14.sp,
+                            color = DoodleColors.InkBlue
+                        )
+                    }
                 }
             }
         }
@@ -15203,6 +15400,8 @@ fun FloatingGmBadge(
                 fontFamily = fontFamily,
                 fontWeight = FontWeight.Black,
                 fontSize = 12.sp,
+                maxLines = 1,
+                softWrap = false,
                 color = DoodleColors.InkBlack
             )
         }
@@ -15433,6 +15632,8 @@ fun GmQuickTierSwitcherPill(
                 fontFamily = fontFamily,
                 fontWeight = FontWeight.Black,
                 fontSize = 11.sp,
+                maxLines = 1,
+                softWrap = false,
                 color = if (isTierPreviewOverride) Color(0xFFE65100) else Color(0xFF6A1B9A),
                 modifier = Modifier
                     .padding(horizontal = 3.dp)
