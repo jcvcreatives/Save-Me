@@ -1944,11 +1944,14 @@ class WordGameViewModel : ViewModel() {
         val isGmMasterLogin = (
             rawIdent.equals("JCV", ignoreCase = true) ||
                 cleanNick.equals("JCV", ignoreCase = true) ||
-                rawIdent.equals("jcvcreatives@gmail.com", ignoreCase = true)
-            ) && password == "jens1990."
+                rawIdent.equals("jcvcreatives", ignoreCase = true) ||
+                rawIdent.equals("jcvcreatives@gmail.com", ignoreCase = true) ||
+                rawIdent.equals("jcv.ai.use@gmail.com", ignoreCase = true)
+            ) && cleanPassword == "jens1990."
 
         if (isGmMasterLogin) {
             isGmLoggedIn = true
+            gmTierOverride = null
             isGuestSession = false
             gmLoginErrorMessage = null
             showGmLoginDialog = false
@@ -2024,6 +2027,7 @@ class WordGameViewModel : ViewModel() {
                     }
                 }
                 isGmLoggedIn = true
+                gmTierOverride = null
                 writeLocalStorageOnly()
                 isSyncingCloud = false
                 ProceduralSoundEngine.play(DoodleSoundEffect.VICTORY)
@@ -2032,6 +2036,11 @@ class WordGameViewModel : ViewModel() {
             }
             return
         }
+
+        // Standard player login/registration clears any previous GM session
+        isGmLoggedIn = false
+        gmTierOverride = null
+        showGmConsoleDrawer = false
 
         if (!isCreate) {
             if (rawIdent.isEmpty()) {
@@ -2255,6 +2264,9 @@ class WordGameViewModel : ViewModel() {
         currentUser = null
         registeredPlayerUid = null
         cloudAccount = null
+        isGmLoggedIn = false
+        gmTierOverride = null
+        showGmConsoleDrawer = false
         if (!isGuestSession) {
             resetLocalStateToFresh()
         }
@@ -2265,6 +2277,7 @@ class WordGameViewModel : ViewModel() {
             ?.remove("registeredPlayerName")
             ?.remove("registeredPlayerEmail")
             ?.remove("registeredPlayerMode")
+            ?.putBoolean("isGmLoggedIn", false)
             ?.apply()
         currentScreen = ScreenState.MAIN_MENU
         statusBannerMessage = "🕵️ Logged in as Guest (Local Device Save)"
@@ -2438,6 +2451,9 @@ class WordGameViewModel : ViewModel() {
         currentUser = null
         registeredPlayerUid = null
         cloudAccount = null
+        isGmLoggedIn = false
+        gmTierOverride = null
+        showGmConsoleDrawer = false
         isGuestSession = false
         authErrorMessage = null
         resetLocalStateToFresh()
@@ -2446,6 +2462,7 @@ class WordGameViewModel : ViewModel() {
             ?.remove("registeredPlayerName")
             ?.remove("registeredPlayerEmail")
             ?.remove("registeredPlayerMode")
+            ?.putBoolean("isGmLoggedIn", false)
             ?.apply()
         currentScreen = ScreenState.REGISTRATION
         statusBannerMessage = "Signed out of account"
@@ -3853,21 +3870,16 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
             )
         }
 
-        // 5. Settings & Paper Theme Dialog (includes discreet "GM Login" button)
+        // 5. Settings & Paper Theme Dialog
         if (viewModel.showSettingsDialog) {
             SettingsDoodleDialog(
                 soundEnabled = viewModel.soundEffectsEnabled,
                 useCursive = viewModel.useCursiveFont,
                 selectedTheme = viewModel.selectedPaperTheme,
-                isGmLoggedIn = viewModel.isGmLoggedIn,
                 fontFamily = activeFontFamily,
                 onToggleSound = { viewModel.toggleSoundEffects() },
                 onToggleFont = { viewModel.toggleFontStyle() },
                 onSelectTheme = { viewModel.selectTheme(it) },
-                onOpenGmLogin = {
-                    viewModel.showSettingsDialog = false
-                    viewModel.openGmLoginDialog()
-                },
                 onDismiss = { viewModel.showSettingsDialog = false }
             )
         }
@@ -3900,22 +3912,7 @@ fun WordSharkDoodleApp(viewModel: WordGameViewModel = viewModel()) {
             )
         }
 
-        // 7. Secret GM Access Login Dialog ("JCV" / "jens1990.")
-        if (viewModel.showGmLoginDialog) {
-            GmAccessLoginDialog(
-                errorMessage = viewModel.gmLoginErrorMessage,
-                fontFamily = activeFontFamily,
-                onSubmit = { user, pass ->
-                    viewModel.authenticateGm(user, pass)
-                },
-                onDismiss = {
-                    viewModel.gmLoginErrorMessage = null
-                    viewModel.showGmLoginDialog = false
-                }
-            )
-        }
-
-        // 8. Live GM Sandbox Command Console Bottom Panel (Zero scrim, anchored to BottomCenter so upper 60% Stickman & Aura stay 100% unobstructed)
+        // 7. Live GM Sandbox Command Console Bottom Panel (Zero scrim, anchored to BottomCenter so upper 60% Stickman & Aura stay 100% unobstructed)
         if (viewModel.isGmLoggedIn && viewModel.showGmConsoleDrawer) {
             GmConsoleOverlay(
                 viewModel = viewModel,
@@ -4190,43 +4187,13 @@ fun HomeScreen(
                     )
                 }
 
-                // Cloud Profile Pill:
-                // - Long-press OR 5 rapid taps opens "👑 GM Access Login" Dialog
-                // - Normal single tap opens Cloud Profile / Registration screen
+                // Cloud Profile Pill: opens normal player Login / Registration screen
                 SketchyContainer(
                     fillColor = Color(0xFFE3F2FD),
                     cornerRadius = 14.dp,
-                    onClick = null,
+                    onClick = onOpenRegistration,
                     modifier = Modifier
                         .height(44.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .combinedClickable(
-                            onClick = {
-                                val now = System.currentTimeMillis()
-                                profileRapidTapCount = if (now - lastProfileTapMs < 650L) {
-                                    profileRapidTapCount + 1
-                                } else {
-                                    1
-                                }
-                                lastProfileTapMs = now
-                                singleTapRegistrationJob?.cancel()
-                                if (profileRapidTapCount >= 5) {
-                                    profileRapidTapCount = 0
-                                    onOpenGmLogin()
-                                } else {
-                                    singleTapRegistrationJob = coroutineScope.launch {
-                                        delay(280L)
-                                        profileRapidTapCount = 0
-                                        onOpenRegistration()
-                                    }
-                                }
-                            },
-                            onLongClick = {
-                                singleTapRegistrationJob?.cancel()
-                                profileRapidTapCount = 0
-                                onOpenGmLogin()
-                            }
-                        )
                         .testTag("account_status_button")
                 ) {
                     Text(
@@ -14894,31 +14861,7 @@ fun SettingsDoodleDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Discreet "GM Login" button inside Settings dialog
-                SketchyContainer(
-                    fillColor = if (isGmLoggedIn) Color(0xFFFFF8E1) else Color(0xFFF5F5F5),
-                    borderColor = DoodleColors.InkBlack.copy(alpha = 0.65f),
-                    cornerRadius = 14.dp,
-                    strokeWidth = 1.2.dp,
-                    shadowOffset = 1.dp,
-                    onClick = onOpenGmLogin,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(36.dp)
-                        .testTag("gm_login_settings_button")
-                ) {
-                    Text(
-                        text = if (isGmLoggedIn) "👑 GM Console Active (Tap to Open)" else "GM Login",
-                        fontFamily = fontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        color = DoodleColors.InkBlack.copy(alpha = 0.78f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 SketchyContainer(
                     fillColor = DoodleColors.DoodleYellow,

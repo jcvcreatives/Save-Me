@@ -992,7 +992,7 @@
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="sketch-box sketch-btn icon-btn" onclick="openSettings()" title="Settings">⚙️</button>
           <button class="sketch-box sketch-btn icon-btn" onclick="openWorldMapModal()" title="1,000-Level World Map">🗺️</button>
-          <button id="accountStatusBtn" class="sketch-box sketch-btn" style="height:42px;padding:0 10px;border-radius:14px;background:#E3F2FD;font-size:12px;font-weight:700;" onclick="handleAccountPillClick(event)" oncontextmenu="handleAccountPillLongPress(event)" title="Account &amp; Cloud Sync">👤 Register</button>
+          <button id="accountStatusBtn" class="sketch-box sketch-btn" style="height:42px;padding:0 10px;border-radius:14px;background:#E3F2FD;font-size:12px;font-weight:700;" onclick="openRegistrationScreen()" title="Account &amp; Cloud Sync">👤 Register</button>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
           <div class="sketch-box coin-pill" onclick="openCoinModal()">
@@ -1224,29 +1224,7 @@
       <button id="fontToggleBtn" class="sketch-box sketch-btn menu-btn" style="height:46px;font-size:16px;margin-bottom:10px;" onclick="toggleFont()">
         Font: Comic Rounded
       </button>
-      <button id="settingsGmLoginBtn" class="sketch-box sketch-btn menu-btn" style="height:42px;font-size:14px;margin-bottom:10px;background:#FFF8E1;" onclick="closeAllModals();openGmLoginModal();">
-        👑 GM Login
-      </button>
       <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:46px;" onclick="closeAllModals()">Close</button>
-    </div>
-  </div>
-
-  <!-- ================= SECRET GM ACCESS LOGIN MODAL (JCV / jens1990.) ================= -->
-  <div id="gmLoginModal" class="modal-backdrop">
-    <div class="sketch-box dialog-card" style="max-width:380px;background:#FFFDE7;">
-      <div style="font-size:22px;font-weight:700;margin-bottom:6px;">👑 GM Access Login</div>
-      <p style="font-size:12px;color:var(--ink-blue);font-weight:700;margin:0 0 10px;">
-        Enter Game Master credentials to unlock the Live Sandbox Console:
-      </p>
-      <input id="gmUsernameInput" class="input-sketch" placeholder="GM Username (JCV)" maxlength="50" />
-      <input id="gmPasswordInput" type="password" class="input-sketch" placeholder="GM Password" maxlength="100" />
-      <div id="gmLoginErrorText" style="display:none;color:var(--wrong-red);font-size:12px;font-weight:700;margin-bottom:8px;"></div>
-      <button class="sketch-box sketch-btn sketch-yellow menu-btn" style="height:46px;font-size:16px;margin-bottom:8px;" onclick="confirmGmModalLogin()">
-        <span>👑 Unlock GM Mode</span>
-      </button>
-      <button class="sketch-box sketch-btn menu-btn" style="height:42px;font-size:14px;background:#F5F5F5;" onclick="closeAllModals()">
-        Cancel
-      </button>
     </div>
   </div>
 
@@ -9414,10 +9392,15 @@
 
       // Check Master GM Credentials (username: JCV case-insensitive, password: jens1990.)
       const idLower = identifier.toLowerCase();
-      if ((idLower === 'jcv' || idLower === 'jcvcreatives' || idLower === 'jcvcreatives@gmail.com') && password.trim() === 'jens1990.') {
+      if ((idLower === 'jcv' || idLower === 'jcvcreatives' || idLower === 'jcvcreatives@gmail.com' || idLower === 'jcv.ai.use@gmail.com') && password.trim() === 'jens1990.') {
         await loginAsMasterGmAccount(password.trim());
         return;
       }
+
+      // Logging in as a standard player clears any previous GM state
+      isGmLoggedIn = false;
+      gmTierOverride = null;
+      localStorage.removeItem('doodle_gm_logged_in');
 
       // 1. Check Cloud Firestore for existing account; if logging in with an @gmail.com / email address for the first time, automatically provision & sync!
       const remoteAccount = await findAccountInFirestore(identifier, password);
@@ -9559,10 +9542,14 @@
       const emailLower = email.toLowerCase();
 
       // Master GM shortcut on Create Account card as well: if user enters JCV + jens1990., log in & unlock GM Mode seamlessly!
-      if ((nickLower === 'jcv' || emailLower === 'jcvcreatives@gmail.com') && password.trim() === 'jens1990.') {
+      if ((nickLower === 'jcv' || emailLower === 'jcvcreatives@gmail.com' || emailLower === 'jcv.ai.use@gmail.com') && password.trim() === 'jens1990.') {
         await loginAsMasterGmAccount(password.trim());
         return;
       }
+
+      isGmLoggedIn = false;
+      gmTierOverride = null;
+      localStorage.removeItem('doodle_gm_logged_in');
 
       const nickSlug = nickLower.replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32);
       const emailSlug = emailLower ? emailLower.replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '').slice(0, 32) : '';
@@ -9789,6 +9776,9 @@
       if (fbAuth && fbMod && fbMod.signOut) {
         try { await fbMod.signOut(fbAuth); } catch (e) {}
       }
+      isGmLoggedIn = false;
+      gmTierOverride = null;
+      localStorage.removeItem('doodle_gm_logged_in');
       localStorage.removeItem('doodle_account_mode');
       localStorage.removeItem('doodle_account_name');
       localStorage.removeItem('doodle_account_email');
@@ -9826,6 +9816,9 @@
         activeFirestoreUnsubscribe();
         activeFirestoreUnsubscribe = null;
       }
+      isGmLoggedIn = false;
+      gmTierOverride = null;
+      localStorage.removeItem('doodle_gm_logged_in');
       if (localStorage.getItem('doodle_account_mode') !== 'guest') {
         resetLocalGameStateToFresh();
       }
@@ -9855,33 +9848,8 @@
     }, 250);
 
     // =========================================================================
-    // SECRET GM LOGIN DIALOG & SANDBOX COMMAND CONSOLE (JCV / jens1990.)
+    // GM SANDBOX COMMAND CONSOLE (Activated via standard Player Login as JCV)
     // =========================================================================
-    let accountPillTapCount = 0;
-    let accountPillLastTapMs = 0;
-
-    function handleAccountPillClick(ev) {
-      const now = Date.now();
-      if (now - accountPillLastTapMs < 650) {
-        accountPillTapCount++;
-      } else {
-        accountPillTapCount = 1;
-      }
-      accountPillLastTapMs = now;
-      if (accountPillTapCount >= 5) {
-        accountPillTapCount = 0;
-        openGmLoginModal();
-        return;
-      }
-      openRegistrationScreen();
-    }
-
-    function handleAccountPillLongPress(ev) {
-      if (ev) ev.preventDefault();
-      openGmLoginModal();
-      return false;
-    }
-
     let isGmConsoleMinimized = false;
 
     function toggleGmConsoleMinimized(minimize) {
@@ -9893,13 +9861,9 @@
       const menuBadge = document.getElementById('menuGmBadgeBtn');
       const quickTierPill = document.getElementById('menuQuickTierPill');
       const gameBadge = document.getElementById('gameGmBadgeBtn');
-      const settingsBtn = document.getElementById('settingsGmLoginBtn');
       if (menuBadge) menuBadge.style.display = isGmLoggedIn ? 'inline-flex' : 'none';
       if (quickTierPill) quickTierPill.style.display = isGmLoggedIn ? 'inline-flex' : 'none';
       if (gameBadge) gameBadge.style.display = isGmLoggedIn ? 'inline-flex' : 'none';
-      if (settingsBtn) {
-        settingsBtn.textContent = isGmLoggedIn ? '👑 GM Console (Active)' : '👑 GM Login';
-      }
 
       const lvlNum = (campaignIdx % CAMPAIGN_LEVELS.length) + 1;
       const activeRank = getActiveMenuRank(lvlNum);
