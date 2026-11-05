@@ -11187,6 +11187,11 @@ private fun DrawScope.drawSharkBalloonsPeril(
     }
 
     val isJawsOpen = (!isMenuPreview && livesRemaining <= 2)
+    val circleAngle = wavePhase * (if (!isMenuPreview && livesRemaining <= 4) 0.95f else 0.65f)
+    val sharkX = centerX + sin(circleAngle) * (w * 0.23f)
+    val sharkDepthY = waterY + cos(circleAngle) * 4.5.dp.toPx()
+    val depthScale = (0.94f + cos(circleAngle) * 0.12f).coerceIn(0.80f, 1.10f)
+
     if (isJawsOpen) {
         drawOpenSharkJaws(
             centerX = centerX + sharkPatrol * (w * 0.04f),
@@ -11194,17 +11199,33 @@ private fun DrawScope.drawSharkBalloonsPeril(
             scale = (w / 380f).coerceIn(0.75f, 1.2f)
         )
     } else {
-        val sharkX = centerX + sin(wavePhase) * (w * 0.23f)
-        val movingRight = cos(wavePhase) >= 0f
+        val movingRight = cos(circleAngle) >= 0f
         drawCirclingSharkFin(
             x = sharkX,
-            waterY = waterY,
+            waterY = sharkDepthY,
             facingRight = movingRight,
-            scale = (w / 380f).coerceIn(0.75f, 1.2f)
+            scale = (w / 380f).coerceIn(0.75f, 1.2f) * depthScale
         )
     }
 
     drawDoodleWaterWaves(waterY = waterY, wavePhase = wavePhase)
+
+    // Underwater circling shark shadow silhouette & wake ring below the stickman to heighten danger
+    if (!isJawsOpen) {
+        val shadowRx = 26.dp.toPx() * depthScale
+        val shadowRy = 6.dp.toPx() * depthScale
+        drawOval(
+            color = DoodleColors.WaterDeep.copy(alpha = 0.28f),
+            topLeft = Offset(sharkX - shadowRx, sharkDepthY + 6.dp.toPx() - shadowRy),
+            size = Size(shadowRx * 2f, shadowRy * 2f)
+        )
+        drawOval(
+            color = Color.White.copy(alpha = 0.45f),
+            topLeft = Offset(sharkX - shadowRx * 1.15f, sharkDepthY + 2.dp.toPx() - shadowRy * 0.8f),
+            size = Size(shadowRx * 2.3f, shadowRy * 1.6f),
+            style = Stroke(width = 1.6.dp.toPx())
+        )
+    }
 }
 
 // ----------------------------------------------------------------------------
